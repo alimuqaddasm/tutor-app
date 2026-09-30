@@ -66,11 +66,16 @@ function loadTree(force) {
   }).catch(function (e) { treeP = null; if (e.status === 409) { TREE = []; return TREE; } throw e; });
   return treeP;
 }
-function shaOf(path) { var f = (TREE || []).filter(function (t) { return t.path === path; })[0]; return f ? f.sha : null; }
-function setTreeSha(path, sha) { TREE = TREE || []; var f = TREE.filter(function (t) { return t.path === path; })[0]; if (f) f.sha = sha; else TREE.push({ path: path, sha: sha }); ls("tutor.tree." + CFG.repo, JSON.stringify(TREE)); }
+var TMAP = null, TMAPsrc = null;
+function shaOf(path) { if (TMAPsrc !== TREE) { TMAP = {}; (TREE || []).forEach(function (t) { TMAP[t.path] = t.sha; }); TMAPsrc = TREE; } return TMAP[path] || null; }
+function setTreeSha(path, sha) { TREE = TREE || []; var f = TREE.filter(function (t) { return t.path === path; })[0]; if (f) f.sha = sha; else TREE.push({ path: path, sha: sha }); TMAPsrc = null; ls("tutor.tree." + CFG.repo, JSON.stringify(TREE)); }
+var inflight = {};
 function blobBytes(sha) {
-  return cget("b:" + sha).then(function (v) { if (v) return v;
-    return gh("/repos/" + CFG.repo + "/git/blobs/" + sha).then(function (r) { var b = b64bytes(r.json.content); cput("b:" + sha, b); return b; }); });
+  return cget("b:" + sha).then(function (v) { if (v) return v; if (inflight[sha]) return inflight[sha];
+    inflight[sha] = fetch(API + "/repos/" + CFG.repo + "/git/blobs/" + sha, { headers: { "Authorization": "Bearer " + CFG.token, "Accept": "application/vnd.github.raw+json", "X-GitHub-Api-Version": "2022-11-28" } })
+      .then(function (r) { if (!r.ok) { var e = new Error("GitHub " + r.status); e.status = r.status; throw e; } return r.arrayBuffer(); })
+      .then(function (buf) { var b = new Uint8Array(buf); cput("b:" + sha, b); delete inflight[sha]; return b; }, function (e) { delete inflight[sha]; throw e; });
+    return inflight[sha]; });
 }
 function fileJSON(path) { var sha = shaOf(path); if (!sha) return Promise.resolve(null); return blobBytes(sha).then(function (b) { return { data: JSON.parse(new TextDecoder().decode(b)), sha: sha }; }); }
 function fileText(path) { var sha = shaOf(path); if (!sha) return Promise.resolve(null); return blobBytes(sha).then(function (b) { return { text: new TextDecoder().decode(b), sha: sha }; }); }
@@ -297,7 +302,7 @@ function drawLesson() {
     var tm = p.sys ? ({ _extra: x.extra.length ? x.extra.length + " logged" : "add as you go", _work: x.work.filter(function (w) { return !w.removed; }).length ? x.work.filter(function (w) { return !w.removed; }).length + " uploaded" : "upload photos", _time: x.time.minutes != null ? x.time.minutes + " min" + (x.time.started ? " · " + hhmm(x.time.started) + "–" + (x.time.ended ? hhmm(x.time.ended) : "") : "") : "not recorded yet", _after: x.feedback && x.feedback.at ? "saved " + hhmm(x.feedback.at) : "notes + finish" })[p.id] : planned + (pm ? " · took " + pm : "");
     return (p.id === "_extra" ? '<div class="sep"></div>' : "") + '<button type="button" data-phase="' + esc(p.id) + '" data-real="' + (p.sys ? "" : "1") + '"' + (p.id === L.phase ? ' aria-current="step"' : "") + '><span class="n">' + (p.sys ? { _extra: "+", _work: "▤", _time: "⏱", _after: "✓" }[p.id] : i + 1) + '</span><span class="nm">' + esc(p.name) + '</span><span class="tm">' + esc(tm) + '</span></button>';
   }).join("") + '</nav><section class="card page" id="phasebox"></section></div>';
-  app.innerHTML = h; drawPhase(); tick();
+  app.innerHTML = h; drawPhase(); tick(); prefetchLesson();
 }
 function drawPhase() {
   var ps = phases(), p = ps.filter(function (q) { return q.id === L.phase; })[0], box = $("#phasebox"), h = "";
@@ -360,8 +365,22 @@ function drawTally() {
   d.innerHTML = n ? '<b>' + c.right + ' / ' + n + '</b><span>right</span><span>✗ ' + c.wrong + '</span><span>wording ' + c.wording + '</span><span>terminology ' + c.terminology + '</span><span>partly ' + c.partly + '</span>' : '<span>Tap a verdict on each answer. Tap it again to undo. Everything saves as you go.</span>';
   box.appendChild(d);
 }
-function loadImages(root) { $$("img[data-src]", root).forEach(function (im) { var p = im.getAttribute("data-src"); var full = /^(students|books)\//.test(p) ? p : lessonBase(L.id) + p;
-  fileURL(full).then(function (u) { var ph = im.nextElementSibling; if (u) { im.src = u; im.hidden = false; if (ph && ph.classList.contains("ph")) ph.remove(); } else if (ph) ph.textContent = "Image not found: " + p; }).catch(function () { var ph = im.nextElementSibling; if (ph) ph.textContent = "Couldn’t load image"; }); }); }
+function showImg(im) { var p = im.getAttribute("data-src"); if (!p || im.getAttribute("data-on")) return; im.setAttribute("data-on", "1"); var full = /^(students|books)\//.test(p) ? p : lessonBase(L.id) + p;
+  fileURL(full).then(function (u) { var ph = im.nextElementSibling; if (u) { im.decoding = "async"; im.src = u; im.hidden = false; if (ph && ph.classList.contains("ph")) ph.remove(); } else if (ph) ph.textContent = "Image not found: " + p; })
+    .catch(function () { im.removeAttribute("data-on"); var ph = im.nextElementSibling; if (ph) ph.textContent = "Couldn’t load image. Tap to retry."; }); }
+var io = "IntersectionObserver" in window ? new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { io.unobserve(e.target); showImg(e.target.__img || e.target); } }); }, { rootMargin: "900px 0px" }) : null;
+function loadImages(root) { $$("img[data-src]:not([data-on])", root).forEach(function (im) { var ph = im.nextElementSibling; var tgt = ph && ph.classList.contains("ph") ? ph : im; if (io) { tgt.__img = im; io.observe(tgt); } else showImg(im); }); }
+document.addEventListener("toggle", function (e) { if (e.target.open) loadImages(e.target); }, true);
+document.addEventListener("click", function (e) { var ph = e.target.closest && e.target.closest(".ph"); if (ph && ph.previousElementSibling && ph.previousElementSibling.tagName === "IMG") showImg(ph.previousElementSibling); });
+/* after a lesson opens, quietly fill the device cache with its question images (not the folded-away DEEP extras) */
+var prefetchFor = null;
+function prefetchLesson() { if (!L || !L.script || prefetchFor === L.id) return; prefetchFor = L.id; var paths = [];
+  (function walk(v, deep) { if (!v) return; if (Array.isArray(v)) { v.forEach(function (x) { walk(x, deep); }); return; } if (typeof v !== "object") return;
+    var d = deep || v.level === "deep"; ["img", "answerImg"].forEach(function (k) { var x = v[k]; (Array.isArray(x) ? x : x ? [x] : []).forEach(function (pth) { if (!d) paths.push(pth); }); });
+    Object.keys(v).forEach(function (k) { if (typeof v[k] === "object") walk(v[k], d); }); })(L.script.phases || L.script, false);
+  var q = paths.map(function (p) { return /^(students|books)\//.test(p) ? p : lessonBase(L.id) + p; }).filter(function (p) { return shaOf(p); }), running = 0;
+  function pump() { while (running < 3 && q.length) { var p = q.shift(); running++; blobBytes(shaOf(p)).catch(function () {}).then(function () { running--; pump(); }); } }
+  setTimeout(pump, 1200); }
 
 /* extra questions: asked on the spot, editable any time */
 function extraView() {
