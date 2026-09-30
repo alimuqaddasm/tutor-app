@@ -351,6 +351,7 @@ function afterView() {
   x.extra.forEach(function (e) { if (e.v && e.v !== "right" && e.v !== "skipped") wrong.push('<li class="mistake ' + esc(e.v) + '"><div><b>' + esc(e.q) + '</b> <span class="pill plain">' + esc(VHELP[e.v]) + '</span></div>' + (e.note ? '<div class="fix">' + esc(e.note) + '</div>' : "") + '</li>'); });
   if (wrong.length) h += '<div><div class="eyebrow" style="margin-bottom:8px">Going into his mistakes log</div><ul class="list-plain">' + wrong.join("") + '</ul></div>';
   function fld(id, label, key, ph, area, def) { var v = fb[key] != null ? fb[key] : (def || ""); return '<div class="field"><label for="' + id + '">' + esc(label) + '</label>' + (area ? '<textarea id="' + id + '" data-fb="' + key + '" placeholder="' + esc(ph || "") + '">' + esc(v) + '</textarea>' : '<input type="text" id="' + id + '" data-fb="' + key + '" value="' + esc(v) + '" placeholder="' + esc(ph || "") + '">') + '</div>'; }
+  if (!x.time.log.length) h += '<div class="sheet form" style="padding:14px 16px;max-width:none"><div class="eyebrow">The clock wasn’t used. Enter the times by hand</div><div class="row2"><div class="field"><label for="mt-s">Started at</label><input type="time" id="mt-s" data-mt="s" value="' + esc(x.time.started ? hhmm(x.time.started) : "") + '"></div><div class="field"><label for="mt-e">Ended at</label><input type="time" id="mt-e" data-mt="e" value="' + esc(x.time.ended ? hhmm(x.time.ended) : "") + '"></div><div class="field"><span class="lab">Minutes</span><div class="mono" id="mt-min" style="padding-top:12px">' + esc(x.time.minutes != null ? x.time.minutes : "—") + '</div></div></div></div>';
   h += '<form class="form" id="fbform"><div class="field"><span class="lab">How did it go?</span><div style="display:flex;gap:6px;flex-wrap:wrap">' + [1, 2, 3, 4, 5].map(function (n) { return '<button class="chip" type="button" data-rate="' + n + '" aria-pressed="' + (fb.rating === n) + '">' + n + '</button>'; }).join("") + '</div><span class="hint">1 rough · 5 went really well</span></div>' +
     fld("fb-cov", "What you actually covered", "covered", "e.g. got to 3c, skipped the NaBH₄ drill", true) + fld("fb-stuck", "Where he got stuck", "stuck", "", true) + fld("fb-worked", "What worked", "worked", "", true) +
     fld("fb-change", "What to change next time (for Claude)", "change", "This shapes the next script", true) + fld("fb-hw", "Homework set", "hw", "", false, s.homeworkSummary) + fld("fb-pages", "Book pages set to memorise", "pages", "e.g. CGP 172–173", false, s.pagesSet) +
@@ -398,6 +399,10 @@ document.addEventListener("input", function (ev) {
   var t = ev.target; if (!L) return; var x = L.session;
   if (t.hasAttribute("data-note") || t.hasAttribute("data-mk")) { var iid = t.closest("[data-item]").getAttribute("data-item"); var a = x.answers[iid] || {};
     if (t.hasAttribute("data-note")) a.note = t.value; else a.m = t.value === "" ? null : +t.value; a.at = now(); x.answers[iid] = a; touch(); }
+  if (t.hasAttribute("data-mt")) { var d = x.date || parseId(L.id).date, sv = $("#mt-s").value, evv = $("#mt-e").value;
+    x.time.started = sv ? new Date(d + "T" + sv).toISOString() : null; x.time.ended = evv ? new Date(d + "T" + evv).toISOString() : null;
+    x.time.minutes = x.time.started && x.time.ended ? Math.round((Date.parse(x.time.ended) - Date.parse(x.time.started)) / 60000) : null; x.time.manual = true;
+    var mm = $("#mt-min"); if (mm) mm.textContent = x.time.minutes != null ? x.time.minutes : "—"; touch(); }
   if (t.hasAttribute("data-fb")) { x.feedback = x.feedback || {}; x.feedback[t.getAttribute("data-fb")] = t.value; x.feedback.at = now(); touch(); }
 });
 document.addEventListener("submit", function (ev) {
