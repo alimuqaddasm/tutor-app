@@ -170,7 +170,7 @@ setInterval(function () { if (L && L.dirty) flush(); }, 25000);
 var app = $("#app");
 function route() { return (location.hash || "#/").slice(1) || "/"; }
 window.addEventListener("hashchange", function () { if (L && L.dirty) flush(); render(); window.scrollTo(0, 0); });
-function nav(r) { var k = r.indexOf("/record") === 0 ? "record" : r.indexOf("/settings") === 0 ? "settings" : r.indexOf("/revise") === 0 ? "revise" : "lessons";
+function nav(r) { var k = r.indexOf("/record") === 0 ? "record" : r.indexOf("/settings") === 0 ? "settings" : r.indexOf("/revise") === 0 ? "revise" : r.indexOf("/videos") === 0 ? "videos" : "lessons";
   $$("[data-nav]").forEach(function (a) { if (a.getAttribute("data-nav") === k) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   $("#who").textContent = CFG.token ? CFG.student + " · " + CFG.device : ""; }
 function render() {
@@ -181,6 +181,7 @@ function render() {
   if (r.indexOf("/new") === 0) return newView();
   if (r.indexOf("/record") === 0) return recordView();
   if (r.indexOf("/revise") === 0) return reviseView();
+  if (r.indexOf("/videos") === 0) return videosView();
   return lessonsView();
 }
 function fail(e) { app.innerHTML = '<div class="empty"><h3>Couldn’t reach GitHub</h3><p>' + esc(e && e.message || e) + '</p><p>Check your connection, or the key and repo in <a href="#/settings">Settings</a>.</p></div>'; }
@@ -489,7 +490,7 @@ document.addEventListener("click", function (ev) {
   var t = ev.target.closest("button,img"); if (!t) return;
   if (t.tagName === "IMG") { if (t.closest(".fig") || t.closest(".thumbs")) { $("#zimg").src = t.src; $("#zoom").hidden = false; } return; }
   if (t.id === "zoomx") { closeZoom(); return; }
-  if (t.hasAttribute("data-seek")) { var fr = $('iframe[data-vid="' + t.getAttribute("data-seek") + '"]'); if (fr) { fr.src = vsrc(t.getAttribute("data-seek"), t.getAttribute("data-t"), true); fr.scrollIntoView({ block: "center", behavior: "smooth" }); } return; }
+  if (t.hasAttribute("data-seek") && false) { var fr = $('iframe[data-vid="' + t.getAttribute("data-seek") + '"]'); if (fr) { fr.src = vsrc(t.getAttribute("data-seek"), t.getAttribute("data-t"), true); fr.scrollIntoView({ block: "center", behavior: "smooth" }); } return; }
   if (t.id === "s-clear") { ls("tutor.token", null); toast("Key removed from this device"); settingsView(); return; }
   if (t.id === "s-cache") { try { indexedDB.deleteDatabase("tutor-desk"); } catch (e) {} idbP = null; ls("tutor.tree." + CFG.repo, null); TREE = null; toast("Cache cleared"); return; }
   if (!L || route().indexOf("/lesson/") !== 0) return;
@@ -550,6 +551,7 @@ document.addEventListener("submit", function (ev) {
 function closeZoom() { $("#zoom").hidden = true; $("#zimg").removeAttribute("src"); }
 $("#zoom").addEventListener("click", function (e) { if (e.target.id === "zoom") closeZoom(); });
 document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeZoom(); });
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-seek]"); if (!t) return; var fr = $('iframe[data-vid="' + t.getAttribute("data-seek") + '"]'); if (fr) { fr.src = vsrc(t.getAttribute("data-seek"), t.getAttribute("data-t"), true); fr.scrollIntoView({ block: "center", behavior: "smooth" }); } });
 function wake() { try { if (navigator.wakeLock) navigator.wakeLock.request("screen").catch(function () {}); } catch (e) {} }
 
 /* ---------------- uploads ---------------- */
@@ -708,6 +710,50 @@ document.addEventListener("click", function (e) { var t = e.target.closest("butt
 if ("serviceWorker" in navigator && location.protocol === "https:") { window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); }); }
 var installEvt = null; window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); installEvt = e; var b = $("#s-install"); if (b) b.hidden = false; });
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("#s-install"); if (t && installEvt) { installEvt.prompt(); installEvt = null; t.hidden = true; } });
+
+/* ---------------- videos: every relevant lecture, by topic, played here ---------------- */
+var VID = { subj: ls("tutor.vsubj") || "chem", q: "", cur: null };
+function durTxt(s) { s = +s || 0; return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+function videosView() {
+  app.innerHTML = '<div class="section-h"><div><div class="label">Lecture videos</div><h2>Videos</h2></div><span class="hint">Chemistry Tutor (organic) and Maths Genie (Pure), in topic order</span></div><div id="vwrap"><div class="empty"><h3>Loading the video list</h3></div></div>';
+  loadTree().then(function () { return fileJSON("videos.json"); }).then(function (r) {
+    if (route().indexOf("/videos") !== 0) return;
+    if (!r) { $("#vwrap").innerHTML = '<div class="empty"><h3>No video list yet</h3><p>Ask Claude to run tools/build_video_catalogue.py.</p></div>'; return; }
+    var tr = {}; (TREE || []).forEach(function (t) { var m = /^transcripts\/youtube\/[a-z]+\/([A-Za-z0-9_-]{11}) .*\.txt$/.exec(t.path); if (m) tr[m[1]] = t.path; });
+    VID.all = r.data.videos.map(function (v) { v.transcript = tr[v.id] || v.transcript || null; return v; }); drawVideos();
+  }).catch(fail);
+}
+function drawVideos() {
+  var q = VID.q.toLowerCase(), list = VID.all.filter(function (v) { return v.subject === VID.subj && (!q || v.title.toLowerCase().indexOf(q) >= 0 || v.group.toLowerCase().indexOf(q) >= 0); });
+  var groups = [], by = {}; list.forEach(function (v) { if (!by[v.group]) { by[v.group] = []; groups.push(v.group); } by[v.group].push(v); });
+  var h = '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px"><div class="qbar">' + [["chem", "Chemistry"], ["maths", "Maths"]].map(function (c) { return '<button class="chip" type="button" data-vsub="' + c[0] + '" aria-pressed="' + (VID.subj === c[0]) + '">' + c[1] + '</button>'; }).join("") + '</div>' +
+    '<input type="search" id="vq" placeholder="Search, e.g. chain rule, NMR" value="' + esc(VID.q) + '" style="flex:1 1 240px;min-height:44px;border-radius:12px;border:1px solid var(--line-2);background:var(--surface);padding:0 14px" aria-label="Search videos"></div>';
+  h += '<div id="vplayer"></div>';
+  h += groups.length ? groups.map(function (g) { return '<div class="section-h" style="margin-top:22px"><h2 style="font-size:var(--s-lg)">' + esc(g) + '</h2><span class="hint">' + by[g].length + '</span></div><div class="items">' + by[g].map(function (v) {
+      return '<button type="button" class="item vrow" data-vid="' + esc(v.id) + '" style="text-align:left;border:0;background:transparent;cursor:pointer;width:100%"><span class="qn">▶</span><span style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><b>' + esc(v.title) + '</b><span class="pill num">' + durTxt(v.duration) + '</span>' + (v.kind === "exam questions" ? '<span class="pill warn">exam questions</span>' : "") + (v.transcript ? '<span class="pill ok">transcript</span>' : "") + '</span></button>'; }).join("") + '</div>'; }).join("")
+    : '<div class="empty"><h3>No videos match</h3><p>Try a shorter search.</p></div>';
+  $("#vwrap").innerHTML = h; if (VID.cur) playVideo(VID.cur, false);
+}
+function playVideo(id, scroll) {
+  var v = (VID.all || []).filter(function (x) { return x.id === id; })[0]; if (!v) return; VID.cur = id;
+  var box = $("#vplayer"); if (!box) return;
+  box.innerHTML = '<div class="vid" style="margin-bottom:8px"><div class="label" style="margin-bottom:6px">' + esc(v.channel) + ' · ' + esc(v.group) + '</div><h3 style="font-size:var(--s-lg);margin-bottom:10px">' + esc(v.title) + '</h3><div class="vframe"><iframe data-vid="' + esc(v.id) + '" src="' + vsrc(v.id, 0, true) + '" title="' + esc(v.title) + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px"><a class="btn small" href="https://www.youtube.com/watch?v=' + esc(v.id) + '" target="_blank" rel="noopener">Open on YouTube</a>' + (v.transcript ? '<button class="btn small" type="button" data-vtr="' + esc(v.id) + '">Show transcript</button>' : '<span class="hint">Transcript not downloaded yet</span>') + '<button class="btn small" type="button" data-vclose>Close</button></div><div id="vtr"></div></div>';
+  if (scroll !== false) box.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+function showTranscript(id) {
+  var v = VID.all.filter(function (x) { return x.id === id; })[0], box = $("#vtr"); if (!v || !box) return; box.innerHTML = '<p class="hint">Loading transcript…</p>';
+  fileText(v.transcript).then(function (r) { if (!r) { box.innerHTML = '<p class="hint">Transcript not found.</p>'; return; }
+    var lines = r.text.split(/\n/).filter(function (l) { return /^\[/.test(l); });
+    box.innerHTML = '<div class="prose vtr">' + lines.map(function (l) { var m = /^\[([0-9:]+)\]\s*(.*)$/.exec(l); return m ? '<p><button class="linkbtn num" type="button" data-seek="' + esc(v.id) + '" data-t="' + esc(m[1]) + '">' + esc(m[1]) + '</button> ' + esc(m[2]) + '</p>' : ""; }).join("") + '</div>'; });
+}
+document.addEventListener("click", function (e) { if (route().indexOf("/videos") !== 0) return; var t = e.target.closest("button"); if (!t) return;
+  if (t.hasAttribute("data-vsub")) { VID.subj = t.getAttribute("data-vsub"); ls("tutor.vsubj", VID.subj); VID.cur = null; drawVideos(); return; }
+  if (t.hasAttribute("data-vid") && t.classList.contains("vrow")) { playVideo(t.getAttribute("data-vid")); return; }
+  if (t.hasAttribute("data-vtr")) { showTranscript(t.getAttribute("data-vtr")); t.remove(); return; }
+  if (t.hasAttribute("data-vclose")) { VID.cur = null; $("#vplayer").innerHTML = ""; return; }
+});
+document.addEventListener("input", function (e) { if (e.target.id === "vq") { VID.q = e.target.value; clearTimeout(timers.vq); timers.vq = setTimeout(function () { var pos = e.target.selectionStart; drawVideos(); var i = $("#vq"); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (x) {} } }, 250); } });
 
 render();
 })();

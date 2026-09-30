@@ -244,3 +244,7 @@ details.reveal > div{padding:0 14px 14px}
 .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:14px;align-items:start}
 .gallery .fig img{max-height:360px;width:100%;object-fit:contain;background:#fff}
 .gallery .fig figcaption{font-size:var(--s-xs);line-height:1.35}
+
+.vtr{max-height:420px;overflow:auto;border-top:1px solid var(--line);margin-top:12px;padding-top:8px}
+.vtr p{margin:.35em 0}
+.vrow:hover{background:var(--surface-2)!important}
