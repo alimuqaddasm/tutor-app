@@ -248,3 +248,14 @@ details.reveal > div{padding:0 14px 14px}
 .vtr{max-height:420px;overflow:auto;border-top:1px solid var(--line);margin-top:12px;padding-top:8px}
 .vtr p{margin:.35em 0}
 .vrow:hover{background:var(--surface-2)!important}
+
+/* taught ticks */
+.tick{flex:none;width:36px;height:36px;border-radius:50%;border:1.5px solid var(--line-2);background:var(--surface);color:var(--line-2);font-weight:800;font-size:1rem;cursor:pointer;display:grid;place-items:center;line-height:1}
+.tick[aria-pressed="true"]{background:var(--ok);border-color:var(--ok);color:#fff}
+.steps li{grid-template-columns:62px minmax(0,1fr) auto;padding:6px 8px;border-radius:12px;margin:-6px -8px}
+.steps li.done{background:var(--ok-wash)}
+.prose.tickable{position:relative;padding-right:48px}
+.prose.tickable > .tick{position:absolute;right:0;top:0}
+.prose.tickable.done{background:linear-gradient(90deg,var(--ok-wash),transparent 70%);border-left:4px solid var(--ok);padding-left:12px;border-radius:0 10px 10px 0}
+.module.done{border-color:var(--ok);box-shadow:inset 4px 0 0 var(--ok)}
+.module > summary .tick{margin-right:2px}

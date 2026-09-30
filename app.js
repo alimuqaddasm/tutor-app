@@ -99,7 +99,7 @@ function newSession(id, script) {
   return { v: 2, lesson: id, student: CFG.student, subject: (script && script.subject) || p.subject, date: (script && script.date) || p.date, title: (script && script.title) || "",
     status: "not-started", time: { log: [], edit: {}, started: null, ended: null, minutes: null, phaseMinutes: {} }, answers: {}, extra: [], work: [], feedback: {}, devices: [], updated: null };
 }
-function norm(s) { s.time = s.time || {}; s.time.log = s.time.log || []; s.time.edit = s.time.edit || {}; s.answers = s.answers || {}; s.extra = s.extra || []; s.work = s.work || []; s.feedback = s.feedback || {}; s.devices = s.devices || [];
+function norm(s) { s.time = s.time || {}; s.time.log = s.time.log || []; s.time.edit = s.time.edit || {}; s.answers = s.answers || {}; s.extra = s.extra || []; s.work = s.work || []; s.feedback = s.feedback || {}; s.devices = s.devices || []; s.done = s.done || {};
   if (s.time.manual && !Object.keys(s.time.edit).length) { s.time.edit = { started: s.time.started, ended: s.time.ended }; delete s.time.manual; } return s; }
 function replay(log, upto) {
   var running = false, since = null, phase = null, secs = 0, per = {}, end = upto || Date.now();
@@ -128,6 +128,7 @@ function merge(local, remote) {
   Object.keys(local.answers).forEach(function (k) { var a = local.answers[k], b = out.answers[k]; if (!b || String(a.at) > String(b.at)) out.answers[k] = a; });
   var ids = {}; out.extra.forEach(function (x) { ids[x.id] = x; }); local.extra.forEach(function (x) { if (!ids[x.id] || String(x.at) > String(ids[x.id].at)) ids[x.id] = x; });
   out.extra = Object.keys(ids).map(function (k) { return ids[k]; }).sort(function (a, b) { return String(a.at).localeCompare(String(b.at)); });
+  out.done = out.done || {}; Object.keys(local.done || {}).forEach(function (k) { var a = local.done[k], b = out.done[k]; if (!b || String(a.at) > String(b.at)) out.done[k] = a; });
   var files = {}; out.work.forEach(function (w) { files[w.file] = w; }); local.work.forEach(function (w) { if (!files[w.file] || String(w.at) > String(files[w.file].at)) files[w.file] = w; });
   out.work = Object.keys(files).map(function (k) { return files[k]; });
   if (String(local.time.editAt || "") >= String(out.time.editAt || "")) { out.time.log = local.time.log; out.time.edit = local.time.edit; out.time.editAt = local.time.editAt; }
@@ -302,10 +303,14 @@ function drawLesson() {
     '<div class="card clock" aria-label="Lesson clock"><span class="t" id="clk">0:00</span><button class="btn small primary" id="clkgo" type="button"></button>' + (r.running ? '<button class="btn small" id="clkend" type="button">End lesson</button>' : "") + '<button class="btn small" type="button" data-phase="_time">Edit times</button><span class="st" id="clkst"></span></div></div>';
   h += '<div class="lesson"><nav class="rail" aria-label="Lesson phases">' + ps.map(function (p, i) {
     var pm = x.time.phaseMinutes && x.time.phaseMinutes[p.id], planned = p.start != null ? p.start + "–" + p.end + " min" : "";
-    var tm = p.sys ? ({ _revise: REV ? dueList(x.subject).length + " due" : "his old mistakes", _extra: x.extra.length ? x.extra.length + " logged" : "add as you go", _work: x.work.filter(function (w) { return !w.removed; }).length ? x.work.filter(function (w) { return !w.removed; }).length + " uploaded" : "upload photos", _time: x.time.minutes != null ? x.time.minutes + " min" + (x.time.started ? " · " + hhmm(x.time.started) + "–" + (x.time.ended ? hhmm(x.time.ended) : "") : "") : "not recorded yet", _after: x.feedback && x.feedback.at ? "saved " + hhmm(x.feedback.at) : "notes + finish" })[p.id] : planned + (pm ? " · took " + pm : "");
+    var tm = p.sys ? ({ _revise: REV ? dueList(x.subject).length + " due" : "his old mistakes", _extra: x.extra.length ? x.extra.length + " logged" : "add as you go", _work: x.work.filter(function (w) { return !w.removed; }).length ? x.work.filter(function (w) { return !w.removed; }).length + " uploaded" : "upload photos", _time: x.time.minutes != null ? x.time.minutes + " min" + (x.time.started ? " · " + hhmm(x.time.started) + "–" + (x.time.ended ? hhmm(x.time.ended) : "") : "") : "not recorded yet", _after: x.feedback && x.feedback.at ? "saved " + hhmm(x.feedback.at) : "notes + finish" })[p.id] : planned + (pm ? " · took " + pm : "") + (phaseCount(p) ? " · " + phaseCount(p) : "");
     return (p.id === "_revise" ? '<div class="sep"></div>' : "") + '<button type="button" data-phase="' + esc(p.id) + '" data-real="' + (p.sys ? "" : "1") + '"' + (p.id === L.phase ? ' aria-current="step"' : "") + '><span class="n">' + (p.sys ? { _revise: "↻", _extra: "+", _work: "▤", _time: "⏱", _after: "✓" }[p.id] : i + 1) + '</span><span class="nm">' + esc(p.name) + '</span><span class="tm">' + esc(tm) + '</span></button>';
   }).join("") + '</nav><section class="card page" id="phasebox"></section></div>';
   app.innerHTML = h; drawPhase(); tick(); prefetchLesson();
+}
+function railCount() { var p = phases().filter(function (q) { return q.id === L.phase && !q.sys; })[0]; if (!p) return; var b = $('.rail button[data-phase="' + p.id + '"] .tm'); if (!b) return;
+  var pm = L.session.time.phaseMinutes && L.session.time.phaseMinutes[p.id], planned = p.start != null ? p.start + "–" + p.end + " min" : "";
+  b.textContent = planned + (pm ? " · took " + pm : "") + (phaseCount(p) ? " · " + phaseCount(p) : "");
 }
 function drawPhase() {
   var ps = phases(), p = ps.filter(function (q) { return q.id === L.phase; })[0], box = $("#phasebox"), h = "";
@@ -322,6 +327,27 @@ function drawPhase() {
   box.innerHTML = h; loadImages(box); drawTally();
 }
 function focusTable(rows) { return '<details class="module"><summary><span class="lvl deep">PLAN</span><h3>Pick your focus</h3><span class="chev">›</span></summary><div class="mbody"><div class="tablewrap"><table class="t"><thead><tr><th>Focus on</th><th>Spend the time on</th><th>Cut down</th></tr></thead><tbody>' + rows.map(function (r) { return '<tr><td><b>' + clean(r.want) + '</b></td><td>' + clean(r.spend) + '</td><td>' + clean(r.cut) + '</td></tr>'; }).join("") + '</tbody></table></div></div></details>'; }
+/* "taught" ticks: keyed by the content itself, so they survive edits elsewhere in the script */
+function plain(h) { return String(h == null ? "" : h).replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/g, " ").replace(/\s+/g, " ").trim(); }
+function isDone(k) { var d = L && L.session.done && L.session.done[k]; return !!(d && !d.off); }
+function tick_(k, label) { return '<button class="tick" type="button" data-tick="' + esc(k) + '" data-lab="' + esc(String(label).slice(0, 90)) + '" aria-pressed="' + isDone(k) + '" title="Mark as taught" aria-label="Mark as taught">\u2713</button>'; }
+function stepKey(h) { return "s:" + hkey(plain(h)); }
+function textKey(h) { return "t:" + hkey(plain(h)); }
+function modKey(n) { return "m:" + hkey(n); }
+function drillKey(q) { return "d:" + hkey(plain(q)); }
+/* everything tickable or answerable in a phase, for the rail count and the after-lesson summary */
+function phaseItems(p) { var out = [];
+  (function walk(bs, mod) { (bs || []).forEach(function (b) {
+    if (b.type === "steps") (b.items || []).forEach(function (it) { out.push({ k: stepKey(it.html), kind: "step", label: plain(it.html), mod: mod }); });
+    else if (b.type === "text" && plain(b.html).length > 40) out.push({ k: textKey(b.html), kind: "text", label: plain(b.html), mod: mod });
+    else if (b.type === "drill") (b.items || []).forEach(function (d) { out.push({ k: drillKey(d[0]), kind: "q", label: plain(d[0]), mod: mod }); });
+    else if (b.type === "quiz") (b.items || []).forEach(function (q) { out.push({ k: q.id, kind: "q", label: plain(q.q), mod: mod }); });
+    else if (b.type === "question") out.push({ k: b.id, kind: "q", label: b.label || b.id, mod: mod });
+    if (b.type === "module") { out.push({ k: modKey(b.name), kind: "module", label: b.name, mod: b.name }); walk(b.blocks, b.name); }
+  }); })(p.blocks, null);
+  return out; }
+function usedOrDone(it) { if (it.kind === "q") { var a = L.session.answers[it.k]; return !!(a && a.v); } return isDone(it.k); }
+function phaseCount(p) { var its = phaseItems(p).filter(function (i) { return i.kind !== "module"; }); var d = its.filter(usedOrDone).length; return its.length ? d + "/" + its.length + " done" : ""; }
 var KIND = { say: "Say", draw: "Draw", ask: "Ask", show: "Show", "do": "Do", check: "Check" };
 function img(path, alt) { return '<figure class="fig"><img data-src="' + esc(path) + '" alt="' + esc(alt || "") + '" hidden><div class="ph">Loading image</div></figure>'; }
 function blocks(bs) {
@@ -333,12 +359,13 @@ function blocks(bs) {
 }
 function block(b) {
   switch (b.type) {
-    case "text": return '<div class="prose">' + clean(b.html) + '</div>';
-    case "steps": return '<ol class="steps">' + (b.items || []).map(function (s) { var k = s.kind || "do"; return '<li class="' + esc(k) + '"><span class="kind ' + esc(k) + '">' + (KIND[k] || esc(k)) + '</span><div class="body prose">' + clean(s.html) + '</div></li>'; }).join("") + '</ol>';
-    case "module": return '<details class="module"' + (b.level !== "deep" ? " open" : "") + '><summary><span class="lvl ' + (b.level === "deep" ? "deep" : "core") + '">' + (b.level === "deep" ? "DEEP" : "CORE") + '</span><h3>' + esc(b.name) + '</h3>' + (b.minutes ? '<span class="pill">' + esc(b.minutes) + ' min</span>' : "") + '<span class="chev">›</span></summary><div class="mbody">' + blocks(b.blocks) + '</div></details>';
+    case "text": if (plain(b.html).length <= 40) return '<div class="prose">' + clean(b.html) + '</div>';
+      var tk = textKey(b.html); return '<div class="prose tickable' + (isDone(tk) ? " done" : "") + '" data-tk="' + esc(tk) + '">' + tick_(tk, plain(b.html)) + clean(b.html) + '</div>';
+    case "steps": return '<ol class="steps">' + (b.items || []).map(function (s) { var k = s.kind || "do", sk = stepKey(s.html); return '<li class="' + esc(k) + (isDone(sk) ? " done" : "") + '" data-tk="' + esc(sk) + '"><span class="kind ' + esc(k) + '">' + (KIND[k] || esc(k)) + '</span><div class="body prose">' + clean(s.html) + '</div>' + tick_(sk, plain(s.html)) + '</li>'; }).join("") + '</ol>';
+    case "module": var mk = modKey(b.name); return '<details class="module' + (isDone(mk) ? " done" : "") + '" data-tk="' + esc(mk) + '"' + (b.level !== "deep" ? " open" : "") + '><summary>' + tick_(mk, b.name) + '<span class="lvl ' + (b.level === "deep" ? "deep" : "core") + '">' + (b.level === "deep" ? "DEEP" : "CORE") + '</span><h3>' + esc(b.name) + '</h3>' + (b.minutes ? '<span class="pill">' + esc(b.minutes) + ' min</span>' : "") + '<span class="chev">›</span></summary><div class="mbody">' + blocks(b.blocks) + '</div></details>';
     case "figure": return b.img ? img(b.img, b.caption).replace("</figure>", (b.caption ? '<figcaption>' + clean(b.caption) + '</figcaption>' : "") + '</figure>') : '<figure class="fig">' + clean(b.html) + '</figure>';
     case "reveal": return '<details class="reveal"><summary>' + esc(b.label || "Answer") + '</summary><div class="prose">' + clean(b.html) + (b.img || []).map(function (i) { return img(i); }).join("") + '</div></details>';
-    case "drill": return '<div><div class="label" style="margin-bottom:8px">' + esc(b.title || "Quick-fire drill") + '</div><div class="drill">' + (b.items || []).map(function (d) { return '<div class="d"><div>' + clean(d[0]) + '</div><details><summary class="linkbtn">Answer</summary><div class="da">' + clean(d[1]) + '</div></details></div>'; }).join("") + '</div></div>';
+    case "drill": return '<div><div class="label" style="margin-bottom:8px">' + esc(b.title || "Quick-fire drill") + '</div><div class="items">' + (b.items || []).map(function (d, i) { var dk = drillKey(d[0]), a = L.session.answers[dk] || {}; return '<div class="item" data-v="' + esc(a.v || "") + '"><span class="qn">' + (i + 1) + '</span><div><div>' + clean(d[0]) + '</div><details><summary class="linkbtn">Answer</summary><div class="da prose">' + clean(d[1]) + '</div></details></div>' + ctl(dk, null, a, plain(d[0])) + '</div>'; }).join("") + '</div></div>';
     case "video": return videoBlock(b);
     case "quiz": return quizBlock(b);
     case "question": return questionBlock(b);
@@ -355,9 +382,9 @@ function videoBlock(b) {
     ((b.moments || []).length ? '<div class="qbar" style="margin-top:10px">' + b.moments.map(function (m) { return '<button class="chip" type="button" data-seek="' + id + '" data-t="' + esc(m.t) + '">' + esc(m.t) + ' · ' + esc(m.label || "") + '</button>'; }).join("") + '</div>' : "") +
     (b.note ? '<div class="prose hint" style="margin-top:8px">' + clean(b.note) + '</div>' : "") + '</div>';
 }
-function ctl(id, marks, a) {
+function ctl(id, marks, a, qtext) {
   a = a || L.session.answers[id] || {};
-  return '<div class="ctl" data-item="' + esc(id) + '">' + VERD.map(function (v) { return '<button class="v" type="button" data-v="' + v[0] + '" title="' + esc(VHELP[v[0]]) + '" aria-pressed="' + (a.v === v[0]) + '">' + v[1] + '</button>'; }).join("") +
+  return '<div class="ctl" data-item="' + esc(id) + '"' + (qtext ? ' data-q="' + esc(String(qtext).slice(0, 160)) + '"' : "") + '>' + VERD.map(function (v) { return '<button class="v" type="button" data-v="' + v[0] + '" title="' + esc(VHELP[v[0]]) + '" aria-pressed="' + (a.v === v[0]) + '">' + v[1] + '</button>'; }).join("") +
     (marks ? '<input class="mk" type="number" min="0" max="' + esc(marks) + '" step="0.5" inputmode="decimal" aria-label="Marks out of ' + esc(marks) + '" data-mk value="' + (a.m != null ? esc(a.m) : "") + '"><span class="hint num">/ ' + esc(marks) + '</span>' : "") +
     '<input class="note" type="text" data-note aria-label="What he said or got wrong" placeholder="What he said / got wrong" value="' + esc(a.note || "") + '"></div>';
 }
@@ -434,7 +461,7 @@ function workView() {
 function itemsList() { var out = [];
   phases().forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) { if (b.type === "question") out.push({ id: b.id, label: b.label || b.id }); if (b.type === "quiz") (b.items || []).forEach(function (q, i) { out.push({ id: q.id, label: "Quiz " + (i + 1) + ": " + String(q.q).replace(/<[^>]+>/g, "").slice(0, 60) }); }); if (b.blocks) walk(b.blocks); }); })(p.blocks); });
   L.session.extra.forEach(function (e, i) { out.push({ id: "x:" + e.id, label: "Extra " + (i + 1) + ": " + e.q.slice(0, 60) }); }); return out; }
-function labelOf(id) { if (!id) return ""; var f = itemsList().filter(function (i) { return i.id === id; })[0]; return f ? f.label : id; }
+function labelOf(id) { if (!id) return ""; var a = L.session.answers[id]; if (a && a.q && /^d:/.test(id)) return a.q; var f = itemsList().filter(function (i) { return i.id === id; })[0]; return f ? f.label : id; }
 
 /* times: everything editable, including undoing "End lesson" */
 function tval(iso) { return iso ? hhmm(iso) : ""; }
@@ -460,6 +487,13 @@ function afterView() {
   var h = '<div class="phase-top"><h2>After the lesson</h2><span class="hint">Claude reads this before the next script</span></div>';
   h += '<div class="stats"><button class="card stat" type="button" data-phase="_time" style="text-align:left;cursor:pointer"><div class="v2">' + (x.time.minutes != null ? x.time.minutes : "—") + '</div><div class="l">minutes taught' + (x.time.started ? " · " + hhmm(x.time.started) + "–" + (x.time.ended ? hhmm(x.time.ended) : "now") : "") + ' · tap to edit</div></button>' +
     '<div class="card stat"><div class="v2">' + (sc.n ? sc.r + "/" + sc.n : "—") + '</div><div class="l">answers right</div></div><div class="card stat"><div class="v2">' + x.work.filter(function (w) { return !w.removed; }).length + '</div><div class="l">photos uploaded</div></div></div>';
+  var cov = [], covTxt = [];
+  phases().filter(function (p) { return !p.sys; }).forEach(function (p) { var its = phaseItems(p), mods = its.filter(function (i) { return i.kind === "module" && isDone(i.k); }).map(function (i) { return i.label; });
+    var steps = its.filter(function (i) { return (i.kind === "step" || i.kind === "text") && isDone(i.k); }).length, qs = its.filter(function (i) { return i.kind === "q"; }), used = qs.filter(usedOrDone), right = used.filter(function (i) { return x.answers[i.k].v === "right"; });
+    if (!mods.length && !steps && !used.length) return;
+    var line = esc(p.name) + ": " + [mods.length ? mods.map(esc).join(", ") : "", steps ? steps + " step" + (steps > 1 ? "s" : "") + " taught" : "", used.length ? used.length + " question" + (used.length > 1 ? "s" : "") + " used, " + right.length + " right" : ""].filter(Boolean).join(" \u00b7 ");
+    cov.push('<li>' + line + '</li>'); covTxt.push(line.replace(/&amp;/g, "&")); });
+  if (cov.length) h += '<div class="card" style="padding:16px 18px"><div class="label" style="margin-bottom:8px">What you covered (from your ticks)</div><ul class="list-plain" style="gap:4px">' + cov.join("") + '</ul><button class="btn small" type="button" id="usecov" data-cov="' + esc(covTxt.join("\n")) + '" style="margin-top:10px">Put this in \u201cWhat you actually covered\u201d</button></div>';
   var wrong = [];
   Object.keys(x.answers).forEach(function (k) { var a = x.answers[k]; if (a.v && a.v !== "right" && a.v !== "skipped") wrong.push('<li class="mistake ' + esc(a.v) + '"><div><b>' + esc(labelOf(k)) + '</b> <span class="pill">' + esc(VHELP[a.v]) + '</span></div>' + (a.note ? '<div class="fix">' + esc(a.note) + '</div>' : "") + '</li>'); });
   x.extra.forEach(function (e) { if (e.v && e.v !== "right" && e.v !== "skipped") wrong.push('<li class="mistake ' + esc(e.v) + '"><div><b>' + esc(e.q) + '</b> <span class="pill">' + esc(VHELP[e.v]) + '</span></div>' + (e.note ? '<div class="fix">' + esc(e.note) + '</div>' : "") + '</li>'); });
@@ -495,6 +529,9 @@ document.addEventListener("click", function (ev) {
   if (t.id === "s-cache") { try { indexedDB.deleteDatabase("tutor-desk"); } catch (e) {} idbP = null; ls("tutor.tree." + CFG.repo, null); TREE = null; toast("Cache cleared"); return; }
   if (!L || route().indexOf("/lesson/") !== 0) return;
   var x = L.session;
+  if (t.hasAttribute("data-tick")) { ev.preventDefault(); ev.stopPropagation(); var k = t.getAttribute("data-tick"); x.done = x.done || {}; var on = !isDone(k);
+    x.done[k] = on ? { at: now(), d: CFG.device, label: t.getAttribute("data-lab") } : { off: true, at: now(), label: t.getAttribute("data-lab") };
+    t.setAttribute("aria-pressed", String(on)); var host = t.closest("[data-tk]"); if (host) host.classList.toggle("done", on); touch(); railCount(); return; }
   if (t.hasAttribute("data-phase")) { var id = t.getAttribute("data-phase"); var r = replay(x.time.log);
     if (t.getAttribute("data-real") && r.running && r.phase !== id) logEvent("phase", id);
     L.phase = id; drawLesson(); if (window.innerWidth < 900) $("#phasebox").scrollIntoView({ block: "start" }); return; }
@@ -507,11 +544,12 @@ document.addEventListener("click", function (ev) {
   if (t.id === "tm-reset") { if (armed !== "reset") { armed = "reset"; t.textContent = "Tap again to reset the clock"; t.classList.add("confirm"); setTimeout(function () { if (armed === "reset") { armed = null; if (t.isConnected) { t.textContent = "Reset the clock"; t.classList.remove("confirm"); } } }, 4000); return; }
     armed = null; x.time.log = []; timeEdited(); drawLesson(); toast("Clock reset"); return; }
   if (t.hasAttribute("data-logdel")) { x.time.log.splice(+t.getAttribute("data-logdel"), 1); timeEdited(); drawLesson(); return; }
+  if (t.id === "usecov") { var ta = $("#fb-cov"); if (ta) { ta.value = (ta.value ? ta.value + "\n" : "") + t.getAttribute("data-cov"); x.feedback.covered = ta.value; x.feedback.at = now(); touch(); } return; }
   if (t.id === "reopen") { x.status = "in-progress"; x.statusAt = now(); touch(); drawLesson(); return; }
   if (t.hasAttribute("data-qf")) { L.filter = t.getAttribute("data-qf"); drawPhase(); return; }
   if (t.hasAttribute("data-ans")) { var qa = t.parentNode.querySelector(".qa"); qa.hidden = !qa.hidden; t.textContent = qa.hidden ? "Show answer" : "Hide answer"; return; }
   if (t.hasAttribute("data-v")) { var box = t.closest("[data-item]"), iid = box.getAttribute("data-item"), v = t.getAttribute("data-v"), a = target(iid);
-    a.v = a.v === v ? null : v; a.at = now(); a.d = CFG.device; save(iid, a);
+    a.v = a.v === v ? null : v; a.at = now(); a.d = CFG.device; if (box.getAttribute("data-q")) a.q = box.getAttribute("data-q"); save(iid, a); railCount();
     $$(".v", box).forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-v") === a.v)); }); var row = box.closest(".item"); if (row) row.setAttribute("data-v", a.v || ""); drawTally(); return; }
   if (t.hasAttribute("data-exv")) { $$("[data-exv]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === t && b.getAttribute("aria-pressed") !== "true")); }); return; }
   if (t.hasAttribute("data-exdel")) { var did = t.getAttribute("data-exdel"); x.extra = x.extra.filter(function (e) { return e.id !== did; }); touch(); drawLesson(); return; }
