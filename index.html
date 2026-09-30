@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
+<meta name="theme-color" content="#121826">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
 <title>Tutor Desk</title>
 <script>
 /* apply the saved theme and text style before anything paints */
@@ -15,7 +19,7 @@ document.write('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?f
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://api.github.com">
-<link rel="stylesheet" href="app.css?v=6">
+<link rel="stylesheet" href="app.css?v=7">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js" defer></script>
 </head>
 <body>
@@ -23,6 +27,7 @@ document.write('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?f
   <a class="brand" href="#/">Tutor Desk <small id="who"></small></a>
   <nav class="nav" aria-label="Sections">
     <a href="#/" data-nav="lessons">Lessons</a>
+    <a href="#/revise" data-nav="revise">Revise</a>
     <a href="#/record" data-nav="record">Record</a>
     <a href="#/settings" data-nav="settings">Settings</a>
   </nav>
@@ -32,6 +37,6 @@ document.write('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?f
 <main id="app"><div class="empty"><h3>Loading</h3><p>Starting the Tutor Desk.</p></div></main>
 <div id="zoom" class="zoom" hidden><button class="btn small" id="zoomx" type="button">Close</button><img id="zimg" alt=""></div>
 <div id="toast" class="toast" hidden></div>
-<script src="app.js?v=6" defer></script>
+<script src="app.js?v=7" defer></script>
 </body>
 </html>

@@ -170,7 +170,7 @@ setInterval(function () { if (L && L.dirty) flush(); }, 25000);
 var app = $("#app");
 function route() { return (location.hash || "#/").slice(1) || "/"; }
 window.addEventListener("hashchange", function () { if (L && L.dirty) flush(); render(); window.scrollTo(0, 0); });
-function nav(r) { var k = r.indexOf("/record") === 0 ? "record" : r.indexOf("/settings") === 0 ? "settings" : "lessons";
+function nav(r) { var k = r.indexOf("/record") === 0 ? "record" : r.indexOf("/settings") === 0 ? "settings" : r.indexOf("/revise") === 0 ? "revise" : "lessons";
   $$("[data-nav]").forEach(function (a) { if (a.getAttribute("data-nav") === k) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   $("#who").textContent = CFG.token ? CFG.student + " · " + CFG.device : ""; }
 function render() {
@@ -180,6 +180,7 @@ function render() {
   if (r.indexOf("/lesson/") === 0) return lessonView(decodeURIComponent(r.slice(8)));
   if (r.indexOf("/new") === 0) return newView();
   if (r.indexOf("/record") === 0) return recordView();
+  if (r.indexOf("/revise") === 0) return reviseView();
   return lessonsView();
 }
 function fail(e) { app.innerHTML = '<div class="empty"><h3>Couldn’t reach GitHub</h3><p>' + esc(e && e.message || e) + '</p><p>Check your connection, or the key and repo in <a href="#/settings">Settings</a>.</p></div>'; }
@@ -194,7 +195,8 @@ function settingsView() {
     '<div class="field"><label for="s-dev">This device</label><input type="text" id="s-dev" value="' + esc(CFG.device) + '" placeholder="tablet, la57, mac"></div>' +
     '<div class="field"><label for="s-stu">Student</label><input type="text" id="s-stu" value="' + esc(CFG.student) + '"></div>' +
     '<div class="field"><label for="s-font">Text style</label><select id="s-font"><option value="figtree"' + (f === "figtree" ? " selected" : "") + '>Clean (Figtree)</option><option value="lexend"' + (f === "lexend" ? " selected" : "") + '>Extra readable (Lexend)</option><option value="serif"' + (f === "serif" ? " selected" : "") + '>Book (Source Serif)</option></select></div></div>' +
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="submit">Save and test</button><button class="btn" type="button" id="s-cache">Clear this device’s cache</button><button class="btn danger" type="button" id="s-clear">Remove key from this device</button><span class="hint" id="s-msg"></span></div></form>';
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="submit">Save and test</button><button class="btn" type="button" id="s-cache">Clear this device’s cache</button><button class="btn danger" type="button" id="s-clear">Remove key from this device</button><span class="hint" id="s-msg"></span></div></form>' +
+    '<div class="card" style="padding:18px 20px;margin-top:16px;max-width:820px"><h3 style="font-size:var(--s-lg)">Install on this device</h3><p class="hint" style="margin:6px 0 12px">Adds a Tutor Desk icon to the home screen. It opens full screen, and lessons you have opened before keep working without internet; taps upload when you are back online. On the Samsung tablet: browser menu \u2192 <b>Add page to</b> \u2192 <b>Home screen</b> (or <b>Install app</b>).</p><button class="btn primary" type="button" id="s-install" hidden>Install Tutor Desk</button></div>';
 }
 function testConnection() {
   var m = $("#s-msg"); m.textContent = "Testing…";
@@ -285,7 +287,7 @@ function phases() {
     if ((s.quiz || []).length) ps.push({ id: "quiz", name: "Oral quiz", blocks: [{ type: "quiz", id: "quiz", items: s.quiz }] });
     if ((s.questions || []).length) ps.push({ id: "qs", name: "Questions", blocks: s.questions.map(function (q) { return Object.assign({ type: "question" }, q); }) });
   } else ps.push({ id: "lesson", name: "Lesson", blocks: [{ type: "text", html: "<p>No script for this lesson. Use <b>Extra questions</b> to log what he answered, and <b>After the lesson</b> for notes.</p>" }] });
-  ps.push({ id: "_extra", name: "Extra questions", sys: 1 }, { id: "_work", name: "His work (photos)", sys: 1 }, { id: "_time", name: "Times", sys: 1 }, { id: "_after", name: "After the lesson", sys: 1 });
+  ps.push({ id: "_revise", name: "Mistakes warm-up", sys: 1 }, { id: "_extra", name: "Extra questions", sys: 1 }, { id: "_work", name: "His work (photos)", sys: 1 }, { id: "_time", name: "Times", sys: 1 }, { id: "_after", name: "After the lesson", sys: 1 });
   return ps;
 }
 function drawLesson() {
@@ -299,16 +301,18 @@ function drawLesson() {
     '<div class="card clock" aria-label="Lesson clock"><span class="t" id="clk">0:00</span><button class="btn small primary" id="clkgo" type="button"></button>' + (r.running ? '<button class="btn small" id="clkend" type="button">End lesson</button>' : "") + '<button class="btn small" type="button" data-phase="_time">Edit times</button><span class="st" id="clkst"></span></div></div>';
   h += '<div class="lesson"><nav class="rail" aria-label="Lesson phases">' + ps.map(function (p, i) {
     var pm = x.time.phaseMinutes && x.time.phaseMinutes[p.id], planned = p.start != null ? p.start + "–" + p.end + " min" : "";
-    var tm = p.sys ? ({ _extra: x.extra.length ? x.extra.length + " logged" : "add as you go", _work: x.work.filter(function (w) { return !w.removed; }).length ? x.work.filter(function (w) { return !w.removed; }).length + " uploaded" : "upload photos", _time: x.time.minutes != null ? x.time.minutes + " min" + (x.time.started ? " · " + hhmm(x.time.started) + "–" + (x.time.ended ? hhmm(x.time.ended) : "") : "") : "not recorded yet", _after: x.feedback && x.feedback.at ? "saved " + hhmm(x.feedback.at) : "notes + finish" })[p.id] : planned + (pm ? " · took " + pm : "");
-    return (p.id === "_extra" ? '<div class="sep"></div>' : "") + '<button type="button" data-phase="' + esc(p.id) + '" data-real="' + (p.sys ? "" : "1") + '"' + (p.id === L.phase ? ' aria-current="step"' : "") + '><span class="n">' + (p.sys ? { _extra: "+", _work: "▤", _time: "⏱", _after: "✓" }[p.id] : i + 1) + '</span><span class="nm">' + esc(p.name) + '</span><span class="tm">' + esc(tm) + '</span></button>';
+    var tm = p.sys ? ({ _revise: REV ? dueList(x.subject).length + " due" : "his old mistakes", _extra: x.extra.length ? x.extra.length + " logged" : "add as you go", _work: x.work.filter(function (w) { return !w.removed; }).length ? x.work.filter(function (w) { return !w.removed; }).length + " uploaded" : "upload photos", _time: x.time.minutes != null ? x.time.minutes + " min" + (x.time.started ? " · " + hhmm(x.time.started) + "–" + (x.time.ended ? hhmm(x.time.ended) : "") : "") : "not recorded yet", _after: x.feedback && x.feedback.at ? "saved " + hhmm(x.feedback.at) : "notes + finish" })[p.id] : planned + (pm ? " · took " + pm : "");
+    return (p.id === "_revise" ? '<div class="sep"></div>' : "") + '<button type="button" data-phase="' + esc(p.id) + '" data-real="' + (p.sys ? "" : "1") + '"' + (p.id === L.phase ? ' aria-current="step"' : "") + '><span class="n">' + (p.sys ? { _revise: "↻", _extra: "+", _work: "▤", _time: "⏱", _after: "✓" }[p.id] : i + 1) + '</span><span class="nm">' + esc(p.name) + '</span><span class="tm">' + esc(tm) + '</span></button>';
   }).join("") + '</nav><section class="card page" id="phasebox"></section></div>';
   app.innerHTML = h; drawPhase(); tick(); prefetchLesson();
 }
 function drawPhase() {
   var ps = phases(), p = ps.filter(function (q) { return q.id === L.phase; })[0], box = $("#phasebox"), h = "";
+  if (p.id === "_revise") { box.innerHTML = '<div class="phase-top"><h2>Mistakes warm-up</h2><span class="hint">His old mistakes, brought back on a schedule until he gets them right</span></div><div id="revbox"></div>'; reviseInto($("#revbox"), L.session.subject); return; }
   if (p.id === "_extra") h = extraView(); else if (p.id === "_work") h = workView(); else if (p.id === "_time") h = timeView(); else if (p.id === "_after") h = afterView();
   else {
-    h += '<div class="phase-top"><h2>' + esc(p.name) + '</h2>' + (p.start != null ? '<span class="hint num">' + p.start + '–' + p.end + ' min</span>' : "") + '</div>';
+    var nq = slidesOf(p).length;
+    h += '<div class="phase-top"><h2>' + esc(p.name) + '</h2><div style="display:flex;gap:10px;align-items:center">' + (nq ? '<button class="btn small accent" type="button" data-show="*">Show him (' + nq + ')</button>' : "") + (p.start != null ? '<span class="hint num">' + p.start + '–' + p.end + ' min</span>' : "") + '</div></div>';
     if (p.show) h += '<div class="screen"><span class="label">On screen</span><div>' + clean(p.show) + '</div></div>';
     if (L.script && L.script.focus && ps[0] === p) h += focusTable(L.script.focus);
     h += blocks(p.blocks || []);
@@ -362,7 +366,7 @@ function quizBlock(b) {
     }).join("") + '</div>';
 }
 function questionBlock(q) {
-  var h = '<div class="qcard"><div><h3>' + esc(q.label || "Question") + '</h3>' + (q.source ? '<div class="src">' + esc(q.source) + '</div>' : "") + '</div>' + (q.html ? '<div class="prose">' + clean(q.html) + '</div>' : "") + (q.img || []).map(function (i) { return img(i, q.label); }).join("");
+  var h = '<div class="qcard"><div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap"><div><h3>' + esc(q.label || "Question") + '</h3>' + (q.source ? '<div class="src">' + esc(q.source) + '</div>' : "") + '</div>' + ((q.img || []).length ? '<button class="btn small" type="button" data-show="' + esc(q.id) + '">Show him</button>' : "") + '</div>' + (q.html ? '<div class="prose">' + clean(q.html) + '</div>' : "") + (q.img || []).map(function (i) { return img(i, q.label); }).join("");
   if (q.answer || (q.answerImg || []).length) h += '<details class="reveal"><summary>Mark scheme</summary><div class="prose">' + clean(q.answer || "") + (q.answerImg || []).map(function (i) { return img(i, "Mark scheme"); }).join("") + '</div></details>';
   var a = L.session.answers[q.id] || {};
   return h + '<div class="items"><div class="item" data-v="' + esc(a.v || "") + '"><span class="qn">▸</span><div class="label" style="padding-top:12px">How he did</div>' + ctl(q.id, q.marks) + '</div></div></div>';
@@ -611,6 +615,93 @@ function md(s) {
   });
   if (list) out.push("</ul>"); return out.join("");
 }
+
+/* ---------------- show him: question pictures full screen, nothing else ---------------- */
+function slidesOf(p) { var out = []; (function walk(bs) { (bs || []).forEach(function (b) { if (b.type === "question" && (b.img || []).length) out.push({ id: b.id, label: b.label, img: b.img }); if (b.blocks) walk(b.blocks); }); })(p && p.blocks); return out; }
+var SH = null;
+function openShow(which) {
+  var p = phases().filter(function (q) { return q.id === L.phase; })[0], sl = slidesOf(p); if (!sl.length) return;
+  var i = which === "*" ? 0 : Math.max(0, sl.map(function (x) { return x.id; }).indexOf(which));
+  var el = document.createElement("div"); el.className = "show"; el.id = "show";
+  el.innerHTML = '<div class="show-top"><span id="sh-lab"></span><span class="num" id="sh-n"></span><button type="button" class="show-x" id="sh-x" aria-label="Close">×</button></div><div class="show-body" id="sh-body"></div><div class="show-nav"><button type="button" id="sh-prev" aria-label="Previous">‹</button><button type="button" id="sh-next" aria-label="Next">›</button></div>';
+  document.body.appendChild(el); SH = { sl: sl, i: i }; drawShow();
+  try { if (el.requestFullscreen) el.requestFullscreen().catch(function () {}); } catch (e) {}
+  var x0 = null; el.addEventListener("touchstart", function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+  el.addEventListener("touchend", function (e) { if (x0 == null) return; var dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 60) stepShow(dx < 0 ? 1 : -1); x0 = null; });
+}
+function drawShow() { var s = SH.sl[SH.i]; $("#sh-lab").textContent = ""; $("#sh-n").textContent = (SH.i + 1) + " / " + SH.sl.length;
+  $("#sh-body").innerHTML = s.img.map(function (i) { return '<img data-src="' + esc(i) + '" alt="' + esc(s.label || "") + '" hidden><div class="ph">Loading</div>'; }).join("");
+  $$("#sh-body img").forEach(showImg); $("#sh-body").scrollTop = 0; $("#sh-prev").disabled = SH.i === 0; $("#sh-next").disabled = SH.i === SH.sl.length - 1; }
+function stepShow(d) { if (!SH) return; var n = SH.i + d; if (n < 0 || n >= SH.sl.length) return; SH.i = n; drawShow(); }
+function closeShow() { var el = $("#show"); if (el) el.remove(); SH = null; try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {} }
+document.addEventListener("click", function (e) { var t = e.target.closest("button"); if (!t) return;
+  if (t.hasAttribute("data-show")) { openShow(t.getAttribute("data-show")); return; }
+  if (t.id === "sh-x") closeShow(); else if (t.id === "sh-prev") stepShow(-1); else if (t.id === "sh-next") stepShow(1); });
+document.addEventListener("keydown", function (e) { if (!SH) return; if (e.key === "ArrowRight") stepShow(1); else if (e.key === "ArrowLeft") stepShow(-1); else if (e.key === "Escape") closeShow(); });
+
+/* ---------------- revise: his mistakes on a schedule (day 1, 3, 7, 14, 30) ---------------- */
+var REV = null, revSaveT = null, GAPS = [1, 3, 7, 14, 30];
+function hkey(s) { var h = 5381; s = String(s); for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return "m" + h.toString(36); }
+function addDays(iso, n) { var d = pdate(iso); d.setDate(d.getDate() + n); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function revKey() { return "tutor.review." + CFG.repo + "." + CFG.student; }
+function loadRevise(force) {
+  if (REV && !force) return Promise.resolve(REV);
+  var sb = studentBase();
+  return loadTree(force).then(function () { return Promise.all([fileText(sb + "mistakes.jsonl"), fileJSON(sb + "review.json")]); }).then(function (v) {
+    var ms = v[0] ? v[0].text.split(/\n/).filter(function (l) { return l.trim(); }).map(function (l) { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean) : [];
+    ms.forEach(function (m) { m.key = hkey((m.date || "") + "|" + (m.text || m.what || "")); });
+    var local = null; try { local = JSON.parse(ls(revKey()) || "null"); } catch (e) {}
+    var rv = (v[1] && v[1].data) || {};
+    if (local && local.dirty) Object.keys(local.data).forEach(function (k) { var a = local.data[k], b = rv[k]; if (!b || String(a.last) > String(b.last)) rv[k] = a; });
+    REV = { ms: ms, rv: rv, sha: v[1] && v[1].sha, dirty: !!(local && local.dirty) }; if (REV.dirty) saveRevise(); return REV; });
+}
+function dueList(subject) { if (!REV) return []; var t = todayIso();
+  return REV.ms.filter(function (m) { var r = REV.rv[m.key]; if (m.fixed && !r) return false; if (r && r.box >= GAPS.length) return false; if (subject && m.subject && m.subject !== subject) return false; return !r || r.due <= t; })
+    .sort(function (a, b) { var ra = REV.rv[a.key], rb = REV.rv[b.key]; return String(ra ? ra.due : a.date).localeCompare(String(rb ? rb.due : b.date)); }); }
+function markRevise(key, ok) { var r = REV.rv[key] || { box: 0, history: [] }, t = todayIso();
+  r.box = ok ? r.box + 1 : 0;
+  r.due = !ok ? addDays(t, 1) : r.box >= GAPS.length ? "done" : addDays(t, GAPS[r.box - 1]);
+  r.last = now(); r.history = (r.history || []).concat([{ d: t, ok: ok, by: CFG.device }]).slice(-12); REV.rv[key] = r; REV.dirty = true;
+  ls(revKey(), JSON.stringify({ dirty: true, data: REV.rv })); clearTimeout(revSaveT); revSaveT = setTimeout(saveRevise, 2500); }
+function saveRevise() { if (!REV || !REV.dirty || !navigator.onLine) return; var path = studentBase() + "review.json", mine = JSON.parse(JSON.stringify(REV.rv));
+  function put(sha) { return putB64(path, b64enc(JSON.stringify(mine, null, 1)), CFG.student + ": mistakes warm-up (" + CFG.device + ")", sha); }
+  setSave("Saving…");
+  put(REV.sha).catch(function (e) { if (e.status !== 409 && e.status !== 422) throw e;
+    return gh("/repos/" + CFG.repo + "/contents/" + enc(path)).then(function (r) { var remote = r.status === 404 ? {} : JSON.parse(new TextDecoder().decode(b64bytes(r.json.content)));
+      Object.keys(remote).forEach(function (k) { if (!mine[k] || String(remote[k].last) > String(mine[k].last)) mine[k] = remote[k]; }); REV.rv = mine; return put(r.status === 404 ? null : r.json.sha); }); })
+  .then(function (sha) { REV.sha = sha; REV.dirty = false; ls(revKey(), JSON.stringify({ dirty: false, data: REV.rv })); setSave("Saved " + hhmm(now())); })
+  .catch(function () { setSave("Not saved · kept on device", true); }); }
+window.addEventListener("online", saveRevise);
+var revState = { i: 0, open: false, subj: null, box: null };
+function reviseInto(box, subject) {
+  box.innerHTML = '<div class="empty"><h3>Loading his mistakes</h3></div>';
+  loadRevise().then(function () { revState = { i: 0, open: false, subj: subject || null, box: box }; drawRevise(); })
+    .catch(function (e) { box.innerHTML = '<div class="empty"><h3>Couldn’t load his mistakes</h3><p>' + esc(e.message) + '</p></div>'; });
+}
+function drawRevise() {
+  var box = revState.box; if (!box || !box.isConnected) return; var due = dueList(revState.subj), all = REV.ms.length;
+  var chips = '<div class="qbar" style="margin-bottom:12px">' + [[null, "All subjects"], ["chem", "Chemistry"], ["maths", "Maths"]].map(function (c) { return '<button class="chip" type="button" data-rsub="' + (c[0] || "") + '" aria-pressed="' + (revState.subj === c[0]) + '">' + c[1] + '</button>'; }).join("") + '</div>';
+  if (!due.length) { box.innerHTML = chips + '<div class="empty"><h3>Nothing due</h3><p>' + (all ? "Every mistake is either mastered or scheduled for a later day." : "No mistakes logged yet. They arrive when Claude closes a lesson.") + '</p></div>'; return; }
+  if (revState.i >= due.length) revState.i = 0;
+  var m = due[revState.i], r = REV.rv[m.key];
+  box.innerHTML = chips + '<div class="rev card"><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pill ' + esc(m.subject || "") + '">' + esc(SUBJ[m.subject] || m.subject || "") + '</span>' + (m.topic ? '<span class="pill">' + esc(m.topic) + '</span>' : "") + (m.type ? '<span class="pill">' + esc(VHELP[m.type] || m.type) + '</span>' : "") + '<span class="pill num">' + (revState.i + 1) + ' of ' + due.length + ' due</span>' + (r ? '<span class="pill">round ' + (r.box + 1) + '</span>' : '<span class="pill warn">first time</span>') + '</div>' +
+    '<div class="label" style="margin-top:16px">Ask him</div><div class="rev-q">' + clean(m.ask || ("What’s the correct version of this? “" + (m.text || m.what || "") + "”")) + '</div>' +
+    (revState.open ? '<div class="qa prose"><b>Answer:</b> ' + clean(m.fix || "") + '<div class="hint" style="margin-top:8px">His mistake (' + esc(m.date || "") + '): ' + clean(m.text || m.what || "") + '</div></div>' : '<div><button class="btn" type="button" data-rev="open">Show answer</button></div>') +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="v" type="button" data-v="right" data-rev="ok" aria-pressed="false">✓ Got it</button><button class="v" type="button" data-v="wrong" data-rev="no" aria-pressed="false">✗ Still wrong</button><button class="btn small" type="button" data-rev="skip">Skip for now</button></div></div>';
+}
+function reviseView() { app.innerHTML = '<div class="section-h"><div><div class="label">' + esc(CFG.student) + '</div><h2>Revise his mistakes</h2></div><span class="hint">Five minutes at the start of a lesson. Each one comes back on day 1, 3, 7, 14 and 30 until he gets it right every time.</span></div><div id="revbox"></div>'; reviseInto($("#revbox"), null); }
+document.addEventListener("click", function (e) { var t = e.target.closest("button"); if (!t || !REV || !revState.box || !revState.box.isConnected) return;
+  if (t.hasAttribute("data-rsub")) { revState.subj = t.getAttribute("data-rsub") || null; revState.i = 0; revState.open = false; drawRevise(); return; }
+  var a = t.getAttribute("data-rev"); if (!a) return; e.stopPropagation(); var due = dueList(revState.subj), m = due[revState.i];
+  if (a === "open") { revState.open = true; drawRevise(); return; }
+  if (a === "skip") { revState.i = (revState.i + 1) % Math.max(1, due.length); revState.open = false; drawRevise(); return; }
+  if (m) { markRevise(m.key, a === "ok"); var nd = REV.rv[m.key].due; toast(a === "ok" ? (nd === "done" ? "Mastered" : "Back on " + fmtDate(nd)) : "Back tomorrow"); }
+  revState.open = false; drawRevise(); }, true);
+
+/* ---------------- install as an app ---------------- */
+if ("serviceWorker" in navigator && location.protocol === "https:") { window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); }); }
+var installEvt = null; window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); installEvt = e; var b = $("#s-install"); if (b) b.hidden = false; });
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("#s-install"); if (t && installEvt) { installEvt.prompt(); installEvt = null; t.hidden = true; } });
 
 render();
 })();
