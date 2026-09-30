@@ -328,10 +328,21 @@ function block(b) {
     case "figure": return b.img ? img(b.img, b.caption).replace("</figure>", (b.caption ? '<figcaption>' + clean(b.caption) + '</figcaption>' : "") + '</figure>') : '<figure class="fig">' + clean(b.html) + '</figure>';
     case "reveal": return '<details class="reveal"><summary>' + esc(b.label || "Answer") + '</summary><div class="prose">' + clean(b.html) + (b.img || []).map(function (i) { return img(i); }).join("") + '</div></details>';
     case "drill": return '<div><div class="label" style="margin-bottom:8px">' + esc(b.title || "Quick-fire drill") + '</div><div class="drill">' + (b.items || []).map(function (d) { return '<div class="d"><div>' + clean(d[0]) + '</div><details><summary class="linkbtn">Answer</summary><div class="da">' + clean(d[1]) + '</div></details></div>'; }).join("") + '</div></div>';
+    case "video": return videoBlock(b);
     case "quiz": return quizBlock(b);
     case "question": return questionBlock(b);
     default: return b.html ? '<div class="prose">' + clean(b.html) + '</div>' : "";
   }
+}
+/* YouTube, embedded; "moments" jump the player to a point ("4:32 KCN mechanism") */
+function secsOf(t) { if (typeof t === "number") return t; var p = String(t || "0").split(":").map(Number); return p.reduce(function (a, b) { return a * 60 + b; }, 0); }
+function vsrc(id, start, auto) { return "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(id) + "?rel=0&modestbranding=1&start=" + secsOf(start) + (auto ? "&autoplay=1" : ""); }
+function videoBlock(b) {
+  var id = String(b.id || "").replace(/[^A-Za-z0-9_-]/g, "");
+  return '<div class="vid"><div class="label" style="margin-bottom:8px">' + esc(b.channel || "Video") + '</div><h3 style="font-size:var(--s-lg);margin-bottom:10px">' + esc(b.title || "") + '</h3>' +
+    '<div class="vframe"><iframe loading="lazy" data-vid="' + id + '" src="' + vsrc(id, b.start || 0) + '" title="' + esc(b.title || "Video") + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>' +
+    ((b.moments || []).length ? '<div class="qbar" style="margin-top:10px">' + b.moments.map(function (m) { return '<button class="chip" type="button" data-seek="' + id + '" data-t="' + esc(m.t) + '">' + esc(m.t) + ' · ' + esc(m.label || "") + '</button>'; }).join("") + '</div>' : "") +
+    (b.note ? '<div class="prose hint" style="margin-top:8px">' + clean(b.note) + '</div>' : "") + '</div>';
 }
 function ctl(id, marks, a) {
   a = a || L.session.answers[id] || {};
@@ -468,6 +479,7 @@ document.addEventListener("click", function (ev) {
   var t = ev.target.closest("button,img"); if (!t) return;
   if (t.tagName === "IMG") { if (t.closest(".fig") || t.closest(".thumbs")) { $("#zimg").src = t.src; $("#zoom").hidden = false; } return; }
   if (t.id === "zoomx") { closeZoom(); return; }
+  if (t.hasAttribute("data-seek")) { var fr = $('iframe[data-vid="' + t.getAttribute("data-seek") + '"]'); if (fr) { fr.src = vsrc(t.getAttribute("data-seek"), t.getAttribute("data-t"), true); fr.scrollIntoView({ block: "center", behavior: "smooth" }); } return; }
   if (t.id === "s-clear") { ls("tutor.token", null); toast("Key removed from this device"); settingsView(); return; }
   if (t.id === "s-cache") { try { indexedDB.deleteDatabase("tutor-desk"); } catch (e) {} idbP = null; ls("tutor.tree." + CFG.repo, null); TREE = null; toast("Cache cleared"); return; }
   if (!L || route().indexOf("/lesson/") !== 0) return;
