@@ -239,3 +239,8 @@ details.reveal > div{padding:0 14px 14px}
 /* revise card */
 .rev{padding:22px 24px;display:grid;gap:14px;max-width:880px}
 .rev-q{font-size:var(--s-xl);font-weight:700;line-height:1.35}
+
+/* picture grid: boards and long runs of figures */
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:14px;align-items:start}
+.gallery .fig img{max-height:360px;width:100%;object-fit:contain;background:#fff}
+.gallery .fig figcaption{font-size:var(--s-xs);line-height:1.35}

@@ -323,7 +323,13 @@ function drawPhase() {
 function focusTable(rows) { return '<details class="module"><summary><span class="lvl deep">PLAN</span><h3>Pick your focus</h3><span class="chev">›</span></summary><div class="mbody"><div class="tablewrap"><table class="t"><thead><tr><th>Focus on</th><th>Spend the time on</th><th>Cut down</th></tr></thead><tbody>' + rows.map(function (r) { return '<tr><td><b>' + clean(r.want) + '</b></td><td>' + clean(r.spend) + '</td><td>' + clean(r.cut) + '</td></tr>'; }).join("") + '</tbody></table></div></div></details>'; }
 var KIND = { say: "Say", draw: "Draw", ask: "Ask", show: "Show", "do": "Do", check: "Check" };
 function img(path, alt) { return '<figure class="fig"><img data-src="' + esc(path) + '" alt="' + esc(alt || "") + '" hidden><div class="ph">Loading image</div></figure>'; }
-function blocks(bs) { return (bs || []).map(block).join(""); }
+function blocks(bs) {
+  /* three or more pictures in a row become a tap-to-enlarge grid instead of a long scroll */
+  var out = [], run = [];
+  function flush() { if (run.length >= 3) out.push('<div class="gallery">' + run.map(block).join("") + '</div>'); else run.forEach(function (b) { out.push(block(b)); }); run = []; }
+  (bs || []).forEach(function (b) { if (b.type === "figure" && b.img) run.push(b); else { flush(); out.push(block(b)); } });
+  flush(); return out.join("");
+}
 function block(b) {
   switch (b.type) {
     case "text": return '<div class="prose">' + clean(b.html) + '</div>';
