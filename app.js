@@ -156,23 +156,30 @@ function touch() { if (!L) return; var x = L.session; x.updated = now(); if (x.d
   setSave("Kept on device"); clearTimeout(timers.flush); timers.flush = setTimeout(flush, 4000); }
 var flushing = false;
 function flush() {
-  if (TRY || !L || !L.dirty || flushing) return Promise.resolve();
+  if (TRY || !L || !L.dirty) return Promise.resolve();
+  if (flushing) return flushing.then(function () { return L && L.dirty && !flushing ? flush() : null; });
   if (!navigator.onLine) { setSave("Offline · kept on device", true); return Promise.resolve(); }
-  flushing = true; setSave("Saving…"); var mine = L, rev = mine.rev || 0; finalizeTime(mine.session);
+  var done; flushing = new Promise(function (r) { done = r; }); setSave("Saving…"); var mine = L, rev = mine.rev || 0; finalizeTime(mine.session);
   var path = lessonBase(mine.id) + "session.json";
   function put(sha) { return putB64(path, b64enc(JSON.stringify(mine.session, null, 1)), CFG.student + " " + mine.id + ": lesson log (" + CFG.device + ")", sha); }
   return put(mine.sha).catch(function (e) {
     if (e.status === 409 || e.status === 422) return gh("/repos/" + CFG.repo + "/contents/" + enc(path)).then(function (r) {
       var remote = r.status === 404 ? null : { data: JSON.parse(new TextDecoder().decode(b64bytes(r.json.content))), sha: r.json.sha };
-      mine.session = merge(mine.session, remote && remote.data); return put(remote && remote.sha); });
+      mine.session = merge(mine.session, remote && remote.data); if (L === mine) tick(); return put(remote && remote.sha); });
     throw e;
   }).then(function (sha) { mine.sha = sha; mine.dirty = (mine.rev || 0) !== rev;
     ls(localKey(mine.id), JSON.stringify({ session: mine.session, sha: sha, dirty: mine.dirty }));
-    setSave(mine.dirty ? "Saving…" : "Saved " + hhmm(now())); flushing = false; if (mine.dirty) setTimeout(flush, 1200); })
-  .catch(function (e) { flushing = false; setSave(e.status === 401 || e.status === 403 ? "Key refused" : "Not saved · kept on device", true);
+    setSave(mine.dirty ? "Saving…" : "Saved " + hhmm(now())); flushing = false; done(); if (mine.dirty) setTimeout(flush, 1200); })
+  .catch(function (e) { flushing = false; done(); setSave(e.status === 401 || e.status === 403 ? "Key refused" : "Not saved · kept on device", true);
     if (e.status === 401 || e.status === 403) toast("GitHub refused the key. Check it in Settings."); });
 }
 window.addEventListener("online", flush);
+window.addEventListener("storage", function (e) { if (TRY || !L || e.key !== localKey(L.id) || !e.newValue) return; var o = null; try { o = JSON.parse(e.newValue); } catch (x) {} if (!o || !o.session) return;
+  L.session = merge(L.session, o.session); if (o.sha && !L.dirty) L.sha = o.sha;
+  if (MODE === "student" || !route().match(/^\/lesson\//)) return;
+  if (document.visibilityState === "hidden" || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) { L.stale = true; tick(); return; }
+  drawLesson(); });
+document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible" && L && L.stale && route().indexOf("/lesson/") === 0 && MODE !== "student") { L.stale = false; drawLesson(); } });
 document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") flush(); });
 setInterval(function () { if (L && L.dirty) flush(); }, 25000);
 
@@ -350,6 +357,7 @@ function lessonView(id) {
       drawLesson();
     });
   }
+  if (TRY && L && L.id === id) { drawLesson(); return; }
   if (!(L && L.id === id)) app.innerHTML = '<div class="empty"><h3>Opening the lesson</h3></div>';
   var had = TREE && TREE.some(function (t) { return t.path.indexOf(base) === 0; });
   var first = had ? open(false) : loadTree(true).then(function () { return open(false); });
@@ -653,7 +661,7 @@ document.addEventListener("click", function (ev) {
   if (t.hasAttribute("data-logdel")) { x.time.log.splice(+t.getAttribute("data-logdel"), 1); timeEdited(); drawLesson(); return; }
   if (t.id === "usecov") { var ta = $("#fb-cov"); if (ta) { ta.value = (ta.value ? ta.value + "\n" : "") + t.getAttribute("data-cov"); x.feedback.covered = ta.value; x.feedback.at = now(); touch(); } return; }
   if (t.id === "reopen") { x.status = "in-progress"; x.statusAt = now(); touch(); drawLesson(); return; }
-  if (t.hasAttribute("data-qf")) { L.filter = t.getAttribute("data-qf"); if (MODE === "teach") drawTeach(); else drawPhase(); return; }
+  if (t.hasAttribute("data-qf")) { L.filter = t.getAttribute("data-qf"); ls(qfKey(), L.filter); if (MODE === "teach") drawTeach(); else drawPhase(); return; }
   if (t.hasAttribute("data-ans")) { var qa = t.parentNode.querySelector(".qa"); qa.hidden = !qa.hidden; t.textContent = qa.hidden ? "Show answer" : "Hide answer"; return; }
   if (t.hasAttribute("data-v")) { var box = t.closest("[data-item]"), iid = box.getAttribute("data-item"), v = t.getAttribute("data-v"), a = target(iid);
     a.v = a.v === v ? null : v; a.at = now(); a.d = CFG.device; if (box.getAttribute("data-q")) a.q = box.getAttribute("data-q"); save(iid, a); railCount();
@@ -690,7 +698,8 @@ document.addEventListener("submit", function (ev) {
   if (f.id === "exform") { var q = $("#ex-q").value.trim(); if (!q) return; var sel = $("[data-exv][aria-pressed='true']");
     x.extra.push({ id: "x" + Date.now().toString(36), q: q, v: sel ? sel.getAttribute("data-exv") : null, note: $("#ex-note").value.trim(), at: now(), d: CFG.device }); touch(); drawLesson(); toast("Added"); return; }
   if (f.id === "fbform") { $$("[data-fb]", f).forEach(function (i) { x.feedback[i.getAttribute("data-fb")] = i.value; }); x.feedback.at = now();
-    if (replay(x.time.log).running) logEvent("end"); x.status = "finished"; x.statusAt = now(); touch(); flush().then(function () { toast("Lesson saved to GitHub"); drawLesson(); }); return; }
+    if (replay(x.time.log).running) logEvent("end"); x.status = "finished"; x.statusAt = now(); touch(); var mine = L;
+    flush().then(function () { toast(TRY ? "Try-out: nothing was saved" : !mine.dirty ? "Lesson saved to GitHub" : navigator.onLine ? "Not saved yet: kept on this device, it retries by itself" : "Offline: kept on this device, it saves when you are back online"); if (L === mine) drawLesson(); }); return; }
   if (f.id === "wkform") uploadWork();
 });
 function closeZoom() { $("#zoom").hidden = true; $("#zimg").removeAttribute("src"); }
@@ -775,7 +784,9 @@ function md(s) {
 function slidesOf(p) { var out = []; (function walk(bs) { (bs || []).forEach(function (b) { if (b.type === "question" && (b.img || []).length) out.push({ id: b.id, label: b.label, img: b.img }); if (b.blocks) walk(b.blocks); }); })(p && p.blocks); return out; }
 var SH = null;
 function openShow(which) {
-  var p = phases().filter(function (q) { return q.id === L.phase; })[0], sl = slidesOf(p); if (!sl.length) return;
+  var p = phases().filter(function (q) { return q.id === L.phase; })[0], sl = slidesOf(p);
+  if (which !== "*" && !sl.some(function (x) { return x.id === which; })) { var hp = phases().filter(function (q) { return slidesOf(q).some(function (x) { return x.id === which; }); })[0]; if (hp) sl = slidesOf(hp); }
+  if (!sl.length) return;
   var i = which === "*" ? 0 : Math.max(0, sl.map(function (x) { return x.id; }).indexOf(which));
   var el = document.createElement("div"); el.className = "showov"; el.id = "show";
   el.innerHTML = '<div class="show-top"><span id="sh-lab"></span><span class="num" id="sh-n"></span><button type="button" class="show-x" id="sh-x" aria-label="Close">×</button></div><div class="show-body" id="sh-body"></div><div class="show-nav"><button type="button" id="sh-prev" aria-label="Previous">‹</button><button type="button" id="sh-next" aria-label="Next">›</button></div>';
@@ -933,7 +944,8 @@ function quizChoices(items) { var hasStar = items.some(function (i) { return i.s
   return (hasStar ? [["star", "★ Suggested"]] : []).concat([["all", "All"], ["recall", "Recall"], ["reason", "Reasoning"], ["draw", "Drawing"]])
     .concat(Object.keys(topics).map(function (t) { return ["t:" + t, t.charAt(0).toUpperCase() + t.slice(1)]; }))
     .map(function (c) { return { f: c[0], label: c[1], n: items.filter(function (i) { return quizOn(i, c[0]); }).length }; }).filter(function (c) { return c.n; }); }
-function quizFilter(items) { return L.filter || (items.some(function (i) { return i.star; }) ? "star" : "all"); }
+function qfKey() { return "tutor.tquiz." + CFG.student + "." + L.id; }
+function quizFilter(items) { if (L.filter == null) L.filter = ls(qfKey()) || null; return L.filter || (items.some(function (i) { return i.star; }) ? "star" : "all"); }
 function teachSeq() {
   var seq = [];
   phases().filter(function (p) { return !p.sys; }).forEach(function (p) {
@@ -1027,11 +1039,12 @@ function pastLine(c, i) { var st = stateOf(c);
   return '<button type="button" class="pastline ' + st + '" data-tjump="' + i + '"><span class="ic">' + iconOf(c) + '</span><span class="tx">' + esc(shortOf(c, 120)) + '</span>' + (st === "done" ? '<span class="mk">✓ taught</span>' : st ? '<span class="mk">' + esc(st.slice(2)) + '</span>' : "") + '</button>'; }
 function drawTeach() {
   var s = L.script || {}, x = L.session, subj = s.subject || x.subject; document.body.setAttribute("data-subject", subj); document.body.classList.add("teaching");
-  var keepRef = TCH.id === L.id && TCH.seq[TCH.pos];
+  var keepRef = TCH.id === L.id && TCH.seq[TCH.pos], ae = document.activeElement, fgo = ae && ae.closest && ae.closest(".tfoot") && ae.getAttribute("data-tgo");
   if (TCH.id !== L.id) { TCH = { id: L.id, seq: teachSeq(), pos: +(ls(tposKey()) || 0), open: {} }; }
   else { TCH.seq = teachSeq(); if (keepRef) { var j = TCH.seq.findIndex(function (q) { return q.t === keepRef.t && (q.it && q.it === keepRef.it || q.b && q.b === keepRef.b && !q.it && !q.d || q.d && q.d === keepRef.d || q.p === keepRef.p && q.t === "phase"); }); if (j >= 0) TCH.pos = j; } }
   if (TCH.pos >= TCH.seq.length) TCH.pos = TCH.seq.length - 1;
   var c = TCH.seq[TCH.pos], pct = Math.round(100 * TCH.pos / Math.max(1, TCH.seq.length - 1)), lv = live();
+  if (c.p) L.phase = c.p.id;
   var h = '<div class="teach3">' + runwayHTML(c) + '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
     '<button class="btn small outl" type="button" id="toc" aria-label="Outline">☰ Outline</button><a class="back" style="margin:0" href="#/lesson/' + encodeURIComponent(L.id) + '">← Plan</a><span aria-hidden="true">·</span><b>' + esc((c.p && c.p.name) || "End") + '</b>' + (c.mod ? '<span aria-hidden="true">›</span><span>' + esc(c.mod) + '</span>' : "") + '</div>' +
     '<div class="tmini"><button class="btn small" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn small" type="button" data-suggest>Suggest</button><a class="btn small" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a><span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
@@ -1047,6 +1060,7 @@ function drawTeach() {
   h += '</div>' + (nx ? '<button type="button" class="upnext" data-tjump="' + (TCH.pos + 1) + '"><b>UP NEXT</b><span>' + esc(shortOf(nx, 130)) + '</span></button>' : "") + '</div>' + footHTML(c, lv) + '</section></div>';
   app.innerHTML = h; fillRows(app); loadImages(app); maths(app); tick();
   window.scrollTo(0, 0); fitBoards(); warmCount();
+  if (fgo) { var fb = $('.tfoot [data-tgo="' + fgo + '"]') || $(".tfoot .btn.next") || $(".tfoot .btn"); if (fb && !fb.disabled) fb.focus({ preventScroll: true }); }
   var oc = $(".outline .cur"); if (oc) oc.scrollIntoView({ block: "center" });
   ls(tposKey(), String(TCH.pos));
 }
@@ -1123,7 +1137,7 @@ function tskip(what) { var c = TCH.seq[TCH.pos], i = TCH.pos + 1;
   else { while (i < TCH.seq.length && TCH.seq[i].t !== "phase" && TCH.seq[i].t !== "end") i++; }
   tmove(Math.min(i, TCH.seq.length - 1) - TCH.pos, "jump"); }
 document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) return; var t = e.target.closest && e.target.closest("button"); if (!t) return;
-  if (t.hasAttribute("data-tgo")) { var g = t.getAttribute("data-tgo"); if (g === "after") { MODE = "plan"; L.phase = "_after"; location.hash = "#/lesson/" + encodeURIComponent(L.id); return; }
+  if (t.hasAttribute("data-tgo")) { var g = t.getAttribute("data-tgo"); if (e.detail > 1 && g !== "-1") return; if (g === "after") { MODE = "plan"; L.phase = "_after"; location.hash = "#/lesson/" + encodeURIComponent(L.id); return; }
     if (g === "skip") return tmove(1, "skip"); return tmove(+g, +g > 0 ? "taught" : "jump"); }
   if (t.hasAttribute("data-tskip")) { tskip(t.getAttribute("data-tskip")); return; }
   if (t.hasAttribute("data-tjump")) { tmove(+t.getAttribute("data-tjump") - TCH.pos, "jump"); return; }
@@ -1133,7 +1147,7 @@ document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) re
 });
 document.addEventListener("toggle", function (e) { var d = e.target; if (MODE === "teach" && d.classList && d.classList.contains("opart")) TCH.open[d.getAttribute("data-pid")] = d.open; }, true);
 document.addEventListener("keydown", function (e) { if (MODE !== "teach" || SH || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || "")) return;
-  if ($("#wuov") || $("#sug")) return;
+  if ($("#wuov") || $("#sug") || !$("#zoom").hidden || e.ctrlKey || e.altKey || e.metaKey) return;
   if (/^[1-6]$/.test(e.key)) { var bs = $$(".chunk.cur .ctl.big .v"); if (bs[+e.key - 1]) bs[+e.key - 1].click(); return; }
   if (e.key === "ArrowRight") tmove(1, "taught"); else if (e.key === "ArrowLeft") tmove(-1, "jump"); else if (e.key === "s" || e.key === "S") tmove(1, "skip"); });
 
@@ -1181,12 +1195,12 @@ document.addEventListener("click", function (e) { if (MODE !== "student" || !STU
   else if (t.id === "stumenu") { STU.drawer = !STU.drawer; drawStudent(); }
   else if (t.id === "stux") { STU.drawer = false; drawStudent(); }
   else if (t.id === "stufs") { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (x) {} } });
-document.addEventListener("keydown", function (e) { if (MODE !== "student" || !STU) return; if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); stuGo(1); } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); stuGo(-1); } });
+document.addEventListener("keydown", function (e) { if (MODE !== "student" || !STU || e.ctrlKey || e.altKey || e.metaKey) return; if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); stuGo(1); } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); stuGo(-1); } });
 
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v15", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v16", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
@@ -1253,6 +1267,7 @@ if (TRY) { document.body.classList.add("tryout");
   var tb = document.createElement("div"); tb.className = "trybar";
   tb.innerHTML = '<b>TRY-OUT MODE</b><span>Tap anything: nothing is saved, and this tab forgets it all when you leave.</span><button class="btn small" type="button" data-suggest>Suggest a change</button><button class="btn small" type="button" id="tryleave">Leave try-out</button>';
   document.body.appendChild(tb);
+  var tryh = function () { document.documentElement.style.setProperty("--tryh", tb.offsetHeight + "px"); }; tryh(); window.addEventListener("resize", tryh); if (window.ResizeObserver) new ResizeObserver(tryh).observe(tb);
   tb.querySelector("#tryleave").addEventListener("click", function () { try { sessionStorage.removeItem("tutor.try"); } catch (e) {} location.href = location.pathname + location.hash; }); }
 
 render();

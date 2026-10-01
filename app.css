@@ -734,3 +734,20 @@ body.pointing,body.pointing *{cursor:crosshair!important}
 .stu-drawer .stu-list{border:0;padding:0;overflow:auto;flex:1}
 .stu-drawer .stu-item img{height:84px}
 .stu-fit.one img,.stu-fit.many img{background:transparent}
+/* v16 bug fixes (round 10) */
+.tmini{flex-wrap:wrap;justify-content:flex-end;min-width:0}
+.tmini .btn,.tmini .clockpill{white-space:nowrap}
+.field{min-width:0;grid-template-columns:minmax(0,1fr)}
+.field input[type=file]{min-width:0;max-width:100%}
+.field select{min-width:0;max-width:100%}
+.upnext:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:8px}
+/* the try-out strip never covers the lesson buttons: room below them matches the strip's real height (set by app.js) */
+body.tryout .tfoot,body.tryout.teaching .teach3 .tfoot{padding-bottom:calc(var(--tryh,76px) + 24px + env(safe-area-inset-bottom,0px))}
+body.tryout main{padding-bottom:calc(var(--tryh,76px) + 40px)}
+@media (max-width:900px){
+  .trybar span{display:none}
+  .trybar{padding:8px 12px;gap:8px}
+  body.tryout:not(.teaching):not(.student) .trybar{bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+  body.tryout main{padding-bottom:calc(var(--tryh,76px) + 140px)}
+  body.tryout.teaching main{padding-bottom:0}
+}

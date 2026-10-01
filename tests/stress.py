@@ -44,7 +44,7 @@ try:
             p.locator('.chunk.cur .ctl [data-v="%s"]' % ["right", "wrong", "partly"][i % 3]).click()
         state = p.locator(".chunk.cur .ctl [aria-pressed=true]").all_inner_texts(); print("after 30 verdict taps pressed:", state)
         # typing in the note must not move the slide
-        before = p.locator(".tmini .num").inner_text(); p.locator(".chunk.cur input[data-note]").click(); p.keyboard.type("he said the wrong thing"); p.keyboard.press("ArrowRight"); after = p.locator(".tmini .num").inner_text()
+        before = p.locator(".tmini .num").inner_text(); p.locator(".chunk.cur .addnote").click(); p.locator(".chunk.cur input[data-note]").click(); p.keyboard.type("he said the wrong thing"); p.keyboard.press("ArrowRight"); after = p.locator(".tmini .num").inner_text()
         print("arrow while typing moved slide:", before != after)
         # all routes
         for r in ["#/videos", "#/revise", "#/record", "#/settings", "#/new", "#/lesson/2026-09-30-maths", "#/lesson/2026-09-30-maths/teach", "#/"]:
