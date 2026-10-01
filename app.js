@@ -521,7 +521,7 @@ function drawTally() {
   d.innerHTML = n ? '<b>' + c.right + ' / ' + n + '</b><span>right</span><span>✗ ' + c.wrong + '</span><span>wording ' + c.wording + '</span><span>terminology ' + c.terminology + '</span><span>partly ' + c.partly + '</span>' : '<span>Tap a verdict on each answer. Tap it again to undo. Everything saves as you go.</span>';
   box.appendChild(d);
 }
-function showImg(im) { var p = im.getAttribute("data-src"); if (!p || im.getAttribute("data-on")) return; im.setAttribute("data-on", "1"); var full = /^(students|books)\//.test(p) ? p : lessonBase(L.id) + p;
+function showImg(im) { var p = im.getAttribute("data-src"); if (!p || im.getAttribute("data-on")) return; im.setAttribute("data-on", "1"); var full = /^(students|books|boards)\//.test(p) ? p : lessonBase(L.id) + p;
   fileURL(full).then(function (u) { var ph = im.nextElementSibling; if (u) { im.decoding = "async"; im.src = u; im.hidden = false; if (ph && ph.classList.contains("ph")) ph.remove(); } else if (ph) ph.textContent = "Image not found: " + p; })
     .catch(function () { im.removeAttribute("data-on"); var ph = im.nextElementSibling; if (ph) ph.textContent = "Couldn’t load image. Tap to retry."; }); }
 var io = "IntersectionObserver" in window ? new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { io.unobserve(e.target); showImg(e.target.__img || e.target); } }); }, { rootMargin: "900px 0px" }) : null;
@@ -538,7 +538,7 @@ function prefetchLesson() { if (!L || !L.script || prefetchFor === L.id) return;
   (function walk(v, deep) { if (!v) return; if (Array.isArray(v)) { v.forEach(function (x) { walk(x, deep); }); return; } if (typeof v !== "object") return;
     var d = deep || v.level === "deep"; ["img", "answerImg"].forEach(function (k) { var x = v[k]; (Array.isArray(x) ? x : x ? [x] : []).forEach(function (pth) { if (!d) paths.push(pth); }); });
     Object.keys(v).forEach(function (k) { if (typeof v[k] === "object") walk(v[k], d); }); })(L.script.phases || L.script, false);
-  var q = paths.map(function (p) { return /^(students|books)\//.test(p) ? p : lessonBase(L.id) + p; }).filter(function (p) { return shaOf(p); }), running = 0;
+  var q = paths.map(function (p) { return /^(students|books|boards)\//.test(p) ? p : lessonBase(L.id) + p; }).filter(function (p) { return shaOf(p); }), running = 0;
   function pump() { while (running < 3 && q.length) { var p = q.shift(); running++; blobBytes(shaOf(p)).catch(function () {}).then(function () { running--; pump(); }); } }
   setTimeout(pump, 1200); }
 
@@ -1200,7 +1200,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v16", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v17", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
