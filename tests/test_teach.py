@@ -61,13 +61,13 @@ try:
         print("6 steps with the current chunk off screen:", bad); p.screenshot(path=O + "5-live.png")
         # 7. student view
         s = c.new_page(); watch(s); s.goto(B + "#/lesson/" + L + "/student"); s.wait_for_selector(".stu", timeout=60000); time.sleep(2)
-        print("7 student exam items:", s.locator(".stu-item").count(), "| 'Mark scheme' visible:", s.locator("text=Mark scheme").count()); s.screenshot(path=O + "7-student.png")
-        s.locator(".stu-item").nth(2).click(); time.sleep(1); print("  click item 3 ->", s.locator(".stu-n").inner_text())
-        s.click('[data-stab="quick"]'); time.sleep(.5); print("  quick items:", s.locator(".stu-item").count(), "|", s.locator(".stu-q").inner_text()[:60]); s.screenshot(path=O + "7b-student-quick.png")
+        s.click("#stumenu"); time.sleep(.4); print("7 student exam items:", s.locator(".stu-item").count(), "| 'Mark scheme' visible:", s.locator("text=Mark scheme").count()); s.screenshot(path=O + "7-student.png")
+        s.locator(".stu-item").nth(2).click(); time.sleep(1); print("  click item 3 ->", s.locator(".stu-view").get_attribute("data-pos"))
+        s.click("#stumenu"); time.sleep(.3); s.click('[data-stab="quick"]'); time.sleep(.5); print("  quick items:", s.locator(".stu-item").count(), "|", s.locator(".stu-q").inner_text()[:60]); s.screenshot(path=O + "7b-student-quick.png")
         time.sleep(4.5)
         click_icon(p, "Q"); time.sleep(.6)
         p.click(".tfoot [data-show]"); time.sleep(1)
-        print("8 Show him went to the student tab:", p.locator(".showov").count() == 0, "| student tab:", s.locator('[data-stab="exam"]').get_attribute("aria-pressed"), s.locator(".stu-n").inner_text())
+        print("8 Show him went to the student tab:", p.locator(".showov").count() == 0, "| student tab:", s.locator(".stu-view").get_attribute("data-pos"))
         c.close()
         # 9. phone outline drawer
         c = ctx_(b, 390, 844); p = c.new_page(); watch(p); p.goto(B + "#/lesson/" + L + "/teach"); p.wait_for_selector(".teach3", timeout=60000); time.sleep(1)
