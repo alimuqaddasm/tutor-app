@@ -634,3 +634,24 @@ body.student main{max-width:none;padding:0}
 @media (max-width:900px){.stu-body{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}.stu-list{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}.stu-item{min-width:120px}.stu-view{padding:16px}}
 .stu-body{grid-template-columns:260px minmax(0,1fr)}
 .stu-item img{height:96px;object-fit:contain;object-position:top left}
+
+/* try-out mode and suggestions */
+.trybar{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:70;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 32px);padding:10px 14px;border-radius:16px;background:repeating-linear-gradient(135deg,#FFB547 0 14px,#FFC56B 14px 28px);color:#12152A;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:var(--s-sm)}
+.trybar b{letter-spacing:.06em}
+.trybar .btn{background:#12152A;color:#F4F5FA;border-color:#12152A}
+body.tryout .tfoot{padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+body.tryout .showov{z-index:90}
+.sug{position:fixed;inset:0;z-index:95;background:rgba(10,12,24,.45);display:grid;place-items:center;padding:16px}
+.sug-card{width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--surface);color:var(--text);border-radius:22px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:20px;display:flex;flex-direction:column;gap:12px}
+.sug-head{display:flex;justify-content:space-between;align-items:center}
+.sug-head h3{font-family:var(--display);font-size:1.35rem}
+.sug-where{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:12px;background:var(--bg);font-size:var(--s-sm)}
+.sug-t{color:var(--accent);font-weight:600}
+.sug textarea{width:100%;border-radius:12px;border:1px solid var(--line-2);background:var(--surface);padding:12px;font:inherit;resize:vertical;min-height:110px}
+.sug-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.sug-list summary{cursor:pointer;font-weight:700}
+.sug-item{padding:10px 0;border-top:1px solid var(--line);display:grid;gap:3px}
+.sug-reply{font-size:13px;font-weight:700}.sug-reply.open{color:var(--text-3)}.sug-reply.done{color:var(--ok)}.sug-reply.later{color:var(--warn)}.sug-reply.no{color:var(--bad)}
+body.pointing,body.pointing *{cursor:crosshair!important}
+.pointed{outline:3px solid var(--live)!important;outline-offset:3px}
+.side-foot{grid-template-columns:1fr;justify-items:start}

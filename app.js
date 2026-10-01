@@ -9,7 +9,7 @@ var $ = function (s, r) { return (r || document).querySelector(s); };
 var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
 function clean(h) { h = h == null ? "" : String(h); return window.DOMPurify ? DOMPurify.sanitize(h, { USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true } }) : esc(h); }
-function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
+function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (window.__tutorTry && /^tutor\.(s|review)\./.test(k)) return null; if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
 var SUBJ = { chem: "Chemistry", maths: "Maths" };
 var DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], DAYL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 var MONL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -39,10 +39,13 @@ function idb() { if (idbP) return idbP; idbP = new Promise(function (res) { try 
 function cget(k) { return idb().then(function (d) { if (!d) return null; return new Promise(function (res) { try { var q = d.transaction("kv").objectStore("kv").get(k); q.onsuccess = function () { res(q.result == null ? null : q.result); }; q.onerror = function () { res(null); }; } catch (e) { res(null); } }); }); }
 function cput(k, v) { return idb().then(function (d) { if (!d) return; try { d.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (e) {} }); }
 
+/* try-out mode: this tab saves nothing (no GitHub writes, no lesson or review copies on the device) */
+var TRY = window.__tutorTry = (function () { var q = /[?&]try\b/.test(location.search); try { if (q) sessionStorage.setItem("tutor.try", "1"); return sessionStorage.getItem("tutor.try") === "1"; } catch (e) { return q; } })();
 /* ---------------- GitHub ---------------- */
 var API = "https://api.github.com";
 function gh(path, opts) {
   opts = opts || {};
+  if (TRY && opts.method && opts.method !== "GET" && !opts.allowTry) { var te = new Error("Try-out mode: nothing is saved"); te.status = 0; te.tryout = true; return Promise.reject(te); }
   var h = { "Authorization": "Bearer " + CFG.token, "Accept": opts.accept || "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
   if (opts.body) h["Content-Type"] = "application/json";
   return fetch(API + path, { method: opts.method || "GET", headers: h, body: opts.body ? JSON.stringify(opts.body) : undefined, cache: "no-store" })
@@ -145,13 +148,15 @@ function merge(local, remote) {
 /* ---------------- current lesson + saving ---------------- */
 var L = null; /* {id, script, session, sha, dirty, rev, phase, filter, marking} */
 function localKey(id) { return "tutor.s." + CFG.repo + "." + CFG.student + "." + id; }
-function stash() { if (L) ls(localKey(L.id), JSON.stringify({ session: L.session, sha: L.sha, dirty: L.dirty })); }
+function stash() { if (TRY) return; if (L) ls(localKey(L.id), JSON.stringify({ session: L.session, sha: L.sha, dirty: L.dirty })); }
 function touch() { if (!L) return; var x = L.session; x.updated = now(); if (x.devices.indexOf(CFG.device) < 0) x.devices.push(CFG.device);
-  if (x.status === "not-started") { x.status = "in-progress"; x.statusAt = now(); } finalizeTime(x); L.dirty = true; L.rev = (L.rev || 0) + 1; stash();
+  if (x.status === "not-started") { x.status = "in-progress"; x.statusAt = now(); } finalizeTime(x);
+  if (TRY) { setSave("Try-out \u00b7 not saved"); return; }
+  L.dirty = true; L.rev = (L.rev || 0) + 1; stash();
   setSave("Kept on device"); clearTimeout(timers.flush); timers.flush = setTimeout(flush, 4000); }
 var flushing = false;
 function flush() {
-  if (!L || !L.dirty || flushing) return Promise.resolve();
+  if (TRY || !L || !L.dirty || flushing) return Promise.resolve();
   if (!navigator.onLine) { setSave("Offline · kept on device", true); return Promise.resolve(); }
   flushing = true; setSave("Saving…"); var mine = L, rev = mine.rev || 0; finalizeTime(mine.session);
   var path = lessonBase(mine.id) + "session.json";
@@ -808,8 +813,9 @@ function markRevise(key, ok) { var r = REV.rv[key] || { box: 0, history: [] }, t
   r.box = ok ? r.box + 1 : 0;
   r.due = !ok ? addDays(t, 1) : r.box >= GAPS.length ? "done" : addDays(t, GAPS[r.box - 1]);
   r.last = now(); r.history = (r.history || []).concat([{ d: t, ok: ok, by: CFG.device }]).slice(-12); REV.rv[key] = r; REV.dirty = true;
+  if (TRY) { setSave("Try-out \u00b7 not saved"); return; }
   ls(revKey(), JSON.stringify({ dirty: true, data: REV.rv })); clearTimeout(revSaveT); revSaveT = setTimeout(saveRevise, 2500); }
-function saveRevise() { if (!REV || !REV.dirty || !navigator.onLine) return; var path = studentBase() + "review.json", mine = JSON.parse(JSON.stringify(REV.rv));
+function saveRevise() { if (TRY || !REV || !REV.dirty || !navigator.onLine) return; var path = studentBase() + "review.json", mine = JSON.parse(JSON.stringify(REV.rv));
   function put(sha) { return putB64(path, b64enc(JSON.stringify(mine, null, 1)), CFG.student + ": mistakes warm-up (" + CFG.device + ")", sha); }
   setSave("Saving…");
   put(REV.sha).catch(function (e) { if (e.status !== 409 && e.status !== 422) throw e;
@@ -989,7 +995,7 @@ function drawTeach() {
   var c = TCH.seq[TCH.pos], pct = Math.round(100 * TCH.pos / Math.max(1, TCH.seq.length - 1)), lv = live();
   var h = '<div class="teach3">' + runwayHTML(c) + '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
     '<button class="btn small outl" type="button" id="toc" aria-label="Outline">☰ Outline</button><a class="back" style="margin:0" href="#/lesson/' + encodeURIComponent(L.id) + '">← Plan</a><span aria-hidden="true">·</span><b>' + esc((c.p && c.p.name) || "End") + '</b>' + (c.mod ? '<span aria-hidden="true">›</span><span>' + esc(c.mod) + '</span>' : "") + '</div>' +
-    '<div class="tmini"><a class="btn small" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a><span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
+    '<div class="tmini"><button class="btn small" type="button" data-suggest>Suggest</button><a class="btn small" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a><span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
     '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>' +
     (lv ? "" : '<div class="preview"><b>Preview</b> · nothing is ticked until you press <b>Start lesson</b>. You can still tick a chunk by hand.</div>') + '</div><div class="tstage">';
   /* the last two chunks of the same section as short grey lines, then the current one */
@@ -1118,6 +1124,78 @@ document.addEventListener("click", function (e) { if (MODE !== "student" || !STU
   else if (t.hasAttribute("data-sgo")) stuGo(+t.getAttribute("data-sgo"));
   else if (t.id === "stufs") { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (x) {} } });
 document.addEventListener("keydown", function (e) { if (MODE !== "student" || !STU) return; if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); stuGo(1); } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); stuGo(-1); } });
+
+/* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
+   Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
+   each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
+var APP_VERSION = "v14", SUG = { open: false, pointing: false, target: "", tags: {} };
+var SUGFILE = "docs/ui-feedback.jsonl";
+function whereAmI() {
+  var r = route(), parts = [];
+  parts.push(MODE === "teach" ? "Teach" : MODE === "student" ? "Student view" : r.indexOf("/lesson/") === 0 ? "Plan" : (r.split("/")[1] || "home"));
+  if (L && r.indexOf("/lesson/") === 0) {
+    parts.push(L.id);
+    if (MODE === "teach" && TCH.seq[TCH.pos]) { var c = TCH.seq[TCH.pos]; parts.push((c.p ? c.p.name : "") + (c.mod ? " › " + c.mod : "") + " › " + c.t + ": " + shortOf(c, 70)); }
+    else if (MODE === "student" && STU && STU.items[STU.i]) parts.push((STU.tab === "exam" ? "exam" : "quick") + " question " + (STU.i + 1));
+    else { var p = phases().filter(function (q) { return q.id === L.phase; })[0]; if (p) parts.push(p.name); }
+  }
+  return parts.join(" · ");
+}
+function sugPanel() {
+  var old = $("#sug"); if (old) old.remove();
+  var el = document.createElement("div"); el.id = "sug"; el.className = "sug"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Suggest a change");
+  el.innerHTML = '<div class="sug-card"><div class="sug-head"><h3>Suggest a change</h3><button class="btn small" type="button" id="sug-x" aria-label="Close">×</button></div>' +
+    '<div class="sug-where"><span class="label">Where</span><span id="sug-w">' + esc(whereAmI()) + '</span>' + (SUG.target ? '<span class="sug-t">You pointed at: ' + esc(SUG.target) + '</span>' : "") + '</div>' +
+    '<button class="btn small" type="button" id="sug-point">' + (SUG.target ? "Point at something else" : "Point at it on the screen") + '</button>' +
+    '<div class="qbar" role="group" aria-label="Kind">' + ["Layout", "Wording", "Hard to find", "Too slow", "Bug", "Missing", "Teaching flow"].map(function (t) { return '<button class="chip" type="button" data-sugtag="' + t + '" aria-pressed="' + !!SUG.tags[t] + '">' + t + '</button>'; }).join("") + '</div>' +
+    '<textarea id="sug-text" rows="4" placeholder="What should change, and why? e.g. “the Skip button is too far from my thumb on the tablet”"></textarea>' +
+    '<div class="sug-foot"><span class="hint" id="sug-st">' + (TRY ? "Try-out mode: this note is the only thing that gets saved." : "Saved as a note for Claude, not into the lesson.") + '</span><button class="btn primary" type="button" id="sug-save">Save suggestion</button></div>' +
+    '<details class="sug-list" id="sug-list"><summary>Your suggestions</summary><div id="sug-items" class="hint">Loading…</div></details></div>';
+  document.body.appendChild(el); SUG.open = true; var ta = $("#sug-text"); ta.value = SUG.draft || ""; ta.focus();
+  ta.addEventListener("input", function () { SUG.draft = ta.value; });
+  loadSugs().then(drawSugs).catch(function () { $("#sug-items").textContent = "Couldn’t load them."; });
+}
+function loadSugs() { return loadTree(true).then(function () { return fileText(SUGFILE); }).then(function (r) {
+  var lines = r ? r.text.split(/\n/).filter(function (l) { return l.trim(); }).map(function (l) { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean) : [];
+  var st = {}; lines.forEach(function (x) { if (x.status && x.id && !x.text) st[x.id] = x; });
+  return lines.filter(function (x) { return x.text; }).map(function (x) { x.reply = st[x.id] || null; return x; }).reverse(); }); }
+function drawSugs(list) { var box = $("#sug-items"); if (!box) return;
+  box.innerHTML = list.length ? list.map(function (x) { return '<div class="sug-item"><div><b>' + esc(x.text) + '</b></div><div class="hint">' + esc(fmtDate(x.at.slice(0, 10))) + ' · ' + esc(x.where || "") + '</div>' +
+    (x.reply ? '<div class="sug-reply ' + esc(x.reply.status) + '">' + esc({ done: "Done", later: "Later", no: "Not doing" }[x.reply.status] || x.reply.status) + (x.reply.note ? ": " + esc(x.reply.note) : "") + '</div>' : '<div class="sug-reply open">Waiting for Claude</div>') + '</div>'; }).join("") : "None yet."; }
+function saveSug() {
+  var text = ($("#sug-text").value || "").trim(); if (!text) { $("#sug-text").focus(); return; }
+  var item = { id: "s" + Date.now().toString(36), at: now(), device: CFG.device, app: APP_VERSION, tryout: !!TRY, where: whereAmI(), pointed: SUG.target || undefined,
+    tags: Object.keys(SUG.tags).filter(function (k) { return SUG.tags[k]; }), screen: window.innerWidth + "×" + window.innerHeight, theme: document.documentElement.getAttribute("data-theme") || "auto", text: text };
+  var btn = $("#sug-save"); btn.disabled = true; $("#sug-st").textContent = "Saving…";
+  function attempt(n) { return gh("/repos/" + CFG.repo + "/contents/" + enc(SUGFILE), { allowTry: true }).then(function (r) {
+      var cur = r.status === 404 ? "" : new TextDecoder().decode(b64bytes(r.json.content)), sha = r.status === 404 ? null : r.json.sha;
+      return gh("/repos/" + CFG.repo + "/contents/" + enc(SUGFILE), { method: "PUT", allowTry: true, body: { message: "UI suggestion (" + CFG.device + ")", content: b64enc(cur.replace(/\s*$/, cur ? "\n" : "") + JSON.stringify(item) + "\n"), sha: sha || undefined } }); })
+    .catch(function (e) { if (n < 2 && (e.status === 409 || e.status === 422)) return attempt(n + 1); throw e; }); }
+  attempt(0).then(function () { SUG.draft = ""; SUG.target = ""; SUG.tags = {}; toast("Suggestion saved. Claude will see it."); closeSug(); })
+    .catch(function (e) { btn.disabled = false; $("#sug-st").textContent = "Couldn’t save (" + (e.message || e) + "). Your text is kept here; try again."; });
+}
+function closeSug() { var el = $("#sug"); if (el) el.remove(); SUG.open = false; }
+/* "Point at it": the next tap on the page names that element instead of doing anything */
+function describeEl(t) { var b = t.closest("button, a, .chunk, .tile, .lrow, .card, figure, li, h1, h2, h3, nav, aside, header") || t;
+  var txt = (b.getAttribute("aria-label") || b.innerText || b.alt || "").replace(/\s+/g, " ").trim().slice(0, 70);
+  return (b.tagName.toLowerCase() + (b.className && typeof b.className === "string" ? "." + b.className.trim().split(/\s+/).slice(0, 2).join(".") : "")) + (txt ? " “" + txt + "”" : ""); }
+document.addEventListener("click", function (e) {
+  if (SUG.pointing) { e.preventDefault(); e.stopPropagation(); SUG.pointing = false; document.body.classList.remove("pointing");
+    var t = e.target; t.classList.add("pointed"); setTimeout(function () { t.classList.remove("pointed"); }, 1500); SUG.target = describeEl(t); sugPanel(); return; }
+  var b = e.target.closest && e.target.closest("button, a"); if (!b) return;
+  if (b.hasAttribute("data-suggest")) { e.preventDefault(); sugPanel(); return; }
+  if (b.id === "sug-x") return closeSug();
+  if (b.id === "sug-save") return saveSug();
+  if (b.id === "sug-point") { closeSug(); SUG.pointing = true; document.body.classList.add("pointing"); toast("Tap the thing you mean"); return; }
+  if (b.hasAttribute("data-sugtag")) { var k = b.getAttribute("data-sugtag"); SUG.tags[k] = !SUG.tags[k]; b.setAttribute("aria-pressed", String(SUG.tags[k])); }
+}, true);
+document.addEventListener("keydown", function (e) { if (e.key === "Escape" && SUG.open) closeSug(); if (e.key === "Escape" && SUG.pointing) { SUG.pointing = false; document.body.classList.remove("pointing"); } });
+/* the try-out strip */
+if (TRY) { document.body.classList.add("tryout");
+  var tb = document.createElement("div"); tb.className = "trybar";
+  tb.innerHTML = '<b>TRY-OUT MODE</b><span>Tap anything: nothing is saved, and this tab forgets it all when you leave.</span><button class="btn small" type="button" data-suggest>Suggest a change</button><button class="btn small" type="button" id="tryleave">Leave try-out</button>';
+  document.body.appendChild(tb);
+  tb.querySelector("#tryleave").addEventListener("click", function () { try { sessionStorage.removeItem("tutor.try"); } catch (e) {} location.href = location.pathname + location.hash; }); }
 
 render();
 })();
