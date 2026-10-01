@@ -12,6 +12,7 @@ function clean(h) { h = h == null ? "" : String(h); return window.DOMPurify ? DO
 function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
 var SUBJ = { chem: "Chemistry", maths: "Maths" };
 var DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], DAYL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+var MONL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function pdate(iso) { var p = String(iso).slice(0, 10).split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
 function fmtDate(iso, long) { if (!iso) return ""; var d = pdate(iso); return long ? DAYL[d.getDay()] + " " + d.getDate() + " " + MON[d.getMonth()] + " " + d.getFullYear() : DAY[d.getDay()] + " " + d.getDate() + " " + MON[d.getMonth()]; }
@@ -77,7 +78,9 @@ function blobBytes(sha) {
       .then(function (buf) { var b = new Uint8Array(buf); cput("b:" + sha, b); delete inflight[sha]; return b; }, function (e) { delete inflight[sha]; throw e; });
     return inflight[sha]; });
 }
-function fileJSON(path) { var sha = shaOf(path); if (!sha) return Promise.resolve(null); return blobBytes(sha).then(function (b) { return { data: JSON.parse(new TextDecoder().decode(b)), sha: sha }; }); }
+function fileJSON(path) { var sha = shaOf(path); if (!sha) return Promise.resolve(null); return blobBytes(sha).then(function (b) {
+  try { return { data: JSON.parse(new TextDecoder().decode(b)), sha: sha }; }
+  catch (e) { var er = new Error(path.split("/").slice(-2).join("/") + " is not valid JSON (" + e.message + "). Ask Claude to fix the file."); er.broken = true; throw er; } }); }
 function fileText(path) { var sha = shaOf(path); if (!sha) return Promise.resolve(null); return blobBytes(sha).then(function (b) { return { text: new TextDecoder().decode(b), sha: sha }; }); }
 var urlCache = {};
 function fileURL(path) { var sha = shaOf(path); if (!sha) return Promise.resolve(null); if (urlCache[sha]) return Promise.resolve(urlCache[sha]);
@@ -175,7 +178,7 @@ function nav(r) { var k = r.indexOf("/record") === 0 ? "record" : r.indexOf("/se
   $$("[data-nav]").forEach(function (a) { if (a.getAttribute("data-nav") === k) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   $("#who").textContent = CFG.token ? CFG.student + " · " + CFG.device : ""; if (typeof subjSync === "function") subjSync(); }
 function render() {
-  var r = route(); nav(r); document.body.removeAttribute("data-subject");
+  var r = route(); nav(r); document.body.removeAttribute("data-subject"); document.body.classList.remove("teaching");
   if (!CFG.token && r.indexOf("/settings") !== 0) { location.hash = "#/settings"; return; }
   if (r.indexOf("/settings") === 0) return settingsView();
   if (r.indexOf("/lesson/") === 0) { var rest = decodeURIComponent(r.slice(8)), tm = /\/teach$/.test(rest); MODE = tm ? "teach" : "plan"; return lessonView(rest.replace(/\/teach$/, "")); }
@@ -185,7 +188,8 @@ function render() {
   if (r.indexOf("/videos") === 0) return videosView();
   return lessonsView();
 }
-function fail(e) { app.innerHTML = '<div class="empty"><h3>Couldn’t reach GitHub</h3><p>' + esc(e && e.message || e) + '</p><p>Check your connection, or the key and repo in <a href="#/settings">Settings</a>.</p></div>'; }
+function fail(e) { if (e && e.broken) { app.innerHTML = '<div class="empty"><h3>This file is broken</h3><p>' + esc(e.message) + '</p><p><a href="#/">Back to lessons</a></p></div>'; return; }
+  app.innerHTML = '<div class="empty"><h3>Couldn’t reach GitHub</h3><p>' + esc(e && e.message || e) + '</p><p>Check your connection, or the key and repo in <a href="#/settings">Settings</a>.</p></div>'; }
 
 /* ---------------- settings ---------------- */
 function settingsView() {
@@ -227,12 +231,11 @@ function lessonsView() {
     })).then(function (items) {
       if (seq !== listSeq || route().indexOf("/lesson/") === 0 || route().indexOf("/record") === 0 || route().indexOf("/settings") === 0) return;
       var sp = subjPick(); items = items.filter(function (it) { var sj = (it.s && it.s.subject) || (it.x && it.x.subject) || parseId(it.id).subject; return sp === "all" || sj === sp; });
-      var h = phead([[CFG.student, ""], ["Lessons", ""]], "Lessons", esc(fmtDate(todayIso(), true)) + (sp !== "all" ? " \u00b7 " + SUBJ[sp] + " only" : ""), '<a class="btn" href="#/new">Log a lesson without a script</a>');
-      h += items.length ? '<div class="grid-2">' + items.map(card).join("") + '</div>' : '<div class="empty"><h3>No lessons yet</h3><p>Ask Claude for the next lesson’s script. It appears here.</p></div>';
-      app.innerHTML = h;
+      app.innerHTML = homeHTML(items); fillHomeRevise();
     });
   }
-  if (TREE && TREE.length) draw(TREE).catch(function () {}); else app.innerHTML = '<div class="empty"><h3>Loading lessons</h3></div>';
+  if (!$(".home")) app.innerHTML = '<div class="empty"><h3>Loading lessons</h3></div>';
+  if (TREE && TREE.length) draw(TREE).catch(function () {});
   loadTree(true).then(draw).catch(function (e) { if (!TREE || !TREE.length) fail(e); else setSave("Offline", true); });
 }
 function card(it) {
@@ -244,6 +247,69 @@ function card(it) {
     '<h3>' + esc(s.title || (x && x.title) || "Lesson") + '</h3>' + (s.summary ? '<div class="hint">' + clean(s.summary) + '</div>' : "") + '</a>';
 }
 function score(x) { var r = 0, n = 0; Object.keys(x.answers || {}).forEach(function (k) { var v = x.answers[k].v; if (!v || v === "skipped") return; n++; if (v === "right") r++; }); (x.extra || []).forEach(function (e) { if (!e.v || e.v === "skipped") return; n++; if (e.v === "right") r++; }); return { r: r, n: n }; }
+
+/* ---------------- home: this week, what's up next per subject, recent lessons ---------------- */
+var OFFDAYS = [2, 5]; /* Tuesday and Friday: Ali's days off */
+function pad2(n) { return String(n).padStart(2, "0"); }
+function isoOf(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+function weekDays() { var d = pdate(todayIso()), dow = (d.getDay() + 6) % 7, out = []; for (var i = 0; i < 7; i++) { var x = new Date(d); x.setDate(d.getDate() - dow + i); out.push(isoOf(x)); } return out; }
+function subjOf(it) { return (it.s && it.s.subject) || (it.x && it.x.subject) || parseId(it.id).subject; }
+function dateOf(it) { return (it.s && it.s.date) || (it.x && it.x.date) || parseId(it.id).date; }
+function doneOf(x, k, kind) { if (!x) return false; if (kind === "q") { var a = x.answers && x.answers[k]; return !!(a && a.v); } var d = x.done && x.done[k]; return !!(d && !d.off); }
+function partsOf(s, x) { if (!s || !s.phases) return [];
+  return s.phases.map(function (p) { var its = phaseItems(p).filter(function (i) { return i.kind !== "module"; }), d = its.filter(function (i) { return doneOf(x, i.k, i.kind); }).length; return { name: p.name, w: pw(p), f: its.length ? d / its.length : 0 }; }); }
+var WMARK = {
+  chem: '<svg viewBox="0 0 230 230" fill="none" aria-hidden="true"><path d="M115 115V30M115 115 40 160" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><path d="M115 115l80 35-15 18z" fill="currentColor"/><path d="M115 115l35 85" stroke="currentColor" stroke-width="6" stroke-dasharray="6 7"/><circle cx="115" cy="115" r="16" fill="currentColor"/><path d="M150 40l26 15v30l-26 15-26-15V55z" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/></svg>',
+  maths: '<svg viewBox="0 0 240 220" fill="none" aria-hidden="true"><path d="M20 110h200M120 10v200" stroke="currentColor" stroke-width="3"/><path d="M60 190c35-12 50-30 60-80s25-68 60-80" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><path d="M30 200 210 20" stroke="currentColor" stroke-width="3" stroke-dasharray="7 8"/><circle cx="60" cy="190" r="7" fill="currentColor"/><circle cx="180" cy="30" r="7" fill="currentColor"/></svg>'
+};
+function homeHTML(items) {
+  var sp = subjPick(), t = todayIso(), wk = weekDays(), byDay = {};
+  items.forEach(function (it) { var d = dateOf(it); (byDay[d] = byDay[d] || []).push(subjOf(it)); });
+  var week = '<div class="week" aria-label="This week">' + wk.map(function (d) { var dd = pdate(d), off = OFFDAYS.indexOf(dd.getDay()) >= 0;
+    return '<div class="wd' + (d === t ? " today" : off ? " off" : "") + '"><span>' + DAY[dd.getDay()] + '</span><span class="n">' + dd.getDate() + '</span><span class="dots">' + (d === t ? "Today" : off ? "Off" : (byDay[d] || []).map(function (s) { return '<i class="' + esc(s) + '" title="' + esc(SUBJ[s] || s) + '"></i>'; }).join("")) + '</span></div>'; }).join("") + '</div>';
+  var h = '<header class="phead"><div class="phead-row"><div style="min-width:0"><div class="eyebrow">' + esc(CFG.student) + (sp !== "all" ? " · " + esc(SUBJ[sp]) + " only" : "") + '</div><h1>' + esc(DAYL[pdate(t).getDay()] + " " + pdate(t).getDate() + " " + MONL[pdate(t).getMonth()]) + '</h1><p>Lessons Mon, Wed, Thu, Sat, Sun · 45 minutes a subject</p></div>' + week + '</div></header>';
+  /* up next: the first lesson from today on that is not logged yet, else an invitation to draft one */
+  var subs = sp === "all" ? ["chem", "maths"] : [sp], shown = {};
+  var tiles = subs.map(function (sj) {
+    var mine = items.filter(function (it) { return subjOf(it) === sj; });
+    var up = mine.filter(function (it) { return dateOf(it) >= t && !(it.x && it.x.status === "finished"); }).sort(function (a, b) { return dateOf(a).localeCompare(dateOf(b)); })[0];
+    var last = mine.filter(function (it) { return it.x && it.x.status === "finished"; }).sort(function (a, b) { return dateOf(b).localeCompare(dateOf(a)); })[0];
+    var tag = '<span class="tag">' + esc(SUBJ[sj]) + ' · up next</span>';
+    if (up) { shown[up.id] = 1; var s = up.s || {}, x = up.x, st = x && x.status === "in-progress" ? "In progress" : s.status === "draft" ? "Draft script" : up.script ? "Script ready" : "No script";
+      return '<article class="tile" data-subject="' + sj + '">' + WMARK[sj] + '<div class="meta">' + tag + '<span class="st">' + esc(fmtDate(dateOf(up))) + ' · ' + st + '</span></div><h2>' + esc(s.title || (x && x.title) || "Lesson") + '</h2>' + (s.summary ? '<p>' + esc(plain(s.summary)) + '</p>' : "") +
+        '<div class="acts"><a class="btn go" href="#/lesson/' + encodeURIComponent(up.id) + '/teach">Teach ▶</a><a class="btn" href="#/lesson/' + encodeURIComponent(up.id) + '">Open the plan</a></div></article>'; }
+    return '<article class="tile" data-subject="' + sj + '">' + WMARK[sj] + '<div class="meta">' + tag + '<span class="st">No script yet</span></div><h2>Next ' + esc(SUBJ[sj].toLowerCase()) + ' lesson</h2>' +
+      (last ? '<p>Last: ' + esc((last.s && last.s.title) || last.x.title || "lesson") + ' (' + esc(fmtDate(dateOf(last))) + '). Claude reads it before drafting the next one.</p>' : '<p>Ask Claude to draft the first script.</p>') +
+      '<div class="acts"><button class="btn go" type="button" data-askclaude="' + sj + '">Draft it with Claude</button><a class="btn" href="#/new">Log without a script</a></div></article>';
+  }).join("");
+  var rest = items.filter(function (it) { return !shown[it.id]; });
+  var rows = rest.map(function (it) {
+    var s = it.s || {}, x = it.x, sj = subjOf(it), d = pdate(dateOf(it)), sc = x ? score(x) : { n: 0 }, parts = partsOf(s, x);
+    var st = x && x.status === "finished" ? "logged" : x && x.status === "in-progress" ? "in progress" : s.status === "draft" ? "draft script" : it.script ? "script ready" : "";
+    var sub = [SUBJ[sj] || sj, st, sc.n ? sc.r + " of " + sc.n + " answers right" : "", it.marking ? "marked" : it.work ? it.work + " photo" + (it.work > 1 ? "s" : "") : ""].filter(Boolean).join(" · ");
+    return '<a class="lrow" data-subject="' + esc(sj) + '" href="#/lesson/' + encodeURIComponent(it.id) + '"><span class="dblock">' + DAY[d.getDay()] + '<b>' + d.getDate() + '</b></span><span class="lt"><b>' + esc(s.title || (x && x.title) || "Lesson") + '</b><span class="hint">' + esc(sub) + '</span></span>' +
+      '<span class="parts" aria-label="Parts taught">' + parts.map(function (p) { return '<span style="flex:' + p.w + ' 1 0" title="' + esc(p.name) + ': ' + Math.round(p.f * 100) + '% ticked"><i style="width:' + Math.round(p.f * 100) + '%"></i></span>'; }).join("") + '</span>' +
+      '<span class="mins">' + (x && x.time && x.time.minutes ? esc(x.time.minutes) + '<small> min</small>' : "") + '</span></a>'; }).join("");
+  /* this week's numbers */
+  var mins = 0, r = 0, n = 0, logged = 0;
+  items.forEach(function (it) { if (wk.indexOf(dateOf(it)) < 0 || !it.x) return; if (it.x.time && it.x.time.minutes) mins += +it.x.time.minutes; if (it.x.status === "finished") logged++; var sc = score(it.x); r += sc.r; n += sc.n; });
+  var side = '<div class="inkcard" id="homerev"><div class="k"><span>MISTAKES WARM-UP</span><span class="num" id="homerevn"></span></div><div class="q" id="homerevq">Loading his mistakes…</div><div class="hint" id="homerevm"></div><a class="btn" href="#/revise">Start the 5-minute warm-up</a></div>' +
+    '<div class="statcard"><span class="k">THIS WEEK</span><div style="display:flex;align-items:baseline;gap:8px"><span class="big">' + Math.floor(mins / 60) + ':' + pad2(Math.round(mins % 60)) + '</span><span class="hint">hours taught</span></div>' +
+    '<div class="statline"><span>Lessons logged</span><b>' + logged + '</b></div><div class="statline"><span>Answers right</span><b>' + (n ? r + " / " + n : "–") + '</b></div></div>';
+  return h + '<div class="home"><div><div class="tiles">' + tiles + '</div>' + (rows ? '<h2 class="sec">Recent lessons</h2><div class="rows">' + rows + '</div>' : "") + '</div><div>' + side + '</div></div>';
+}
+function fillHomeRevise() {
+  var sp = subjPick();
+  loadRevise().then(function () { var box = $("#homerev"); if (!box) return; var due = dueList(sp === "all" ? null : sp); $("#homerevn").textContent = due.length + " due";
+    if (!due.length) { $("#homerevq").textContent = "Nothing due today."; $("#homerevm").textContent = "Each mistake comes back on day 1, 3, 7, 14 and 30."; return; }
+    var m = due[0], rv = REV.rv[m.key]; $("#homerevq").textContent = plain(m.ask || m.text || m.what || "");
+    $("#homerevm").textContent = [SUBJ[m.subject] || m.subject, m.topic, m.type, rv ? "review " + (rv.box + 1) : "first review"].filter(Boolean).join(" · "); revBadge(); }).catch(function () { var q = $("#homerevq"); if (q) q.textContent = "Couldn’t load the mistakes list."; });
+}
+function revBadge() { var b = $("#revbadge"); if (!b || !REV) return; var n = dueList(null).length; b.textContent = n; b.hidden = !n; }
+document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-askclaude]"); if (!b) return;
+  var sj = b.getAttribute("data-askclaude"), txt = "/tutor next lesson " + (SUBJ[sj] || sj).toLowerCase() + " for " + CFG.student;
+  var done = function () { toast("Copied “" + txt + "”. Paste it into any Claude chat to draft the script."); };
+  try { navigator.clipboard.writeText(txt).then(done, function () { toast("Ask Claude: “" + txt + "”"); }); } catch (x) { toast("Ask Claude: “" + txt + "”"); } });
 
 /* ---------------- new unscripted lesson ---------------- */
 function newView() {
@@ -281,7 +347,7 @@ function lessonView(id) {
   if (!(L && L.id === id)) app.innerHTML = '<div class="empty"><h3>Opening the lesson</h3></div>';
   var had = TREE && TREE.some(function (t) { return t.path.indexOf(base) === 0; });
   var first = had ? open(false) : loadTree(true).then(function () { return open(false); });
-  first.then(function () { if (had) return loadTree(true).then(function () { return open(true); }); }).catch(function (e) { if (!(L && L.id === id)) fail(e); });
+  first.then(function () { if (had) return loadTree(true).then(function () { return open(true); }, function () { setSave("Offline · using the saved copy", true); }); }).catch(function (e) { if (window.console) console.error(e); if (!(L && L.id === id)) fail(e); else toast("Couldn’t draw this lesson: " + (e && e.message || e)); });
 }
 function phases() {
   var s = L.script, ps = [];
@@ -326,7 +392,7 @@ function drawPhase() {
     h += blocks(p.blocks || []);
     var i = ps.indexOf(p); if (i < ps.length - 1) h += '<div style="display:flex;justify-content:flex-end"><button class="btn accent" type="button" data-phase="' + esc(ps[i + 1].id) + '" data-real="' + (ps[i + 1].sys ? "" : "1") + '">Next: ' + esc(ps[i + 1].name) + ' →</button></div>';
   }
-  box.innerHTML = h; loadImages(box); maths(box); drawTally();
+  box.innerHTML = h; fillRows(box); loadImages(box); maths(box); drawTally();
 }
 function focusTable(rows) { return '<details class="module"><summary><span class="lvl deep">PLAN</span><h3>Pick your focus</h3><span class="chev">›</span></summary><div class="mbody"><div class="tablewrap"><table class="t"><thead><tr><th>Focus on</th><th>Spend the time on</th><th>Cut down</th></tr></thead><tbody>' + rows.map(function (r) { return '<tr><td><b>' + clean(r.want) + '</b></td><td>' + clean(r.spend) + '</td><td>' + clean(r.cut) + '</td></tr>'; }).join("") + '</tbody></table></div></div></details>'; }
 /* "taught" ticks: keyed by the content itself, so they survive edits elsewhere in the script */
@@ -341,6 +407,7 @@ function drillKey(q) { return "d:" + hkey(plain(q)); }
 function phaseItems(p) { var out = [];
   (function walk(bs, mod) { (bs || []).forEach(function (b) {
     if (b.type === "steps") (b.items || []).forEach(function (it) { out.push({ k: stepKey(it.html), kind: "step", label: plain(it.html), mod: mod }); });
+    else if (b.type === "text" && gradeRows(clean(b.html)).rows.length) gradeRows(clean(b.html)).rows.forEach(function (r) { out.push({ k: r.k, kind: "q", label: r.label, mod: mod }); });
     else if (b.type === "text" && plain(b.html).length > 40) out.push({ k: textKey(b.html), kind: "text", label: plain(b.html), mod: mod });
     else if (b.type === "drill") (b.items || []).forEach(function (d) { out.push({ k: drillKey(d[0]), kind: "q", label: plain(d[0]), mod: mod }); });
     else if (b.type === "quiz") (b.items || []).forEach(function (q) { out.push({ k: q.id, kind: "q", label: plain(q.q), mod: mod }); });
@@ -350,6 +417,28 @@ function phaseItems(p) { var out = [];
   return out; }
 function usedOrDone(it) { if (it.kind === "q") { var a = L.session.answers[it.k]; return !!(a && a.v); } return isDone(it.k); }
 function phaseCount(p) { var its = phaseItems(p).filter(function (i) { return i.kind !== "module"; }); var d = its.filter(usedOrDone).length; return its.length ? d + "/" + its.length + " done" : ""; }
+/* tables whose rows hide an answer (<details>) get a small verdict control on every row, so each row is its own question */
+var GRCACHE = {};
+function gradeRows(html) {
+  if (GRCACHE[html]) return GRCACHE[html];
+  var out = { html: html, rows: [] };
+  if (html.indexOf("<table") >= 0 && html.indexOf("<details") >= 0) {
+    var tp = document.createElement("template"); tp.innerHTML = html;
+    tp.content.querySelectorAll("table").forEach(function (tb) {
+      var body = tb.tBodies[0] ? tb.tBodies[0].rows : [], any = false;
+      Array.prototype.forEach.call(body, function (tr) { if (!tr.querySelector("details") || !tr.cells.length) return; any = true;
+        var label = plain(tr.cells[0].textContent), k = "r:" + hkey(label); out.rows.push({ k: k, label: label });
+        tr.setAttribute("data-row", k); var td = document.createElement("td"); td.className = "rowv"; td.setAttribute("data-rowk", k); td.setAttribute("data-rowq", label); tr.appendChild(td); });
+      if (any && tb.tHead && tb.tHead.rows[0]) { var th = document.createElement("th"); th.textContent = "He said"; tb.tHead.rows[0].appendChild(th); }
+    });
+    if (out.rows.length) { var w = document.createElement("div"); w.appendChild(tp.content.cloneNode(true)); out.html = w.innerHTML; }
+  }
+  return (GRCACHE[html] = out);
+}
+/* the verdict buttons are filled in at draw time, so they always show the current answer */
+function rowCtl(k, q) { var a = (L && L.session.answers[k]) || {};
+  return '<div class="ctl mini" data-item="' + esc(k) + '" data-q="' + esc(String(q).slice(0, 160)) + '">' + [["right", "✓", "Right"], ["wrong", "✗", "Wrong"], ["partly", "½", "Partly"]].map(function (v) { return '<button class="v" type="button" data-v="' + v[0] + '" title="' + v[2] + '" aria-label="' + v[2] + '" aria-pressed="' + (a.v === v[0]) + '">' + v[1] + '</button>'; }).join("") + '</div>'; }
+function fillRows(root) { $$("td[data-rowk]", root).forEach(function (td) { var k = td.getAttribute("data-rowk"); td.innerHTML = rowCtl(k, td.getAttribute("data-rowq")); var a = L.session.answers[k]; td.parentNode.setAttribute("data-v", (a && a.v) || ""); }); }
 var KIND = { say: "Say", draw: "Draw", ask: "Ask", show: "Show", "do": "Do", check: "Check" };
 function img(path, alt) { return '<figure class="fig"><img data-src="' + esc(path) + '" alt="' + esc(alt || "") + '" hidden><div class="ph">Loading image</div></figure>'; }
 function blocks(bs) {
@@ -361,7 +450,8 @@ function blocks(bs) {
 }
 function block(b) {
   switch (b.type) {
-    case "text": if (plain(b.html).length <= 40) return '<div class="prose">' + clean(b.html) + '</div>';
+    case "text": var gr = gradeRows(clean(b.html)); if (gr.rows.length) return '<div class="prose">' + gr.html + '</div>';
+      if (plain(b.html).length <= 40) return '<div class="prose">' + clean(b.html) + '</div>';
       var tk = textKey(b.html); return '<div class="prose tickable' + (isDone(tk) ? " done" : "") + '" data-tk="' + esc(tk) + '">' + tick_(tk, plain(b.html)) + clean(b.html) + '</div>';
     case "steps": return '<ol class="steps">' + (b.items || []).map(function (s) { var k = s.kind || "do", sk = stepKey(s.html); return '<li class="' + esc(k) + (isDone(sk) ? " done" : "") + '" data-tk="' + esc(sk) + '"><span class="kind ' + esc(k) + '">' + (KIND[k] || esc(k)) + '</span><div class="body prose">' + clean(s.html) + '</div>' + tick_(sk, plain(s.html)) + '</li>'; }).join("") + '</ol>';
     case "module": var mk = modKey(b.name); return '<details class="module' + (isDone(mk) ? " done" : "") + '" data-tk="' + esc(mk) + '"' + (b.level !== "deep" ? " open" : "") + '><summary>' + tick_(mk, b.name) + '<span class="lvl ' + (b.level === "deep" ? "deep" : "core") + '">' + (b.level === "deep" ? "DEEP" : "CORE") + '</span><h3>' + esc(b.name) + '</h3>' + (b.minutes ? '<span class="pill">' + esc(b.minutes) + ' min</span>' : "") + '<span class="chev">›</span></summary><div class="mbody">' + blocks(b.blocks) + '</div></details>';
@@ -463,7 +553,7 @@ function workView() {
 function itemsList() { var out = [];
   phases().forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) { if (b.type === "question") out.push({ id: b.id, label: b.label || b.id }); if (b.type === "quiz") (b.items || []).forEach(function (q, i) { out.push({ id: q.id, label: "Quiz " + (i + 1) + ": " + String(q.q).replace(/<[^>]+>/g, "").slice(0, 60) }); }); if (b.blocks) walk(b.blocks); }); })(p.blocks); });
   L.session.extra.forEach(function (e, i) { out.push({ id: "x:" + e.id, label: "Extra " + (i + 1) + ": " + e.q.slice(0, 60) }); }); return out; }
-function labelOf(id) { if (!id) return ""; var a = L.session.answers[id]; if (a && a.q && /^d:/.test(id)) return a.q; var f = itemsList().filter(function (i) { return i.id === id; })[0]; return f ? f.label : id; }
+function labelOf(id) { if (!id) return ""; var a = L.session.answers[id]; if (a && a.q && /^[dr]:/.test(id)) return a.q; var f = itemsList().filter(function (i) { return i.id === id; })[0]; return f ? f.label : id; }
 
 /* times: everything editable, including undoing "End lesson" */
 function tval(iso) { return iso ? hhmm(iso) : ""; }
@@ -516,6 +606,8 @@ function tick() {
   var go = $("#clkgo"); if (go) go.textContent = r.running ? "Pause" : (r.secs ? "Resume" : "Start lesson");
   var st = $("#clkst"); if (st) st.textContent = x.time.started ? "from " + hhmm(x.time.started) + (x.time.ended && !r.running ? " to " + hhmm(x.time.ended) : "") : "";
   $$(".rail button[data-real]").forEach(function (b) { b.classList.toggle("live", r.running && r.phase === b.getAttribute("data-phase")); });
+  var cp = $(".clockpill"); if (cp) cp.classList.toggle("live", r.running);
+  if (MODE === "teach") runwayTick(r);
 }
 setInterval(function () { if (L && replay(L.session.time.log).running) tick(); }, 1000);
 function logEvent(e, p) { L.session.time.log.push({ t: now(), e: e, p: p || undefined, d: CFG.device }); L.session.time.editAt = now(); touch(); }
@@ -536,7 +628,9 @@ document.addEventListener("click", function (ev) {
     t.setAttribute("aria-pressed", String(on)); var host = t.closest("[data-tk]"); if (host) host.classList.toggle("done", on); touch(); railCount(); return; }
   if (t.hasAttribute("data-phase")) { var id = t.getAttribute("data-phase"); var r = replay(x.time.log);
     if (t.getAttribute("data-real") && r.running && r.phase !== id) logEvent("phase", id);
-    L.phase = id; drawLesson(); if (window.innerWidth < 900) $("#phasebox").scrollIntoView({ block: "start" }); return; }
+    L.phase = id; drawLesson();
+    /* a new part always starts at its top: jump up if we were scrolled past it */
+    var pb = $("#phasebox"); if (pb) { var y = pb.getBoundingClientRect().top + window.scrollY - 12; if (window.innerWidth < 900 || window.scrollY > y) window.scrollTo({ top: Math.max(0, y), behavior: "instant" }); } return; }
   if (t.id === "clkgo") { var r2 = replay(x.time.log); var cur = phases().filter(function (p) { return p.id === L.phase && !p.sys; })[0];
     if (r2.running) logEvent("pause"); else { if (x.status === "finished") { x.status = "in-progress"; x.statusAt = now(); } logEvent(r2.secs ? "resume" : "start", cur ? cur.id : (r2.phase || phases()[0].id)); wake(); }
     drawLesson(); return; }
@@ -552,7 +646,7 @@ document.addEventListener("click", function (ev) {
   if (t.hasAttribute("data-ans")) { var qa = t.parentNode.querySelector(".qa"); qa.hidden = !qa.hidden; t.textContent = qa.hidden ? "Show answer" : "Hide answer"; return; }
   if (t.hasAttribute("data-v")) { var box = t.closest("[data-item]"), iid = box.getAttribute("data-item"), v = t.getAttribute("data-v"), a = target(iid);
     a.v = a.v === v ? null : v; a.at = now(); a.d = CFG.device; if (box.getAttribute("data-q")) a.q = box.getAttribute("data-q"); save(iid, a); railCount();
-    $$(".v", box).forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-v") === a.v)); }); var row = box.closest(".item"); if (row) row.setAttribute("data-v", a.v || ""); drawTally(); return; }
+    $$(".v", box).forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-v") === a.v)); }); var row = box.closest(".item, tr[data-row]"); if (row) row.setAttribute("data-v", a.v || ""); drawTally(); return; }
   if (t.hasAttribute("data-exv")) { $$("[data-exv]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === t && b.getAttribute("aria-pressed") !== "true")); }); return; }
   if (t.hasAttribute("data-exdel")) { var did = t.getAttribute("data-exdel"); x.extra = x.extra.filter(function (e) { return e.id !== did; }); touch(); drawLesson(); return; }
   if (t.hasAttribute("data-wkdel")) { var f = t.getAttribute("data-wkdel"); x.work.forEach(function (w) { if (w.file === f) { w.removed = true; w.at = now(); } }); touch(); drawLesson(); toast("Removed from the lesson (the photo stays in GitHub)"); return; }
@@ -625,7 +719,7 @@ function recordView() {
   var sb = studentBase();
   function draw(tree) {
     var ids = lessonIds(tree).filter(function (i) { return i.session; });
-    return Promise.all([fileText(sb + "mistakes.jsonl"), fileText(sb + "tests.jsonl"), fileText(sb + "profile.md")].concat(ids.map(function (i) { return fileJSON(lessonBase(i.id) + "session.json").then(function (d) { i.x = d && norm(d.data); return i; }); })))
+    return Promise.all([fileText(sb + "mistakes.jsonl"), fileText(sb + "tests.jsonl"), fileText(sb + "profile.md")].concat(ids.map(function (i) { return fileJSON(lessonBase(i.id) + "session.json").then(function (d) { i.x = d && norm(d.data); return i; }, function () { return i; }); })))
       .then(function (v) {
         if (route().indexOf("/record") !== 0) return;
         function jl(r) { return r ? r.text.split(/\n/).filter(function (l) { return l.trim(); }).map(function (l) { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean) : []; }
@@ -643,7 +737,9 @@ function recordView() {
         app.innerHTML = h;
       });
   }
-  if (TREE && TREE.length) draw(TREE).catch(function () {}); else app.innerHTML = '<div class="empty"><h3>Loading his record</h3></div>';
+  /* show the new page at once, so the previous page never sits under the Record tab while this loads */
+  app.innerHTML = phead([[CFG.student, ""], ["Record", ""]], CFG.student + "’s record", "Time taught, answers, mistakes and tests.") + '<div class="empty"><h3>Loading his record</h3></div>';
+  if (TREE && TREE.length) draw(TREE).catch(function (e) { if (route().indexOf("/record") === 0) fail(e); });
   loadTree(true).then(draw).catch(function (e) { if (!TREE || !TREE.length) fail(e); });
 }
 document.addEventListener("click", function (ev) { var tr = ev.target.closest("tr[data-href]"); if (tr) location.hash = tr.getAttribute("data-href"); });
@@ -805,7 +901,15 @@ subjSync();
 function phead(crumbs, title, sub, right) {
   return '<div class="phead"><div class="phead-row"><div style="min-width:0"><div class="crumb">' + crumbs.map(function (c, i) { return (i ? '<span aria-hidden="true">›</span>' : "") + (c[1] ? '<a href="' + c[1] + '">' + esc(c[0]) + '</a>' : '<span>' + esc(c[0]) + '</span>'); }).join("") + '</div><h1>' + esc(title) + '</h1>' + (sub ? '<p>' + sub + '</p>' : "") + '</div>' + (right || "") + '</div></div>';
 }
-function maths(el) { try { if (window.renderMathInElement && el) renderMathInElement(el, { delimiters: [{ left: "\\(", right: "\\)", display: false }, { left: "\\[", right: "\\]", display: true }, { left: "$$", right: "$$", display: true }], throwOnError: false }); } catch (e) {} }
+/* maths typesetting: KaTeX loads only the first time a page actually contains \( \), \[ \] or $$ */
+var KTX = null, KCDN = "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/";
+function loadKatex() { if (KTX) return KTX; KTX = new Promise(function (res, rej) {
+  var l = document.createElement("link"); l.rel = "stylesheet"; l.href = KCDN + "katex.min.css"; document.head.appendChild(l);
+  var k = document.createElement("script"); k.src = KCDN + "katex.min.js"; k.onerror = rej;
+  k.onload = function () { var a = document.createElement("script"); a.src = KCDN + "contrib/auto-render.min.js"; a.onload = res; a.onerror = rej; document.head.appendChild(a); };
+  document.head.appendChild(k); }); KTX.catch(function () { KTX = null; }); return KTX; }
+function typeset(el) { try { renderMathInElement(el, { delimiters: [{ left: "\\(", right: "\\)", display: false }, { left: "\\[", right: "\\]", display: true }, { left: "$$", right: "$$", display: true }], throwOnError: false }); } catch (e) {} }
+function maths(el) { if (!el || !/\\\(|\\\[|\$\$/.test(el.textContent)) return; if (window.renderMathInElement) return typeset(el); loadKatex().then(function () { if (el.isConnected) typeset(el); }, function () {}); }
 
 /* ---------------- teach mode: the script one chunk at a time ---------------- */
 var MODE = "plan", TCH = { id: null, pos: 0, seq: [] };
@@ -820,7 +924,7 @@ function teachSeq() {
         if (b.type === "figure" && b.img) { run.push(b); return; }
         flush();
         if (b.type === "steps") (b.items || []).forEach(function (it) { seq.push({ t: "step", it: it, key: stepKey(it.html), p: p, mod: mod }); });
-        else if (b.type === "text") seq.push({ t: "text", b: b, key: plain(b.html).length > 40 ? textKey(b.html) : null, p: p, mod: mod });
+        else if (b.type === "text") seq.push({ t: "text", b: b, key: !gradeRows(clean(b.html)).rows.length && plain(b.html).length > 40 ? textKey(b.html) : null, p: p, mod: mod });
         else if (b.type === "module") { seq.push({ t: "mod", b: b, key: modKey(b.name), p: p, mod: b.name }); walk(b.blocks, b.name); seq.push({ t: "modend", b: b, p: p, mod: b.name }); }
         else if (b.type === "quiz") (b.items || []).forEach(function (it, i) { seq.push({ t: "quiz", it: it, n: i + 1, of: b.items.length, p: p, mod: mod }); });
         else if (b.type === "drill") (b.items || []).forEach(function (d, i) { seq.push({ t: "drill", d: d, key: drillKey(d[0]), n: i + 1, of: b.items.length, title: b.title, p: p, mod: mod }); });
@@ -833,25 +937,6 @@ function teachSeq() {
   return seq;
 }
 function tposKey() { return "tutor.tpos." + CFG.student + "." + L.id; }
-function drawTeach() {
-  var s = L.script || {}, x = L.session, subj = s.subject || x.subject; document.body.setAttribute("data-subject", subj);
-  if (TCH.id !== L.id) { TCH = { id: L.id, seq: teachSeq(), pos: +(ls(tposKey()) || 0) }; } else TCH.seq = teachSeq();
-  if (TCH.pos >= TCH.seq.length) TCH.pos = TCH.seq.length - 1;
-  var c = TCH.seq[TCH.pos], pct = Math.round(100 * TCH.pos / Math.max(1, TCH.seq.length - 1));
-  var h = '<div class="teach"><div class="tbar"><div class="tbar-row"><div class="tcrumb"><a class="back" style="margin:0" href="#/lesson/' + encodeURIComponent(L.id) + '">← Plan</a><span>·</span><b>' + esc((c.p && c.p.name) || "End") + '</b>' + (c.mod ? '<span>›</span><span>' + esc(c.mod) + '</span>' : "") + '</div>' +
-    '<div class="tmini"><span class="t" id="clk">0:00</span><button class="btn small primary" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div><div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div></div>';
-  /* show the current chunk with the earlier chunks of the same group greyed above it */
-  var keep = window.innerWidth < 900 ? 1 : 3, start = TCH.pos; while (start > 0 && TCH.pos - start < keep && sameGroup(TCH.seq[start - 1], c) && TCH.seq[start - 1].t !== "phase" && TCH.seq[start - 1].t !== "mod") start--;
-  h += '<div id="tbody">';
-  for (var i = start; i <= TCH.pos; i++) h += '<div class="chunk ' + (i === TCH.pos ? "cur" : "past") + '" data-ti="' + i + '">' + chunkHTML(TCH.seq[i], i === TCH.pos) + '</div>';
-  h += '</div>' + footHTML(c) + '</div>';
-  app.innerHTML = h; loadImages(app); maths(app); tick();
-  /* keep the whole current chunk in view between the top bar and the bottom buttons */
-  var cur = $(".chunk.cur"), bar = $(".tbar"), foot = $(".tfoot");
-  if (cur && start < TCH.pos) { var top = bar ? bar.getBoundingClientRect().height : 0, bot = window.innerHeight - (foot ? foot.getBoundingClientRect().top : window.innerHeight), r = cur.getBoundingClientRect(), room = window.innerHeight - top - Math.max(0, bot);
-    window.scrollBy(0, r.height > room ? r.top - top - 8 : r.bottom - (window.innerHeight - Math.max(0, bot)) + 12); } else window.scrollTo(0, 0);
-  ls(tposKey(), String(TCH.pos));
-}
 function sameGroup(a, b) { return a && b && a.p === b.p && a.mod === b.mod; }
 function tlabel(kind, ic, text) { return '<div class="tlabel k-' + kind + '"><span class="ic">' + ic + '</span>' + esc(text) + '</div>'; }
 function chunkHTML(c, cur) {
@@ -860,7 +945,7 @@ function chunkHTML(c, cur) {
     case "mod": return tlabel(c.b.level === "deep" ? "deep" : "core", c.b.level === "deep" ? "D" : "C", (c.b.level === "deep" ? "Deep dive" : "Core") + (c.b.minutes ? " · " + c.b.minutes + " min" : "")) + '<h2 style="font-size:var(--s-xl)">' + esc(c.b.name) + '</h2>' + (c.b.level === "deep" && cur ? '<p class="hint">Optional extra depth. Teach it, or skip straight past it.</p>' : "");
     case "modend": return '<p class="hint">End of “' + esc(c.b.name) + '”.</p>';
     case "step": var k = c.it.kind || "do"; return tlabel(k, ({ say: "S", draw: "D", ask: "?", show: "▣", check: "✓" })[k] || "→", KIND[k] || k) + '<div class="big prose">' + clean(c.it.html) + '</div>';
-    case "text": return '<div class="prose big">' + clean(c.b.html) + '</div>';
+    case "text": var g2 = gradeRows(clean(c.b.html)); return (g2.rows.length ? tlabel("q", "?", "Ask him row by row · " + g2.rows.filter(function (r) { var a = L.session.answers[r.k]; return a && a.v; }).length + " of " + g2.rows.length + " asked") : "") + '<div class="prose big">' + g2.html + '</div>';
     case "figs": return c.items.length > 1 ? '<div class="gallery">' + c.items.map(block).join("") + '</div>' : block(c.items[0]);
     case "quiz": var a = L.session.answers[c.it.id] || {};
       return tlabel("q", "?", "Oral quiz · " + c.n + " of " + c.of + (c.it.page ? " · " + c.it.page : "")) + '<div class="big prose">' + clean(c.it.q) + '</div>' + (cur ? '<details class="reveal" style="margin:10px 0"><summary>Show answer</summary><div class="prose">' + clean(c.it.a) + '</div></details><div class="items"><div class="item" data-v="' + esc(a.v || "") + '"><span class="qn">▸</span><div class="label" style="padding-top:12px">How he did</div>' + ctl(c.it.id) + '</div></div>' : "");
@@ -871,19 +956,80 @@ function chunkHTML(c, cur) {
     default: return block(c.b || {});
   }
 }
+function drawTeach() {
+  var s = L.script || {}, x = L.session, subj = s.subject || x.subject; document.body.setAttribute("data-subject", subj); document.body.classList.add("teaching");
+  if (TCH.id !== L.id) { TCH = { id: L.id, seq: teachSeq(), pos: +(ls(tposKey()) || 0) }; } else TCH.seq = teachSeq();
+  if (TCH.pos >= TCH.seq.length) TCH.pos = TCH.seq.length - 1;
+  var c = TCH.seq[TCH.pos], pct = Math.round(100 * TCH.pos / Math.max(1, TCH.seq.length - 1));
+  var h = '<div class="teach3">' + runwayHTML(c) + '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
+    '<a class="back" style="margin:0" href="#/lesson/' + encodeURIComponent(L.id) + '">← Plan</a><span aria-hidden="true">·</span><b>' + esc((c.p && c.p.name) || "End") + '</b>' + (c.mod ? '<span aria-hidden="true">›</span><span>' + esc(c.mod) + '</span>' : "") + '</div>' +
+    '<div class="tmini"><span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
+    '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div></div><div class="tstage">';
+  /* the current chunk, with the earlier chunks of the same group greyed above it */
+  var keep = window.innerWidth < 900 ? 1 : 2, start = TCH.pos; while (start > 0 && TCH.pos - start < keep && sameGroup(TCH.seq[start - 1], c) && TCH.seq[start - 1].t !== "phase" && TCH.seq[start - 1].t !== "mod") start--;
+  h += '<div id="tbody">';
+  for (var i = start; i <= TCH.pos; i++) h += '<div class="chunk ' + (i === TCH.pos ? "cur" : "past") + '" data-ti="' + i + '">' + chunkHTML(TCH.seq[i], i === TCH.pos) + '</div>';
+  var nx = upNext(TCH.pos + 1);
+  h += '</div>' + (nx ? '<div class="upnext"><b>UP NEXT</b><span>' + esc(nx) + '</span></div>' : "") + '</div>' + footHTML(c) + '</section></div>';
+  app.innerHTML = h; fillRows(app); loadImages(app); maths(app); tick();
+  /* keep the whole current chunk in view between the top bar and the bottom buttons; a new part starts at the top */
+  var cur = $(".chunk.cur"), bar = $(".tbar"), foot = $(".tfoot");
+  if (cur && start < TCH.pos) { var top = bar ? bar.getBoundingClientRect().height : 0, bot = window.innerHeight - (foot ? foot.getBoundingClientRect().top : window.innerHeight), r = cur.getBoundingClientRect(), room = window.innerHeight - top - Math.max(0, bot);
+    window.scrollBy(0, r.height > room ? r.top - top - 8 : r.bottom - (window.innerHeight - Math.max(0, bot)) + 12); } else window.scrollTo(0, 0);
+  ls(tposKey(), String(TCH.pos));
+}
+/* the runway: the lesson's parts drawn to the scale of their planned minutes, with the clock as a moving pin */
+function pw(p) { return p.start != null && p.end != null ? Math.max(2, p.end - p.start) : 4; }
+function runwayHTML(c) {
+  var s = L.script || {}, x = L.session, ps = phases().filter(function (p) { return !p.sys; }), ci = c.p ? ps.indexOf(c.p) : ps.length;
+  var total = ps.reduce(function (a, p) { return a + pw(p); }, 0), t0 = 0;
+  TCH.rw = { total: total, cur: c.p || null, starts: {} };
+  var lis = ps.map(function (p, i) {
+    var st = p.start != null ? p.start : t0; TCH.rw.starts[p.id] = st; t0 = st + pw(p);
+    var its = phaseItems(p), qs = its.filter(function (q) { return q.kind === "q"; }), used = qs.filter(usedOrDone), right = used.filter(function (q) { return x.answers[q.k] && x.answers[q.k].v === "right"; });
+    var pm = x.time.phaseMinutes && x.time.phaseMinutes[p.id];
+    var sub = [pm ? "took " + pm + " min" : (p.start != null ? p.start + "–" + p.end + " min" : ""), used.length ? right.length + " of " + used.length + " right" : ""].filter(Boolean).join(" · ");
+    var mods = "";
+    if (i === ci) { var ms = (p.blocks || []).filter(function (b) { return b.type === "module"; });
+      if (ms.length) mods = '<div class="mods">' + ms.map(function (b) { var j = seqIndex(function (q) { return q.t === "mod" && q.b === b; }); return '<button type="button" data-tjump="' + j + '" class="' + (c.mod === b.name ? "cur" : isDone(modKey(b.name)) ? "done" : "") + '">' + esc(b.name) + (b.level === "deep" ? " · deep" : "") + '</button>'; }).join("") + '</div>'; }
+    var pj = seqIndex(function (q) { return q.t === "phase" && q.p === p; });
+    return '<li class="' + (i < ci ? "past" : i === ci ? "cur" : "") + '" style="flex-grow:' + pw(p) + '"><button type="button" data-tjump="' + pj + '"><span class="nm">' + esc(p.name) + '</span>' + (sub ? '<span class="sub">' + esc(sub) + '</span>' : "") + '</button>' + mods + '</li>';
+  }).join("");
+  var subj = s.subject || x.subject, pd = parseId(L.id);
+  return '<aside class="runway" aria-label="Lesson runway"><a class="back" href="#/lesson/' + encodeURIComponent(L.id) + '">← Back to Plan</a>' +
+    '<span class="tag">' + esc(SUBJ[subj] || subj) + ' · ' + esc(fmtDate(s.date || x.date || pd.date)) + '</span><div class="ttl">' + esc(s.title || x.title || "Lesson") + '</div>' +
+    '<div class="rw"><div class="rw-track" aria-hidden="true"><i class="fill" id="rwfill"></i><b class="pin" id="rwpin" hidden></b></div><ol>' + lis + '</ol></div>' +
+    '<div class="onclock" id="onclock" hidden><span class="k">ON THE CLOCK</span><span id="onclockt"></span></div></aside>';
+}
+function seqIndex(f) { for (var i = 0; i < TCH.seq.length; i++) if (f(TCH.seq[i])) return i; return 0; }
+function runwayTick(r) {
+  var fill = $("#rwfill"), pin = $("#rwpin"), oc = $("#onclock"); if (!fill || !TCH.rw) return;
+  var m = r.secs / 60, pc = Math.min(1, m / Math.max(1, TCH.rw.total)) * 100;
+  fill.style.height = pc + "%"; pin.style.top = pc + "%"; pin.hidden = !r.secs;
+  var p = TCH.rw.cur; if (!oc) return;
+  if (!r.secs || !p || p.start == null) { oc.hidden = true; return; }
+  var d = Math.round(m - p.start), late = Math.round(m - p.end);
+  $("#onclockt").innerHTML = esc(p.name) + " was planned for minute " + p.start + "–" + p.end + ". " + (m < p.start ? "You are <b>" + Math.max(1, -d) + " min ahead</b>." : m > p.end ? "You are <b>" + Math.max(1, late) + " min behind</b>." : "You are <b>on time</b>.");
+  oc.hidden = false;
+}
+/* a short line saying what comes after the current chunk */
+function upNext(i) { var c = TCH.seq[i]; while (c && c.t === "modend") c = TCH.seq[++i]; if (!c) return "";
+  var t = c.t === "phase" ? "Part: " + c.p.name : c.t === "mod" ? c.b.name : c.t === "step" ? plain(c.it.html) : c.t === "text" ? plain(c.b.html) : c.t === "quiz" ? "Quiz: " + plain(c.it.q) : c.t === "drill" ? "Drill: " + plain(c.d[0]) : c.t === "question" ? "Exam question: " + (c.b.label || "") : c.t === "figs" ? (c.items.length > 1 ? c.items.length + " pictures" : "A picture" + (c.items[0].caption ? ": " + plain(c.items[0].caption) : "")) : c.t === "video" ? "Video: " + (c.b.title || "") : c.t === "end" ? "End of the script" : "";
+  return t.length > 120 ? t.slice(0, 118) + "…" : t; }
 function footHTML(c) {
-  var taughtable = { step: 1, text: 1, figs: 1, video: 1, reveal: 1, mod: 1 }[c.t];
+  var taughtable = { step: 1, figs: 1, video: 1, reveal: 1, mod: 1 }[c.t] || (c.t === "text" && c.key);
   var mid = "";
   if (c.t === "question" && (c.b.img || []).length) mid += '<button class="btn small" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
   if (c.t === "mod" && c.b.level === "deep") mid += '<button class="btn small" type="button" data-tskip="mod">Skip this deep dive</button>';
   if (c.t === "phase") mid += '<button class="btn small" type="button" data-tskip="phase">Skip this part</button>';
+  var lab = c.t === "phase" ? "Start this part" : c.t === "mod" ? "Teach this" : taughtable ? '<span class="ck" aria-hidden="true">✓</span>Taught · Next' : "Next";
   return '<div class="tfoot"><button class="btn" type="button" data-tgo="-1"' + (TCH.pos === 0 ? " disabled" : "") + '>← Back</button><div class="mid">' + mid + '</div>' +
-    (c.t === "end" ? "" : '<button class="btn next" type="button" data-tgo="+1">' + (c.t === "phase" ? "Start this part →" : c.t === "mod" ? "Teach this →" : taughtable ? "✓ Taught · Next →" : "Next →") + '</button>') + '</div>';
+    (c.t === "end" ? "" : '<button class="btn next" type="button" data-tgo="+1">' + lab + ' <kbd>→</kbd></button>') + '</div>';
 }
 function setDone(key, label, on) { var x = L.session; x.done = x.done || {}; x.done[key] = on ? { at: now(), d: CFG.device, label: String(label || "").slice(0, 90) } : { off: true, at: now() }; }
-function tmove(d) {
+function tmove(d, jump) {
   var c = TCH.seq[TCH.pos], x = L.session;
-  if (d > 0) {
+  if (d === 1 && !jump) {
     if (c.key && { step: 1, text: 1, mod: 1 }[c.t] && !isDone(c.key)) { setDone(c.key, c.t === "mod" ? c.b.name : plain(c.t === "step" ? c.it.html : c.b.html), true); touch(); }
   }
   var n = Math.max(0, Math.min(TCH.seq.length - 1, TCH.pos + d)); TCH.pos = n;
@@ -899,6 +1045,7 @@ function tskip(what) { var c = TCH.seq[TCH.pos], i = TCH.pos + 1;
 document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) return; var t = e.target.closest && e.target.closest("button"); if (!t) return;
   if (t.hasAttribute("data-tgo")) { var g = t.getAttribute("data-tgo"); if (g === "after") { MODE = "plan"; L.phase = "_after"; location.hash = "#/lesson/" + encodeURIComponent(L.id); return; } tmove(+g); return; }
   if (t.hasAttribute("data-tskip")) { tskip(t.getAttribute("data-tskip")); return; }
+  if (t.hasAttribute("data-tjump")) { tmove(+t.getAttribute("data-tjump") - TCH.pos, true); return; }
   });
 document.addEventListener("keydown", function (e) { if (MODE !== "teach" || SH || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || "")) return;
   if (e.key === "ArrowRight") tmove(1); else if (e.key === "ArrowLeft") tmove(-1); });
