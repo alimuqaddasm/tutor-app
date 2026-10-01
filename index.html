@@ -13,31 +13,38 @@
 /* apply the saved theme and text style before anything paints */
 (function(){try{var t=localStorage.getItem("tutor.theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);
 var f=localStorage.getItem("tutor.font")||"figtree";document.documentElement.setAttribute("data-font",f);
-var fam={figtree:"Figtree:wght@400;600;700;800",lexend:"Lexend:wght@400;600;700;800",serif:"Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700;8..60,800"}[f]||"Figtree:wght@400;600;700;800";
+var fam={figtree:"Figtree:wght@400;500;600;700;800",lexend:"Lexend:wght@400;600;700;800",serif:"Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700;8..60,800"}[f]||"Figtree:wght@400;500;600;700;800";
 document.write('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family='+fam+'&display=swap">');}catch(e){}})();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://api.github.com">
-<link rel="stylesheet" href="app.css?v=10">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css">
+<link rel="stylesheet" href="app.css?v=11">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/contrib/auto-render.min.js" defer></script>
 </head>
 <body>
-<header class="top"><div class="top-in">
-  <a class="brand" href="#/">Tutor Desk <small id="who"></small></a>
+<div class="shell">
+<aside class="side" aria-label="Main">
+  <a class="brand" href="#/"><span class="logo" aria-hidden="true"></span><span>Tutor Desk</span><small id="who"></small></a>
+  <div class="subjsw" role="group" aria-label="Subject">
+    <button type="button" data-subj="all">Both</button><button type="button" data-subj="chem">Chemistry</button><button type="button" data-subj="maths">Maths</button>
+  </div>
   <nav class="nav" aria-label="Sections">
-    <a href="#/" data-nav="lessons">Lessons</a>
-    <a href="#/revise" data-nav="revise">Revise</a>
-    <a href="#/videos" data-nav="videos">Videos</a>
-    <a href="#/record" data-nav="record">Record</a>
-    <a href="#/settings" data-nav="settings">Settings</a>
+    <a href="#/" data-nav="lessons"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg><span>Lessons</span></a>
+    <a href="#/videos" data-nav="videos"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/></svg><span>Videos</span></a>
+    <a href="#/revise" data-nav="revise"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg><span>Revise</span></a>
+    <a href="#/record" data-nav="record"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Record</span></a>
+    <a href="#/settings" data-nav="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></a>
   </nav>
-  <button class="theme" id="theme" type="button" aria-label="Switch light or dark"></button>
-  <div class="save" id="save" aria-live="polite"></div>
-</div></header>
+  <div class="side-foot"><button class="theme" id="theme" type="button" aria-label="Switch light or dark"></button><div class="save" id="save" aria-live="polite"></div></div>
+</aside>
 <main id="app"><div class="empty"><h3>Loading</h3><p>Starting the Tutor Desk.</p></div></main>
+</div>
 <div id="zoom" class="zoom" hidden><button class="btn small" id="zoomx" type="button">Close</button><img id="zimg" alt=""></div>
 <div id="toast" class="toast" hidden></div>
-<script src="app.js?v=10" defer></script>
+<script src="app.js?v=11" defer></script>
 </body>
 </html>
