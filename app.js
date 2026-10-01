@@ -102,7 +102,8 @@ function newSession(id, script) {
   return { v: 2, lesson: id, student: CFG.student, subject: (script && script.subject) || p.subject, date: (script && script.date) || p.date, title: (script && script.title) || "",
     status: "not-started", time: { log: [], edit: {}, started: null, ended: null, minutes: null, phaseMinutes: {} }, answers: {}, extra: [], work: [], feedback: {}, devices: [], updated: null };
 }
-function norm(s) { s.time = s.time || {}; s.time.log = s.time.log || []; s.time.edit = s.time.edit || {}; s.answers = s.answers || {}; s.extra = s.extra || []; s.work = s.work || []; s.feedback = s.feedback || {}; s.devices = s.devices || []; s.done = s.done || {};
+var PREVIEW_FIX = "2026-10-01T12:00:00Z";
+function norm(s) { if (s && s.done && !((s.time && s.time.log) || []).some(function (e) { return e.e === "start"; })) Object.keys(s.done).forEach(function (k) { var d = s.done[k]; if (d && !d.off && String(d.at) < PREVIEW_FIX) s.done[k] = { off: true, at: PREVIEW_FIX, label: d.label }; }); s.time = s.time || {}; s.time.log = s.time.log || []; s.time.edit = s.time.edit || {}; s.answers = s.answers || {}; s.extra = s.extra || []; s.work = s.work || []; s.feedback = s.feedback || {}; s.devices = s.devices || []; s.done = s.done || {};
   if (s.time.manual && !Object.keys(s.time.edit).length) { s.time.edit = { started: s.time.started, ended: s.time.ended }; delete s.time.manual; } return s; }
 function replay(log, upto) {
   var running = false, since = null, phase = null, secs = 0, per = {}, end = upto || Date.now();
@@ -178,10 +179,10 @@ function nav(r) { var k = r.indexOf("/record") === 0 ? "record" : r.indexOf("/se
   $$("[data-nav]").forEach(function (a) { if (a.getAttribute("data-nav") === k) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   $("#who").textContent = CFG.token ? CFG.student + " · " + CFG.device : ""; if (typeof subjSync === "function") subjSync(); }
 function render() {
-  var r = route(); nav(r); document.body.removeAttribute("data-subject"); document.body.classList.remove("teaching");
+  var r = route(); nav(r); document.body.removeAttribute("data-subject"); document.body.classList.remove("teaching", "student", "toc-open");
   if (!CFG.token && r.indexOf("/settings") !== 0) { location.hash = "#/settings"; return; }
   if (r.indexOf("/settings") === 0) return settingsView();
-  if (r.indexOf("/lesson/") === 0) { var rest = decodeURIComponent(r.slice(8)), tm = /\/teach$/.test(rest); MODE = tm ? "teach" : "plan"; return lessonView(rest.replace(/\/teach$/, "")); }
+  if (r.indexOf("/lesson/") === 0) { var rest = decodeURIComponent(r.slice(8)), mm = /\/(teach|student)$/.exec(rest); MODE = mm ? mm[1] : "plan"; return lessonView(rest.replace(/\/(teach|student)$/, "")); }
   if (r.indexOf("/new") === 0) return newView();
   if (r.indexOf("/record") === 0) return recordView();
   if (r.indexOf("/revise") === 0) return reviseView();
@@ -361,6 +362,7 @@ function phases() {
 }
 function drawLesson() {
   if (MODE === "teach") return drawTeach();
+  if (MODE === "student") return drawStudent();
   var s = L.script || {}, x = L.session, subj = s.subject || x.subject;
   document.body.setAttribute("data-subject", subj);
   var ps = phases(); if (!L.phase || !ps.some(function (p) { return p.id === L.phase; })) L.phase = x.status === "finished" ? "_after" : ps[0].id;
@@ -368,7 +370,7 @@ function drawLesson() {
   var h = '<div class="lhead phead"><div style="min-width:0"><div class="crumb" style="margin-bottom:8px"><a href="#/">Lessons</a><span aria-hidden="true">\u203a</span><span>' + esc(SUBJ[subj] || subj) + '</span></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="pill ' + esc(subj) + '">' + esc(SUBJ[subj] || subj) + '</span><span class="hint">' + esc(fmtDate(x.date || s.date, true)) + '</span>' +
     (s.status === "draft" ? '<span class="pill warn">Draft script</span>' : "") + (x.status === "finished" ? '<span class="pill ok">Logged</span>' : x.status === "in-progress" ? '<span class="pill warn">In progress</span>' : "") + '</div>' +
     '<h1>' + esc(s.title || x.title || "Lesson") + '</h1>' + (s.summary ? '<div class="sub">' + clean(s.summary) + '</div>' : "") + '</div>' +
-    '<div class="card clock" aria-label="Lesson clock"><span class="t" id="clk">0:00</span><button class="btn small primary" id="clkgo" type="button"></button>' + (r.running ? '<button class="btn small" id="clkend" type="button">End lesson</button>' : "") + '<button class="btn small" type="button" data-phase="_time">Edit times</button><span class="st" id="clkst"></span></div><div class="modes" style="align-self:center"><a href="#/lesson/' + encodeURIComponent(L.id) + '" aria-current="true">Plan</a><a href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach \u25b6</a></div></div>';
+    '<div class="card clock" aria-label="Lesson clock"><span class="t" id="clk">0:00</span><button class="btn small primary" id="clkgo" type="button"></button>' + (r.running ? '<button class="btn small" id="clkend" type="button">End lesson</button>' : "") + '<button class="btn small" type="button" data-phase="_time">Edit times</button><span class="st" id="clkst"></span></div><div class="modes" style="align-self:center"><a href="#/lesson/' + encodeURIComponent(L.id) + '" aria-current="true">Plan</a><a href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach \u25b6</a><a href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student \u2197</a></div></div>';
   h += '<div class="lesson"><nav class="rail" aria-label="Lesson phases">' + ps.map(function (p, i) {
     var pm = x.time.phaseMinutes && x.time.phaseMinutes[p.id], planned = p.start != null ? p.start + "–" + p.end + " min" : "";
     var tm = p.sys ? ({ _revise: REV ? dueList(x.subject).length + " due" : "his old mistakes", _extra: x.extra.length ? x.extra.length + " logged" : "add as you go", _work: x.work.filter(function (w) { return !w.removed; }).length ? x.work.filter(function (w) { return !w.removed; }).length + " uploaded" : "upload photos", _time: x.time.minutes != null ? x.time.minutes + " min" + (x.time.started ? " · " + hhmm(x.time.started) + "–" + (x.time.ended ? hhmm(x.time.ended) : "") : "") : "not recorded yet", _after: x.feedback && x.feedback.at ? "saved " + hhmm(x.feedback.at) : "notes + finish" })[p.id] : planned + (pm ? " · took " + pm : "") + (phaseCount(p) ? " · " + phaseCount(p) : "");
@@ -642,7 +644,7 @@ document.addEventListener("click", function (ev) {
   if (t.hasAttribute("data-logdel")) { x.time.log.splice(+t.getAttribute("data-logdel"), 1); timeEdited(); drawLesson(); return; }
   if (t.id === "usecov") { var ta = $("#fb-cov"); if (ta) { ta.value = (ta.value ? ta.value + "\n" : "") + t.getAttribute("data-cov"); x.feedback.covered = ta.value; x.feedback.at = now(); touch(); } return; }
   if (t.id === "reopen") { x.status = "in-progress"; x.statusAt = now(); touch(); drawLesson(); return; }
-  if (t.hasAttribute("data-qf")) { L.filter = t.getAttribute("data-qf"); drawPhase(); return; }
+  if (t.hasAttribute("data-qf")) { L.filter = t.getAttribute("data-qf"); if (MODE === "teach") drawTeach(); else drawPhase(); return; }
   if (t.hasAttribute("data-ans")) { var qa = t.parentNode.querySelector(".qa"); qa.hidden = !qa.hidden; t.textContent = qa.hidden ? "Show answer" : "Hide answer"; return; }
   if (t.hasAttribute("data-v")) { var box = t.closest("[data-item]"), iid = box.getAttribute("data-item"), v = t.getAttribute("data-v"), a = target(iid);
     a.v = a.v === v ? null : v; a.at = now(); a.d = CFG.device; if (box.getAttribute("data-q")) a.q = box.getAttribute("data-q"); save(iid, a); railCount();
@@ -766,7 +768,7 @@ var SH = null;
 function openShow(which) {
   var p = phases().filter(function (q) { return q.id === L.phase; })[0], sl = slidesOf(p); if (!sl.length) return;
   var i = which === "*" ? 0 : Math.max(0, sl.map(function (x) { return x.id; }).indexOf(which));
-  var el = document.createElement("div"); el.className = "show"; el.id = "show";
+  var el = document.createElement("div"); el.className = "showov"; el.id = "show";
   el.innerHTML = '<div class="show-top"><span id="sh-lab"></span><span class="num" id="sh-n"></span><button type="button" class="show-x" id="sh-x" aria-label="Close">×</button></div><div class="show-body" id="sh-body"></div><div class="show-nav"><button type="button" id="sh-prev" aria-label="Previous">‹</button><button type="button" id="sh-next" aria-label="Next">›</button></div>';
   document.body.appendChild(el); SH = { sl: sl, i: i }; drawShow();
   try { if (el.requestFullscreen) el.requestFullscreen().catch(function () {}); } catch (e) {}
@@ -779,7 +781,7 @@ function drawShow() { var s = SH.sl[SH.i]; $("#sh-lab").textContent = ""; $("#sh
 function stepShow(d) { if (!SH) return; var n = SH.i + d; if (n < 0 || n >= SH.sl.length) return; SH.i = n; drawShow(); }
 function closeShow() { var el = $("#show"); if (el) el.remove(); SH = null; try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {} }
 document.addEventListener("click", function (e) { var t = e.target.closest("button"); if (!t) return;
-  if (t.hasAttribute("data-show")) { openShow(t.getAttribute("data-show")); return; }
+  if (t.hasAttribute("data-show")) { showHim(t.getAttribute("data-show")); return; }
   if (t.id === "sh-x") closeShow(); else if (t.id === "sh-prev") stepShow(-1); else if (t.id === "sh-next") stepShow(1); });
 document.addEventListener("keydown", function (e) { if (!SH) return; if (e.key === "ArrowRight") stepShow(1); else if (e.key === "ArrowLeft") stepShow(-1); else if (e.key === "Escape") closeShow(); });
 
@@ -911,144 +913,211 @@ function loadKatex() { if (KTX) return KTX; KTX = new Promise(function (res, rej
 function typeset(el) { try { renderMathInElement(el, { delimiters: [{ left: "\\(", right: "\\)", display: false }, { left: "\\[", right: "\\]", display: true }, { left: "$$", right: "$$", display: true }], throwOnError: false }); } catch (e) {} }
 function maths(el) { if (!el || !/\\\(|\\\[|\$\$/.test(el.textContent)) return; if (window.renderMathInElement) return typeset(el); loadKatex().then(function () { if (el.isConnected) typeset(el); }, function () {}); }
 
-/* ---------------- teach mode: the script one chunk at a time ---------------- */
-var MODE = "plan", TCH = { id: null, pos: 0, seq: [] };
+/* ---------------- teach mode: the script one chunk at a time ----------------
+   Nothing is recorded until the lesson clock runs ("preview"). While it runs, "Taught · Next" ticks the chunk
+   and "Skip" moves on without ticking. Every chunk can be reached from the outline. */
+var MODE = "plan", TCH = { id: null, pos: 0, seq: [], open: {} };
+function quizOn(it, f) { return f === "all" || (f === "star" && it.star) || f === it.kind || ("t:" + it.topic) === f; }
+function quizChoices(items) { var hasStar = items.some(function (i) { return i.star; }), topics = {};
+  items.forEach(function (i) { if (i.topic) topics[i.topic] = 1; });
+  return (hasStar ? [["star", "★ Suggested"]] : []).concat([["all", "All"], ["recall", "Recall"], ["reason", "Reasoning"], ["draw", "Drawing"]])
+    .concat(Object.keys(topics).map(function (t) { return ["t:" + t, t.charAt(0).toUpperCase() + t.slice(1)]; }))
+    .map(function (c) { return { f: c[0], label: c[1], n: items.filter(function (i) { return quizOn(i, c[0]); }).length }; }).filter(function (c) { return c.n; }); }
+function quizFilter(items) { return L.filter || (items.some(function (i) { return i.star; }) ? "star" : "all"); }
 function teachSeq() {
   var seq = [];
   phases().filter(function (p) { return !p.sys; }).forEach(function (p) {
     seq.push({ t: "phase", p: p });
     (function walk(bs, mod) {
-      var run = [];
-      function flush() { if (run.length) seq.push({ t: "figs", items: run, p: p, mod: mod }); run = []; }
       (bs || []).forEach(function (b) {
-        if (b.type === "figure" && b.img) { run.push(b); return; }
-        flush();
-        if (b.type === "steps") (b.items || []).forEach(function (it) { seq.push({ t: "step", it: it, key: stepKey(it.html), p: p, mod: mod }); });
+        if (b.type === "figure" && b.img) seq.push({ t: "fig", b: b, p: p, mod: mod });
+        else if (b.type === "steps") (b.items || []).forEach(function (it) { seq.push({ t: "step", it: it, key: stepKey(it.html), p: p, mod: mod }); });
         else if (b.type === "text") seq.push({ t: "text", b: b, key: !gradeRows(clean(b.html)).rows.length && plain(b.html).length > 40 ? textKey(b.html) : null, p: p, mod: mod });
-        else if (b.type === "module") { seq.push({ t: "mod", b: b, key: modKey(b.name), p: p, mod: b.name }); walk(b.blocks, b.name); seq.push({ t: "modend", b: b, p: p, mod: b.name }); }
-        else if (b.type === "quiz") (b.items || []).forEach(function (it, i) { seq.push({ t: "quiz", it: it, n: i + 1, of: b.items.length, p: p, mod: mod }); });
+        else if (b.type === "module") { seq.push({ t: "mod", b: b, key: modKey(b.name), p: p, mod: b.name }); walk(b.blocks, b.name); }
+        else if (b.type === "quiz") { var its = b.items || [], f = quizFilter(its), on = its.filter(function (i) { return quizOn(i, f); });
+          seq.push({ t: "quizpick", b: b, p: p, mod: mod });
+          on.forEach(function (it, i) { seq.push({ t: "quiz", it: it, n: i + 1, of: on.length, b: b, p: p, mod: mod }); }); }
         else if (b.type === "drill") (b.items || []).forEach(function (d, i) { seq.push({ t: "drill", d: d, key: drillKey(d[0]), n: i + 1, of: b.items.length, title: b.title, p: p, mod: mod }); });
         else seq.push({ t: b.type, b: b, p: p, mod: mod });
       });
-      flush();
     })(p.blocks, null);
   });
   seq.push({ t: "end" });
   return seq;
 }
 function tposKey() { return "tutor.tpos." + CFG.student + "." + L.id; }
-function sameGroup(a, b) { return a && b && a.p === b.p && a.mod === b.mod; }
+function live() { return replay(L.session.time.log).running; }
 function tlabel(kind, ic, text) { return '<div class="tlabel k-' + kind + '"><span class="ic">' + ic + '</span>' + esc(text) + '</div>'; }
-function chunkHTML(c, cur) {
+var KIC = { say: "S", draw: "D", ask: "?", show: "▣", check: "✓" };
+function chunkKey(c) { return c.t === "quiz" ? c.it.id : c.t === "drill" ? c.key : c.t === "question" ? c.b.id : c.key || null; }
+/* what one chunk is, in a few words: for the outline, the greyed lines and "up next" */
+function shortOf(c, n) { n = n || 90; var t = c.t === "phase" ? c.p.name : c.t === "mod" ? c.b.name : c.t === "step" ? plain(c.it.html) : c.t === "text" ? plain(c.b.html) :
+    c.t === "quizpick" ? "Choose the quiz questions" : c.t === "quiz" ? plain(c.it.q) : c.t === "drill" ? plain(c.d[0]) : c.t === "question" ? (c.b.label || "Exam question") :
+    c.t === "fig" ? (plain(c.b.caption) || "Picture") : c.t === "video" ? "Video: " + (c.b.title || "") : c.t === "reveal" ? (c.b.label || "Reveal") : c.t === "end" ? "End of the script" : (c.t || "");
+  return t.length > n ? t.slice(0, n - 1) + "…" : t; }
+function stateOf(c) { var k = chunkKey(c); if (!k) return ""; if (c.t === "quiz" || c.t === "drill" || c.t === "question") { var a = L.session.answers[k]; return a && a.v ? "v-" + a.v : ""; } return isDone(k) ? "done" : ""; }
+function iconOf(c) { return c.t === "step" ? (KIC[c.it.kind] || "→") : c.t === "quiz" || c.t === "drill" ? "?" : c.t === "question" ? "Q" : c.t === "fig" ? "▧" : c.t === "video" ? "▶" : c.t === "mod" ? (c.b.level === "deep" ? "D" : "C") : c.t === "quizpick" ? "★" : "¶"; }
+function chunkHTML(c) {
+  var k = chunkKey(c), tk = k && { step: 1, text: 1, mod: 1 }[c.t] ? '<span class="ctick">' + tick_(k, shortOf(c)) + '</span>' : "";
   switch (c.t) {
     case "phase": return '<div class="tphase"><div class="label">Part ' + (phases().indexOf(c.p) + 1) + (c.p.start != null ? ' · ' + c.p.start + '–' + c.p.end + ' min' : "") + '</div><h2>' + esc(c.p.name) + '</h2>' + (c.p.show ? '<div class="screen" style="margin-top:16px"><span class="label">On screen</span><div>' + clean(c.p.show) + '</div></div>' : "") + (L.script && L.script.focus && phases()[0] === c.p ? focusTable(L.script.focus) : "") + '</div>';
-    case "mod": return tlabel(c.b.level === "deep" ? "deep" : "core", c.b.level === "deep" ? "D" : "C", (c.b.level === "deep" ? "Deep dive" : "Core") + (c.b.minutes ? " · " + c.b.minutes + " min" : "")) + '<h2 style="font-size:var(--s-xl)">' + esc(c.b.name) + '</h2>' + (c.b.level === "deep" && cur ? '<p class="hint">Optional extra depth. Teach it, or skip straight past it.</p>' : "");
-    case "modend": return '<p class="hint">End of “' + esc(c.b.name) + '”.</p>';
-    case "step": var k = c.it.kind || "do"; return tlabel(k, ({ say: "S", draw: "D", ask: "?", show: "▣", check: "✓" })[k] || "→", KIND[k] || k) + '<div class="big prose">' + clean(c.it.html) + '</div>';
-    case "text": var g2 = gradeRows(clean(c.b.html)); return (g2.rows.length ? tlabel("q", "?", "Ask him row by row · " + g2.rows.filter(function (r) { var a = L.session.answers[r.k]; return a && a.v; }).length + " of " + g2.rows.length + " asked") : "") + '<div class="prose big">' + g2.html + '</div>';
-    case "figs": return c.items.length > 1 ? '<div class="gallery">' + c.items.map(block).join("") + '</div>' : block(c.items[0]);
-    case "quiz": var a = L.session.answers[c.it.id] || {};
-      return tlabel("q", "?", "Oral quiz · " + c.n + " of " + c.of + (c.it.page ? " · " + c.it.page : "")) + '<div class="big prose">' + clean(c.it.q) + '</div>' + (cur ? '<details class="reveal" style="margin:10px 0"><summary>Show answer</summary><div class="prose">' + clean(c.it.a) + '</div></details><div class="items"><div class="item" data-v="' + esc(a.v || "") + '"><span class="qn">▸</span><div class="label" style="padding-top:12px">How he did</div>' + ctl(c.it.id) + '</div></div>' : "");
+    case "mod": return tk + tlabel(c.b.level === "deep" ? "deep" : "core", c.b.level === "deep" ? "D" : "C", (c.b.level === "deep" ? "Deep dive, optional" : "Core") + (c.b.minutes ? " · " + c.b.minutes + " min" : "")) + '<h2 style="font-size:var(--s-xl)">' + esc(c.b.name) + '</h2>';
+    case "step": var kd = c.it.kind || "do"; return tk + tlabel(kd, KIC[kd] || "→", KIND[kd] || kd) + '<div class="big prose">' + clean(c.it.html) + '</div>';
+    case "text": var g2 = gradeRows(clean(c.b.html)); return tk + (g2.rows.length ? tlabel("q", "?", "Ask him row by row · " + g2.rows.filter(function (r) { var a = L.session.answers[r.k]; return a && a.v; }).length + " of " + g2.rows.length + " asked") : "") + '<div class="prose big">' + g2.html + '</div>';
+    case "fig": return '<figure class="tfig">' + img(c.b.img, plain(c.b.caption) || "Picture") + (c.b.caption ? '<figcaption>' + clean(c.b.caption) + '</figcaption>' : "") + '</figure>';
+    case "quizpick": var its = c.b.items || [], f = quizFilter(its);
+      return tlabel("q", "★", "Oral quiz · which questions?") + '<p class="hint" style="margin:0 0 12px">Pick a set. Only those questions come up next, in order. You can change it from any quiz question.</p><div class="qbar" role="group" aria-label="Quiz questions">' +
+        quizChoices(its).map(function (q) { return '<button class="chip" type="button" data-qf="' + esc(q.f) + '" aria-pressed="' + (f === q.f) + '">' + esc(q.label) + ' <b class="num">' + q.n + '</b></button>'; }).join("") + '</div>';
+    case "quiz": var a = L.session.answers[c.it.id] || {}, pick = seqIndex(function (q) { return q.t === "quizpick" && q.b === c.b; });
+      return tlabel("q", "?", "Oral quiz · " + c.n + " of " + c.of + (c.it.page ? " · " + c.it.page : "")) + '<button class="linkbtn qset" type="button" data-tjump="' + pick + '">Set: ' + esc((quizChoices(c.b.items || []).filter(function (q) { return q.f === quizFilter(c.b.items || []); })[0] || {}).label || "All") + ' · change</button>' +
+        '<div class="big prose">' + clean(c.it.q) + '</div><details class="reveal" style="margin:10px 0"><summary>Show answer</summary><div class="prose">' + clean(c.it.a) + '</div></details><div class="items"><div class="item" data-v="' + esc(a.v || "") + '"><span class="qn">▸</span><div class="label" style="padding-top:12px">How he did</div>' + ctl(c.it.id, null, a, plain(c.it.q)) + '</div></div>';
     case "drill": var a2 = L.session.answers[c.key] || {};
-      return tlabel("q", "?", (c.title || "Drill") + " · " + c.n + " of " + c.of) + '<div class="big prose">' + clean(c.d[0]) + '</div>' + (cur ? '<details class="reveal" style="margin:10px 0"><summary>Show answer</summary><div class="prose">' + clean(c.d[1]) + '</div></details><div class="items"><div class="item" data-v="' + esc(a2.v || "") + '"><span class="qn">▸</span><div class="label" style="padding-top:12px">How he did</div>' + ctl(c.key, null, a2, plain(c.d[0])) + '</div></div>' : "");
+      return tlabel("q", "?", (c.title || "Drill") + " · " + c.n + " of " + c.of) + '<div class="big prose">' + clean(c.d[0]) + '</div><details class="reveal" style="margin:10px 0"><summary>Show answer</summary><div class="prose">' + clean(c.d[1]) + '</div></details><div class="items"><div class="item" data-v="' + esc(a2.v || "") + '"><span class="qn">▸</span><div class="label" style="padding-top:12px">How he did</div>' + ctl(c.key, null, a2, plain(c.d[0])) + '</div></div>';
     case "question": return tlabel("q", "Q", "Exam question") + questionBlock(c.b);
     case "end": return '<div class="tphase"><div class="label">Done</div><h2>End of the script</h2><p class="hint">Log times, notes and what to change next time.</p><button class="btn next" type="button" data-tgo="after">After the lesson →</button></div>';
     default: return block(c.b || {});
   }
 }
+function pastLine(c, i) { var st = stateOf(c);
+  return '<button type="button" class="pastline ' + st + '" data-tjump="' + i + '"><span class="ic">' + iconOf(c) + '</span><span class="tx">' + esc(shortOf(c, 120)) + '</span>' + (st === "done" ? '<span class="mk">✓ taught</span>' : st ? '<span class="mk">' + esc(st.slice(2)) + '</span>' : "") + '</button>'; }
 function drawTeach() {
   var s = L.script || {}, x = L.session, subj = s.subject || x.subject; document.body.setAttribute("data-subject", subj); document.body.classList.add("teaching");
-  if (TCH.id !== L.id) { TCH = { id: L.id, seq: teachSeq(), pos: +(ls(tposKey()) || 0) }; } else TCH.seq = teachSeq();
+  var keepRef = TCH.id === L.id && TCH.seq[TCH.pos];
+  if (TCH.id !== L.id) { TCH = { id: L.id, seq: teachSeq(), pos: +(ls(tposKey()) || 0), open: {} }; }
+  else { TCH.seq = teachSeq(); if (keepRef) { var j = TCH.seq.findIndex(function (q) { return q.t === keepRef.t && (q.it && q.it === keepRef.it || q.b && q.b === keepRef.b && !q.it && !q.d || q.d && q.d === keepRef.d || q.p === keepRef.p && q.t === "phase"); }); if (j >= 0) TCH.pos = j; } }
   if (TCH.pos >= TCH.seq.length) TCH.pos = TCH.seq.length - 1;
-  var c = TCH.seq[TCH.pos], pct = Math.round(100 * TCH.pos / Math.max(1, TCH.seq.length - 1));
+  var c = TCH.seq[TCH.pos], pct = Math.round(100 * TCH.pos / Math.max(1, TCH.seq.length - 1)), lv = live();
   var h = '<div class="teach3">' + runwayHTML(c) + '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
-    '<a class="back" style="margin:0" href="#/lesson/' + encodeURIComponent(L.id) + '">← Plan</a><span aria-hidden="true">·</span><b>' + esc((c.p && c.p.name) || "End") + '</b>' + (c.mod ? '<span aria-hidden="true">›</span><span>' + esc(c.mod) + '</span>' : "") + '</div>' +
-    '<div class="tmini"><span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
-    '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div></div><div class="tstage">';
-  /* the current chunk, with the earlier chunks of the same group greyed above it */
-  var keep = window.innerWidth < 900 ? 1 : 2, start = TCH.pos; while (start > 0 && TCH.pos - start < keep && sameGroup(TCH.seq[start - 1], c) && TCH.seq[start - 1].t !== "phase" && TCH.seq[start - 1].t !== "mod") start--;
+    '<button class="btn small outl" type="button" id="toc" aria-label="Outline">☰ Outline</button><a class="back" style="margin:0" href="#/lesson/' + encodeURIComponent(L.id) + '">← Plan</a><span aria-hidden="true">·</span><b>' + esc((c.p && c.p.name) || "End") + '</b>' + (c.mod ? '<span aria-hidden="true">›</span><span>' + esc(c.mod) + '</span>' : "") + '</div>' +
+    '<div class="tmini"><a class="btn small" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a><span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
+    '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>' +
+    (lv ? "" : '<div class="preview"><b>Preview</b> · nothing is ticked until you press <b>Start lesson</b>. You can still tick a chunk by hand.</div>') + '</div><div class="tstage">';
+  /* the last two chunks of the same section as short grey lines, then the current one */
+  var keep = window.innerWidth < 900 ? 1 : 2, start = TCH.pos;
+  while (start > 0 && TCH.pos - start < keep && TCH.seq[start - 1].p === c.p && TCH.seq[start - 1].mod === c.mod && TCH.seq[start - 1].t !== "phase") start--;
   h += '<div id="tbody">';
-  for (var i = start; i <= TCH.pos; i++) h += '<div class="chunk ' + (i === TCH.pos ? "cur" : "past") + '" data-ti="' + i + '">' + chunkHTML(TCH.seq[i], i === TCH.pos) + '</div>';
-  var nx = upNext(TCH.pos + 1);
-  h += '</div>' + (nx ? '<div class="upnext"><b>UP NEXT</b><span>' + esc(nx) + '</span></div>' : "") + '</div>' + footHTML(c) + '</section></div>';
+  for (var i = start; i < TCH.pos; i++) h += pastLine(TCH.seq[i], i);
+  h += '<div class="chunk cur' + (stateOf(c) === "done" ? " done" : "") + '" data-tk="' + esc(chunkKey(c) || "") + '">' + chunkHTML(c) + '</div>';
+  var nx = TCH.seq[TCH.pos + 1];
+  h += '</div>' + (nx ? '<button type="button" class="upnext" data-tjump="' + (TCH.pos + 1) + '"><b>UP NEXT</b><span>' + esc(shortOf(nx, 130)) + '</span></button>' : "") + '</div>' + footHTML(c, lv) + '</section></div>';
   app.innerHTML = h; fillRows(app); loadImages(app); maths(app); tick();
-  /* keep the whole current chunk in view between the top bar and the bottom buttons; a new part starts at the top */
-  var cur = $(".chunk.cur"), bar = $(".tbar"), foot = $(".tfoot");
-  if (cur && start < TCH.pos) { var top = bar ? bar.getBoundingClientRect().height : 0, bot = window.innerHeight - (foot ? foot.getBoundingClientRect().top : window.innerHeight), r = cur.getBoundingClientRect(), room = window.innerHeight - top - Math.max(0, bot);
-    window.scrollBy(0, r.height > room ? r.top - top - 8 : r.bottom - (window.innerHeight - Math.max(0, bot)) + 12); } else window.scrollTo(0, 0);
+  window.scrollTo(0, 0);
+  var oc = $(".outline .cur"); if (oc) oc.scrollIntoView({ block: "center" });
   ls(tposKey(), String(TCH.pos));
 }
-/* the runway: the lesson's parts drawn to the scale of their planned minutes, with the clock as a moving pin */
+function footHTML(c, lv) {
+  var taughtable = { step: 1, mod: 1 }[c.t] || (c.t === "text" && c.key), mid = "";
+  if (c.t === "question" && (c.b.img || []).length) mid += '<button class="btn small" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
+  if (c.t === "mod") mid += '<button class="btn small" type="button" data-tskip="mod">Skip this section</button>';
+  if (c.t === "phase") mid += '<button class="btn small" type="button" data-tskip="phase">Skip this part</button>';
+  var tick = lv && taughtable && c.t !== "mod";
+  var lab = c.t === "phase" ? "Start this part" : c.t === "mod" ? "Teach this" : tick ? '<span class="ck" aria-hidden="true">✓</span>Taught · Next' : "Next";
+  return '<div class="tfoot"><button class="btn" type="button" data-tgo="-1"' + (TCH.pos === 0 ? " disabled" : "") + '>← Back</button><div class="mid">' + mid + '</div>' +
+    (c.t === "end" ? "" : (tick ? '<button class="btn skip" type="button" data-tgo="skip" title="Move on without ticking">Skip</button>' : "") + '<button class="btn next" type="button" data-tgo="+1">' + lab + ' <kbd>→</kbd></button>') + '</div>';
+}
+/* outline: every part, section and chunk, so any point can be reached; the clock as a pin on a time bar */
 function pw(p) { return p.start != null && p.end != null ? Math.max(2, p.end - p.start) : 4; }
 function runwayHTML(c) {
   var s = L.script || {}, x = L.session, ps = phases().filter(function (p) { return !p.sys; }), ci = c.p ? ps.indexOf(c.p) : ps.length;
-  var total = ps.reduce(function (a, p) { return a + pw(p); }, 0), t0 = 0;
-  TCH.rw = { total: total, cur: c.p || null, starts: {} };
-  var lis = ps.map(function (p, i) {
-    var st = p.start != null ? p.start : t0; TCH.rw.starts[p.id] = st; t0 = st + pw(p);
+  var timed = ps.filter(function (p) { return p.start != null; }), total = timed.length ? Math.max.apply(null, timed.map(function (p) { return p.end; })) : 45;
+  TCH.rw = { total: total, cur: c.p || null };
+  var bar = '<div class="tl" aria-hidden="true">' + timed.map(function (p) { return '<span class="' + (ps.indexOf(p) < ci ? "past" : p === c.p ? "cur" : "") + '" style="left:' + (100 * p.start / total) + '%;width:' + (100 * (p.end - p.start) / total) + '%"></span>'; }).join("") + '<b class="pin" id="rwpin" hidden></b></div>';
+  var parts = ps.map(function (p, i) {
     var its = phaseItems(p), qs = its.filter(function (q) { return q.kind === "q"; }), used = qs.filter(usedOrDone), right = used.filter(function (q) { return x.answers[q.k] && x.answers[q.k].v === "right"; });
     var pm = x.time.phaseMinutes && x.time.phaseMinutes[p.id];
-    var sub = [pm ? "took " + pm + " min" : (p.start != null ? p.start + "–" + p.end + " min" : ""), used.length ? right.length + " of " + used.length + " right" : ""].filter(Boolean).join(" · ");
-    var mods = "";
-    if (i === ci) { var ms = (p.blocks || []).filter(function (b) { return b.type === "module"; });
-      if (ms.length) mods = '<div class="mods">' + ms.map(function (b) { var j = seqIndex(function (q) { return q.t === "mod" && q.b === b; }); return '<button type="button" data-tjump="' + j + '" class="' + (c.mod === b.name ? "cur" : isDone(modKey(b.name)) ? "done" : "") + '">' + esc(b.name) + (b.level === "deep" ? " · deep" : "") + '</button>'; }).join("") + '</div>'; }
+    var sub = [p.start != null ? p.start + "–" + p.end + " min" : "", pm ? "took " + pm : "", used.length ? right.length + "/" + used.length + " right" : ""].filter(Boolean).join(" · ");
+    var rows = "", lastMod = null;
+    TCH.seq.forEach(function (q, j) { if (q.p !== p || q.t === "phase") return;
+      if (q.t === "mod") { rows += '<button type="button" class="om' + (j === TCH.pos ? " cur" : "") + (isDone(q.key) ? " done" : "") + '" data-tjump="' + j + '">' + esc(q.b.name) + (q.b.level === "deep" ? ' <small>deep</small>' : "") + '</button>'; lastMod = q.b.name; return; }
+      rows += '<button type="button" class="oc ' + stateOf(q) + (j === TCH.pos ? " cur" : "") + (q.mod ? " in" : "") + '" data-tjump="' + j + '"><span class="ic">' + iconOf(q) + '</span><span class="tx">' + esc(shortOf(q, 70)) + '</span></button>'; });
+    var open = TCH.open[p.id] != null ? TCH.open[p.id] : i === ci;
     var pj = seqIndex(function (q) { return q.t === "phase" && q.p === p; });
-    return '<li class="' + (i < ci ? "past" : i === ci ? "cur" : "") + '" style="flex-grow:' + pw(p) + '"><button type="button" data-tjump="' + pj + '"><span class="nm">' + esc(p.name) + '</span>' + (sub ? '<span class="sub">' + esc(sub) + '</span>' : "") + '</button>' + mods + '</li>';
+    return '<details class="opart' + (i < ci ? " past" : i === ci ? " now" : "") + '" data-pid="' + esc(p.id) + '"' + (open ? " open" : "") + '><summary><span class="nm">' + esc(p.name) + '</span>' + (sub ? '<span class="sub">' + esc(sub) + '</span>' : "") + '</summary>' +
+      '<button type="button" class="oc go' + (TCH.pos === pj ? " cur" : "") + '" data-tjump="' + pj + '"><span class="ic">▸</span><span class="tx">Start of this part</span></button>' + rows + '</details>';
   }).join("");
   var subj = s.subject || x.subject, pd = parseId(L.id);
-  return '<aside class="runway" aria-label="Lesson runway"><a class="back" href="#/lesson/' + encodeURIComponent(L.id) + '">← Back to Plan</a>' +
+  return '<aside class="runway" aria-label="Lesson outline"><div class="rhead"><a class="back" href="#/lesson/' + encodeURIComponent(L.id) + '">← Back to Plan</a><button class="btn small outl" type="button" id="tocx">Close</button></div>' +
     '<span class="tag">' + esc(SUBJ[subj] || subj) + ' · ' + esc(fmtDate(s.date || x.date || pd.date)) + '</span><div class="ttl">' + esc(s.title || x.title || "Lesson") + '</div>' +
-    '<div class="rw"><div class="rw-track" aria-hidden="true"><i class="fill" id="rwfill"></i><b class="pin" id="rwpin" hidden></b></div><ol>' + lis + '</ol></div>' +
-    '<div class="onclock" id="onclock" hidden><span class="k">ON THE CLOCK</span><span id="onclockt"></span></div></aside>';
+    bar + '<div class="onclock" id="onclock" hidden><span id="onclockt"></span></div><nav class="outline">' + parts + '</nav></aside>';
 }
 function seqIndex(f) { for (var i = 0; i < TCH.seq.length; i++) if (f(TCH.seq[i])) return i; return 0; }
 function runwayTick(r) {
-  var fill = $("#rwfill"), pin = $("#rwpin"), oc = $("#onclock"); if (!fill || !TCH.rw) return;
-  var m = r.secs / 60, pc = Math.min(1, m / Math.max(1, TCH.rw.total)) * 100;
-  fill.style.height = pc + "%"; pin.style.top = pc + "%"; pin.hidden = !r.secs;
+  var pin = $("#rwpin"), oc = $("#onclock"); if (!pin || !TCH.rw) return;
+  var m = r.secs / 60; pin.style.left = Math.min(100, 100 * m / Math.max(1, TCH.rw.total)) + "%"; pin.hidden = !r.secs;
   var p = TCH.rw.cur; if (!oc) return;
   if (!r.secs || !p || p.start == null) { oc.hidden = true; return; }
-  var d = Math.round(m - p.start), late = Math.round(m - p.end);
-  $("#onclockt").innerHTML = esc(p.name) + " was planned for minute " + p.start + "–" + p.end + ". " + (m < p.start ? "You are <b>" + Math.max(1, -d) + " min ahead</b>." : m > p.end ? "You are <b>" + Math.max(1, late) + " min behind</b>." : "You are <b>on time</b>.");
+  $("#onclockt").innerHTML = "Minute <b>" + Math.floor(m) + "</b> · this part is planned for " + p.start + "–" + p.end + ". " + (m < p.start ? "<b>" + Math.max(1, Math.round(p.start - m)) + " min ahead</b>" : m > p.end ? "<b>" + Math.max(1, Math.round(m - p.end)) + " min behind</b>" : "<b>On time</b>");
   oc.hidden = false;
 }
-/* a short line saying what comes after the current chunk */
-function upNext(i) { var c = TCH.seq[i]; while (c && c.t === "modend") c = TCH.seq[++i]; if (!c) return "";
-  var t = c.t === "phase" ? "Part: " + c.p.name : c.t === "mod" ? c.b.name : c.t === "step" ? plain(c.it.html) : c.t === "text" ? plain(c.b.html) : c.t === "quiz" ? "Quiz: " + plain(c.it.q) : c.t === "drill" ? "Drill: " + plain(c.d[0]) : c.t === "question" ? "Exam question: " + (c.b.label || "") : c.t === "figs" ? (c.items.length > 1 ? c.items.length + " pictures" : "A picture" + (c.items[0].caption ? ": " + plain(c.items[0].caption) : "")) : c.t === "video" ? "Video: " + (c.b.title || "") : c.t === "end" ? "End of the script" : "";
-  return t.length > 120 ? t.slice(0, 118) + "…" : t; }
-function footHTML(c) {
-  var taughtable = { step: 1, figs: 1, video: 1, reveal: 1, mod: 1 }[c.t] || (c.t === "text" && c.key);
-  var mid = "";
-  if (c.t === "question" && (c.b.img || []).length) mid += '<button class="btn small" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
-  if (c.t === "mod" && c.b.level === "deep") mid += '<button class="btn small" type="button" data-tskip="mod">Skip this deep dive</button>';
-  if (c.t === "phase") mid += '<button class="btn small" type="button" data-tskip="phase">Skip this part</button>';
-  var lab = c.t === "phase" ? "Start this part" : c.t === "mod" ? "Teach this" : taughtable ? '<span class="ck" aria-hidden="true">✓</span>Taught · Next' : "Next";
-  return '<div class="tfoot"><button class="btn" type="button" data-tgo="-1"' + (TCH.pos === 0 ? " disabled" : "") + '>← Back</button><div class="mid">' + mid + '</div>' +
-    (c.t === "end" ? "" : '<button class="btn next" type="button" data-tgo="+1">' + lab + ' <kbd>→</kbd></button>') + '</div>';
-}
 function setDone(key, label, on) { var x = L.session; x.done = x.done || {}; x.done[key] = on ? { at: now(), d: CFG.device, label: String(label || "").slice(0, 90) } : { off: true, at: now() }; }
-function tmove(d, jump) {
+/* how: "taught" ticks the chunk you leave (only while the clock runs), "skip" and "jump" never tick */
+function tmove(d, how) {
   var c = TCH.seq[TCH.pos], x = L.session;
-  if (d === 1 && !jump) {
-    if (c.key && { step: 1, text: 1, mod: 1 }[c.t] && !isDone(c.key)) { setDone(c.key, c.t === "mod" ? c.b.name : plain(c.t === "step" ? c.it.html : c.b.html), true); touch(); }
-  }
+  if (how === "taught" && live() && c.key && { step: 1, text: 1 }[c.t] && !isDone(c.key)) { setDone(c.key, shortOf(c), true); touch(); }
+  if (how === "taught" && live() && c.t === "mod" && !isDone(c.key)) { setDone(c.key, c.b.name, true); touch(); }
   var n = Math.max(0, Math.min(TCH.seq.length - 1, TCH.pos + d)); TCH.pos = n;
   var np = TCH.seq[n] && TCH.seq[n].p, r = replay(x.time.log);
   if (np && r.running && r.phase !== np.id) logEvent("phase", np.id);
   if (np) L.phase = np.id;
+  document.body.classList.remove("toc-open");
   drawTeach();
 }
 function tskip(what) { var c = TCH.seq[TCH.pos], i = TCH.pos + 1;
-  if (what === "mod") { while (i < TCH.seq.length && !(TCH.seq[i].t === "modend" && TCH.seq[i].b === c.b)) i++; i++; }
+  if (what === "mod") { while (i < TCH.seq.length && TCH.seq[i].p === c.p && TCH.seq[i].mod === c.b.name) i++; }
   else { while (i < TCH.seq.length && TCH.seq[i].t !== "phase" && TCH.seq[i].t !== "end") i++; }
-  TCH.pos = Math.min(i, TCH.seq.length - 1); drawTeach(); }
+  tmove(Math.min(i, TCH.seq.length - 1) - TCH.pos, "jump"); }
 document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) return; var t = e.target.closest && e.target.closest("button"); if (!t) return;
-  if (t.hasAttribute("data-tgo")) { var g = t.getAttribute("data-tgo"); if (g === "after") { MODE = "plan"; L.phase = "_after"; location.hash = "#/lesson/" + encodeURIComponent(L.id); return; } tmove(+g); return; }
+  if (t.hasAttribute("data-tgo")) { var g = t.getAttribute("data-tgo"); if (g === "after") { MODE = "plan"; L.phase = "_after"; location.hash = "#/lesson/" + encodeURIComponent(L.id); return; }
+    if (g === "skip") return tmove(1, "skip"); return tmove(+g, +g > 0 ? "taught" : "jump"); }
   if (t.hasAttribute("data-tskip")) { tskip(t.getAttribute("data-tskip")); return; }
-  if (t.hasAttribute("data-tjump")) { tmove(+t.getAttribute("data-tjump") - TCH.pos, true); return; }
-  });
+  if (t.hasAttribute("data-tjump")) { tmove(+t.getAttribute("data-tjump") - TCH.pos, "jump"); return; }
+  if (t.id === "toc") { document.body.classList.add("toc-open"); return; }
+  if (t.id === "tocx") { document.body.classList.remove("toc-open"); return; }
+});
+document.addEventListener("toggle", function (e) { var d = e.target; if (MODE === "teach" && d.classList && d.classList.contains("opart")) TCH.open[d.getAttribute("data-pid")] = d.open; }, true);
 document.addEventListener("keydown", function (e) { if (MODE !== "teach" || SH || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || "")) return;
-  if (e.key === "ArrowRight") tmove(1); else if (e.key === "ArrowLeft") tmove(-1); });
+  if (e.key === "ArrowRight") tmove(1, "taught"); else if (e.key === "ArrowLeft") tmove(-1, "jump"); else if (e.key === "s" || e.key === "S") tmove(1, "skip"); });
+
+/* ---------------- student view: the questions only, for his screen (opens in its own tab) ----------------
+   Exam questions as pictures, quick questions as text. Never an answer or a mark scheme.
+   The teacher's "Show him" sends the question here when this tab is open. */
+var STU = null, BC = null;
+try { BC = new BroadcastChannel("tutor-desk"); } catch (e) {}
+var studentSeen = {};
+if (BC) BC.onmessage = function (ev) { var m = ev.data || {};
+  if (m.type === "alive") studentSeen[m.lesson] = Date.now();
+  if (m.type === "show" && MODE === "student" && L && m.lesson === L.id && STU) { var k = STU.items.findIndex(function (q) { return q.id === m.id; }); if (k >= 0) { STU.tab = STU.items[k].kind; STU.i = k; drawStudent(); } BC.postMessage({ type: "alive", lesson: L.id }); } };
+setInterval(function () { if (BC && MODE === "student" && L) BC.postMessage({ type: "alive", lesson: L.id }); }, 4000);
+/* Show him: to the student tab if one is open for this lesson, otherwise full screen here */
+function showHim(id) { if (BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 10000 && id !== "*") { BC.postMessage({ type: "show", lesson: L.id, id: id }); toast("Sent to the student view"); return; } openShow(id); }
+function studentItems() { var out = [];
+  phases().filter(function (p) { return !p.sys; }).forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) {
+    if (b.type === "question" && (b.img || []).length) out.push({ kind: "exam", id: b.id, img: b.img, p: p });
+    else if (b.type === "quiz") (b.items || []).forEach(function (it) { out.push({ kind: "quick", id: it.id, text: it.q, p: p }); });
+    else if (b.type === "drill") (b.items || []).forEach(function (d) { out.push({ kind: "quick", id: drillKey(d[0]), text: d[0], p: p }); });
+    if (b.blocks) walk(b.blocks); }); })(p.blocks); });
+  return out; }
+function drawStudent() {
+  document.body.classList.add("student"); document.body.setAttribute("data-subject", (L.script && L.script.subject) || L.session.subject);
+  if (!STU || STU.id !== L.id) STU = { id: L.id, items: studentItems(), tab: "exam", i: -1 };
+  var list = STU.items.map(function (q, i) { q.i = i; return q; }).filter(function (q) { return q.kind === STU.tab; });
+  if (STU.i < 0 || !STU.items[STU.i] || STU.items[STU.i].kind !== STU.tab) STU.i = list.length ? list[0].i : -1;
+  var ne = STU.items.filter(function (q) { return q.kind === "exam"; }).length, nq = STU.items.length - ne, cur = STU.items[STU.i], pos = list.indexOf(cur);
+  var h = '<div class="stu"><header class="stu-top"><span class="stu-t">' + esc((L.script && L.script.title) || "Questions") + '</span><div class="modes"><button type="button" data-stab="exam" aria-pressed="' + (STU.tab === "exam") + '">Exam questions ' + ne + '</button><button type="button" data-stab="quick" aria-pressed="' + (STU.tab === "quick") + '">Quick questions ' + nq + '</button></div><button class="btn small" type="button" id="stufs">Full screen</button></header>' +
+    '<div class="stu-body"><nav class="stu-list" aria-label="Questions">' + list.map(function (q, k) { return '<button type="button" class="stu-item' + (q === cur ? " cur" : "") + '" data-si="' + q.i + '"><span class="n num">' + (k + 1) + '</span>' + (q.kind === "exam" ? '<img data-src="' + esc(q.img[0]) + '" alt="" hidden><span class="ph"></span>' : '<span class="tx">' + esc(plain(q.text).slice(0, 80)) + '</span>') + '</button>'; }).join("") + '</nav>' +
+    '<main class="stu-view">' + (cur ? '<div class="stu-n">Question ' + (pos + 1) + ' of ' + list.length + '</div>' + (cur.kind === "exam" ? cur.img.map(function (i) { return '<img data-src="' + esc(i) + '" alt="Question ' + (pos + 1) + '" hidden><div class="ph">Loading</div>'; }).join("") : '<div class="stu-q">' + clean(cur.text) + '</div>') +
+      '<div class="stu-nav"><button class="btn" type="button" data-sgo="-1"' + (pos <= 0 ? " disabled" : "") + '>← Previous</button><button class="btn primary" type="button" data-sgo="1"' + (pos >= list.length - 1 ? " disabled" : "") + '>Next →</button></div>' : '<div class="empty"><h3>No questions here</h3></div>') + '</main></div></div>';
+  app.innerHTML = h; $$(".stu-view img").forEach(showImg); loadImages(app); maths(app);
+  var ci = $(".stu-item.cur"); if (ci) ci.scrollIntoView({ block: "nearest" }); $(".stu-view").scrollTop = 0;
+  if (BC) BC.postMessage({ type: "alive", lesson: L.id });
+}
+function stuGo(d) { var list = STU.items.filter(function (q) { return q.kind === STU.tab; }), k = list.indexOf(STU.items[STU.i]) + d; if (k < 0 || k >= list.length) return; STU.i = list[k].i; drawStudent(); }
+document.addEventListener("click", function (e) { if (MODE !== "student" || !STU) return; var t = e.target.closest && e.target.closest("button"); if (!t) return;
+  if (t.hasAttribute("data-stab")) { STU.tab = t.getAttribute("data-stab"); STU.i = -1; drawStudent(); }
+  else if (t.hasAttribute("data-si")) { STU.i = +t.getAttribute("data-si"); drawStudent(); }
+  else if (t.hasAttribute("data-sgo")) stuGo(+t.getAttribute("data-sgo"));
+  else if (t.id === "stufs") { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (x) {} } });
+document.addEventListener("keydown", function (e) { if (MODE !== "student" || !STU) return; if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); stuGo(1); } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); stuGo(-1); } });
 
 render();
 })();
