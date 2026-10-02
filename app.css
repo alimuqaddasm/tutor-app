@@ -857,3 +857,42 @@ body[data-tlayout="float"] .fita.min .vb{min-height:48px}
   body[data-tlayout="float"] .fita.min .vb{min-height:40px}
   body[data-tlayout="float"] .chunk.fit .fitq{padding-bottom:110px}
 }
+
+/* v22 "Flip" layout: question and answer each get the whole screen; the marking strip lives in the bottom bar */
+body[data-tlayout="flip"] .chunk.cur.fit{display:block}
+body[data-tlayout="flip"] .chunk.fit .fitq,body[data-tlayout="flip"] .chunk.fit .fita{height:100%;overflow:auto;border:0;padding:0}
+body[data-tlayout="flip"] .chunk.fit .fita{display:none}
+body[data-tlayout="flip"] .chunk.fit.flipped .fita{display:block}
+body[data-tlayout="flip"] .chunk.fit.flipped .fitq{display:none}
+body[data-tlayout="flip"] .fita details.ans > summary,body[data-tlayout="flip"] .fita details.reveal > summary{display:none}
+body[data-tlayout="flip"] .fita details.ans,body[data-tlayout="flip"] .fita details.reveal{border:0;background:none;margin:0}
+body[data-tlayout="flip"] .fita .fig img{width:auto;max-width:100%;height:auto;object-fit:contain;display:block;margin:0 auto}
+.flip-h{font-weight:700;color:var(--text-2);font-size:var(--s-sm);margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.vstrip{flex:1 1 100%;order:-2;grid-column:1 / -1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 0 12px;margin-bottom:2px;border-bottom:1px solid var(--line)}
+.vstrip .btn.flipbtn{min-height:44px;border-radius:12px;font-weight:800;background:var(--accent-wash);color:var(--accent);border-color:transparent}
+.vstrip .btn.flipbtn kbd{font:600 11px var(--mono);padding:1px 6px;border-radius:5px;border:1px solid currentColor;opacity:.55;margin-left:6px}
+.vstrip .ctl.big{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:0;background:none;flex:1 1 auto}
+.vstrip .ctl.big .vmain{display:flex;gap:6px}
+.vstrip .ctl.big .vb{min-height:44px;padding:0 14px;font-size:.95rem;border-radius:12px;gap:6px}
+.vstrip .ctl.big .vmore{gap:6px}
+.vstrip .ctl.big .vmore .hint{display:none}
+.vstrip .ctl.big .vs{min-height:40px;padding:0 10px}
+.vstrip .ctl.big .vsep{display:none}
+.vstrip .ctl.big kbd{display:none}
+.vstrip .ctl.big input.note{width:min(260px,100%);min-height:40px}
+@media (max-width:900px){.vstrip .ctl.big .vmore{display:none}.vstrip .ctl.big .vb{padding:0 10px}}
+.vstrip{flex-wrap:nowrap;padding-bottom:10px}
+.vstrip .ctl.big{flex-wrap:nowrap;flex:0 1 auto}
+.vstrip .ctl.big .vmore,.vstrip .ctl.big .addnote,.vstrip .ctl.big input.note[hidden]{display:none}
+.vstrip.more{flex-wrap:wrap}
+.vstrip.more .ctl.big{flex-wrap:wrap}
+.vstrip.more .ctl.big .vmore{display:flex}
+.vstrip.more .ctl.big .addnote{display:inline}
+.vstrip .btn.vmorebtn{min-height:44px;min-width:48px;border-radius:12px;font-weight:800;font-size:1.2rem;margin-left:auto}
+.vstrip.more .btn.vmorebtn{background:var(--surface-2)}
+body[data-tlayout="flip"] .teach3 .tfoot{padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));margin-top:12px}
+body[data-tlayout="flip"] .teach3 .tfoot > .btn{min-height:48px}
+.chunk.fit .figrow{display:flex;gap:12px;justify-content:center;align-items:flex-start}
+.chunk.fit .figrow .fig{flex:0 1 auto;min-width:0;margin:0}
+body[data-tlayout="flip"] .chunk.flipped .prose.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:20px;align-items:start}
+@media (max-width:900px){body[data-tlayout="flip"] .chunk.flipped .prose.two{display:block}}

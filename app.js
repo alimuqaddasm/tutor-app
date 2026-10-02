@@ -217,7 +217,7 @@ function settingsView() {
     '<div class="field"><label for="s-dev">This device</label><input type="text" id="s-dev" value="' + esc(CFG.device) + '" placeholder="tablet, la57, mac"></div>' +
     '<div class="field"><label for="s-stu">Student</label><input type="text" id="s-stu" value="' + esc(CFG.student) + '"></div>' +
     '<div class="field"><label for="s-font">Text style</label><select id="s-font"><option value="figtree"' + (f === "figtree" ? " selected" : "") + '>Clean (Figtree)</option><option value="lexend"' + (f === "lexend" ? " selected" : "") + '>Extra readable (Lexend)</option><option value="serif"' + (f === "serif" ? " selected" : "") + '>Book (Source Serif)</option></select></div></div>' +
-    '<div class="field"><span class="lab">Teach layout for questions</span><span class="laysw" role="group">' + LAYOUTS.map(function (l) { return '<button type="button" class="chip" data-layout="' + l[0] + '" aria-pressed="' + (layoutPick() === l[0]) + '">' + l[1] + '</button>'; }).join("") + '</span><span class="hint">Side panel: question left, answer and verdicts right. Floating card: the question fills the screen; answer and verdicts in a card in the corner.</span></div>' +
+    '<div class="field"><span class="lab">Teach layout for questions</span><span class="laysw" role="group">' + LAYOUTS.map(function (l) { return '<button type="button" class="chip" data-layout="' + l[0] + '" aria-pressed="' + (layoutPick() === l[0]) + '">' + l[1] + '</button>'; }).join("") + '</span><span class="hint">Side panel: question left, answer and verdicts right. Floating card: the question fills the screen; answer and verdicts in a card in the corner. Flip: the question fills the screen with the verdicts in the bottom bar; Show answer (key A) turns the screen to the answer.</span></div>' +
     '<div class="field"><span class="lab">Hints in Teach</span><label class="mkchk"><input type="checkbox" data-fold="maths"' + (foldOn("maths") ? " checked" : "") + '> Maths: fold the hints under each question (open them only when he is stuck)</label><label class="mkchk"><input type="checkbox" data-fold="chem"' + (foldOn("chem") ? " checked" : "") + '> Chemistry: the same</label></div>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="submit">Save and test</button><button class="btn" type="button" id="s-cache">Clear this device’s cache</button><button class="btn danger" type="button" id="s-clear">Remove key from this device</button><span class="hint" id="s-msg"></span></div></form>' +
     '<div class="card" style="padding:18px 20px;margin-top:16px;max-width:820px"><h3 style="font-size:var(--s-lg)">Install on this device</h3><p class="hint" style="margin:6px 0 12px">Adds a Tutor Desk icon to the home screen. It opens full screen, and lessons you have opened before keep working without internet; taps upload when you are back online. On the Samsung tablet: browser menu \u2192 <b>Add page to</b> \u2192 <b>Home screen</b> (or <b>Install app</b>).</p><button class="btn primary" type="button" id="s-install" hidden>Install Tutor Desk</button></div>';
@@ -1200,12 +1200,13 @@ function runwayHTML(c) {
 /* question screens without scrolling. "side": question left, answer + verdicts right (wide screens; narrower ones use
    "float"). "float": the question fills the screen, answer + verdicts in a small card over the bottom-right corner that
    folds down to just the verdict buttons. Chosen in Settings or from the try-out dot; "classic" is the old page. */
-var LAYOUTS = [["classic", "Classic"], ["side", "Side panel"], ["float", "Floating card"]], fitOpen = false;
+var LAYOUTS = [["classic", "Classic"], ["side", "Side panel"], ["float", "Floating card"], ["flip", "Flip"]], fitOpen = false, flipOn = false;
 function layoutPick() { return ls("tutor.layout") || "classic"; }
 function layoutOf() { var v = layoutPick(); return v === "side" && window.innerWidth < 1000 ? "float" : v; }
 function layPressed() { $$("[data-layout]").forEach(function (b) { if (b.tagName === "BUTTON") b.setAttribute("aria-pressed", String(b.getAttribute("data-layout") === layoutPick())); }); }
 function applyFit() { var lay = layoutOf(), cur = $(".chunk.cur"); document.body.setAttribute("data-tlayout", lay);
   if (!cur || lay === "classic" || !/\bt-(question|quiz|drill)\b/.test(cur.className)) return;
+  if (lay === "flip") return applyFlip(cur);
   var right = document.createElement("div"), body = document.createElement("div"), left = document.createElement("div");
   right.className = "fita" + (lay === "float" && !fitOpen ? " min" : ""); body.className = "fita-b"; left.className = "fitq";
   $$(".tnote", cur).forEach(function (n) { n.open = false; body.appendChild(n); });
@@ -1213,13 +1214,40 @@ function applyFit() { var lay = layoutOf(), cur = $(".chunk.cur"); document.body
   while (cur.firstChild) left.appendChild(cur.firstChild);
   if (lay === "float") right.innerHTML = '<button type="button" class="fita-h" data-fitx aria-expanded="' + fitOpen + '"><b>Answer and marking</b><span aria-hidden="true">' + (fitOpen ? "\u25be" : "\u25b4") + '</span></button>';
   right.appendChild(body); cur.appendChild(left); cur.appendChild(right); cur.classList.add("fit"); fitQ(); }
+/* "flip" (Ali, 2 Oct: the side panel shrinks the question, the floating card covers it): the question has the whole
+   screen at full size; the verdict buttons sit in a strip in the bottom bar, so nothing covers it; "Show answer" (key A)
+   turns the whole screen into the answer and mark scheme at full size, and back */
+function applyFlip(cur) {
+  var ans = document.createElement("div"), left = document.createElement("div"), strip = document.createElement("div");
+  ans.className = "fita flipa"; left.className = "fitq"; strip.className = "vstrip";
+  $$(".tnote", cur).forEach(function (n) { n.open = false; ans.appendChild(n); });
+  $$(".ans, details.reveal", cur).filter(function (el) { return !el.parentNode.closest(".ans, details.reveal"); }).forEach(function (el) { el.open = true; ans.appendChild(el); });
+  var ctlb = $(".ctl.big", cur);
+  while (cur.firstChild) left.appendChild(cur.firstChild);
+  var hasAns = !!ans.querySelector(".ans, details.reveal");
+  $$(".ans .prose, details.reveal > .prose", ans).forEach(function (pr) { var figs = $$(":scope > figure.fig", pr); if (!figs.length) return;
+    var row = document.createElement("div"); row.className = "figrow"; figs.forEach(function (f) { row.appendChild(f); }); pr.appendChild(row);
+    if (pr.textContent.replace(/Loading image/g, "").trim()) pr.classList.add("two"); });
+  ans.insertAdjacentHTML("afterbegin", '<div class="flip-h">' + esc(shortOf(TCH.seq[TCH.pos], 110)) + '</div>');
+  cur.appendChild(left); cur.appendChild(ans); cur.classList.add("fit", "flip"); cur.classList.toggle("flipped", flipOn && hasAns);
+  strip.innerHTML = hasAns ? '<button type="button" class="btn flipbtn" data-flip>' + (flipOn ? "\u2190 Question" : "Show answer") + ' <kbd>A</kbd></button>' : "";
+  if (ctlb) { strip.appendChild(ctlb); strip.insertAdjacentHTML("beforeend", '<button type="button" class="btn vmorebtn" data-vmore aria-expanded="false" title="Wording, terminology, marks, note">⋯</button>'); }
+  var foot = $(".tfoot"); if (foot && (hasAns || ctlb)) foot.insertBefore(strip, foot.firstChild);
+  loadImages(ans); fitQ(); }
+function flipIt() { var cur = $(".chunk.cur.flip"); if (!cur || !$("[data-flip]")) return; flipOn = !flipOn; cur.classList.toggle("flipped", flipOn);
+  $("[data-flip]").firstChild.textContent = flipOn ? "\u2190 Question " : "Show answer "; fitQ(); }
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-flip]"); if (t) flipIt(); });
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-vmore]"); if (!t) return; var st = t.closest(".vstrip"), on = !st.classList.contains("more"); st.classList.toggle("more", on); t.setAttribute("aria-expanded", String(on)); fitQ(); });
 function fitQ() { var cur = $(".chunk.cur.fit"), foot = $(".tfoot"); if (!cur || !foot) return;
   var fh = foot.getBoundingClientRect().height; document.documentElement.style.setProperty("--footh", fh + "px");
   var room = Math.max(300, window.innerHeight - cur.getBoundingClientRect().top - fh - 22); cur.style.height = room + "px";
-  var left = cur.querySelector(".fitq"), ims = $$(".fig img", left).filter(function (i) { return !i.hidden; });
-  ims.forEach(function (i) { i.style.maxHeight = "none"; });
-  var other = left.scrollHeight - ims.reduce(function (a, i) { return a + i.getBoundingClientRect().height; }, 0);
-  var per = Math.max(140, (room - other - 12) / Math.max(1, ims.length)); ims.forEach(function (i) { i.style.maxHeight = per + "px"; }); }
+  var left = cur.classList.contains("flipped") ? cur.querySelector(".fita") : cur.querySelector(".fitq"), ims = $$(".fig img", left).filter(function (i) { return !i.hidden; });
+  if (!ims.length) return;
+  var rows = []; ims.forEach(function (i) { var r = i.closest(".figrow") || i; if (rows.indexOf(r) < 0) rows.push(r); });
+  var per = left.clientHeight; ims.forEach(function (i) { i.style.maxHeight = per + "px"; });
+  per = Math.min(per, Math.max.apply(null, ims.map(function (i) { return i.getBoundingClientRect().height || per; })));
+  for (var k = 0; k < 6 && left.scrollHeight > left.clientHeight + 1 && per > 90; k++) {
+    per = Math.max(90, per - (left.scrollHeight - left.clientHeight + 4) / rows.length); ims.forEach(function (i) { i.style.maxHeight = per + "px"; }); } }
 document.addEventListener("load", function (e) { if (MODE === "teach" && e.target && e.target.tagName === "IMG" && $(".chunk.cur.fit")) fitQ(); }, true);
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-fitx]"); if (!t) return; fitOpen = !fitOpen; var f = t.closest(".fita"); f.classList.toggle("min", !fitOpen); t.setAttribute("aria-expanded", String(fitOpen)); t.lastChild.textContent = fitOpen ? "\u25be" : "\u25b4"; });
 document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("button[data-layout]"); if (!b) return; ls("tutor.layout", b.getAttribute("data-layout")); layPressed(); if (MODE === "teach" && L) drawTeach(); toast("Teach layout: " + b.textContent); });
@@ -1247,7 +1275,7 @@ function setDone(key, label, on, skip) { var x = L.session; x.done = x.done || {
 /* how: "taught" ticks the chunk you leave (only while the clock runs); "skip" records it as skipped on purpose;
    "next" and "jump" move without recording anything */
 function tmove(d, how) {
-  var c = TCH.seq[TCH.pos], x = L.session;
+  var c = TCH.seq[TCH.pos], x = L.session; flipOn = false;
   if (how === "skip" && live() && c.key && { step: 1, text: 1 }[c.t]) { setDone(c.key, shortOf(c), false, true); touch(); }
   if (how === "taught" && live() && c.key && { step: 1, text: 1 }[c.t] && !isDone(c.key)) { setDone(c.key, shortOf(c), true); touch(); }
   if (how === "taught" && live() && c.t === "mod" && !isDone(c.key)) { setDone(c.key, c.b.name, true); touch(); }
@@ -1280,6 +1308,7 @@ document.addEventListener("toggle", function (e) { var d = e.target; if (MODE ==
 document.addEventListener("keydown", function (e) { if (MODE !== "teach" || SH || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || "")) return;
   if ($("#wuov") || $("#sug") || !$("#zoom").hidden || e.ctrlKey || e.altKey || e.metaKey) return;
   if (e.key === "0") { iskipIt(); return; }
+  if ((e.key === "a" || e.key === "A") && $(".chunk.cur.flip")) { flipIt(); return; }
   if (/^[1-6]$/.test(e.key)) { var bs = $$(".chunk.cur .ctl.big .v"); if (bs[+e.key - 1]) bs[+e.key - 1].click(); return; }
   var three = !!$(".tfoot.three");
   if (e.key === "ArrowRight") tmove(1, three ? "next" : "taught"); else if (e.key === "ArrowLeft") tmove(-1, "jump");
@@ -1341,7 +1370,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v21", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v22", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
