@@ -11,6 +11,7 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/test_round11.py            # round 11 (2 Oct): I-skipped-it, Taught/Next/Skip, student swipe/arrows, missed lessons + make-up time (27 checks)
     python tests/test_round12.py            # round 12 (2 Oct): page stays at top, steady top bar, try-out dot, folded maths hints, instant suggestions (13 checks)
     python tests/test_round13.py            # round 13 (2 Oct): pictures preload in Teach, exam-paper maths font, try-out glow + label (6 checks)
+    python tests/test_round14.py            # round 14 (2 Oct): Try-out button, plain dot, make-up chip, Side panel / Floating card layouts with no scrolling (15 checks)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
 On Windows run with PYTHONIOENCODING=utf-8, or printing ★ crashes the console.

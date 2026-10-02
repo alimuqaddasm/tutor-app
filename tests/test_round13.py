@@ -35,7 +35,7 @@ try:
         # 3. try-out look
         glow = p.evaluate("getComputedStyle(document.body, '::after').boxShadow")
         check("try-out: a soft orange glow round the window", "245, 158, 11" in glow, glow[:80])
-        check("try-out: a labelled 'Try-out' button", p.locator("#trydot").inner_text().strip() == "Try-out")
+        check("try-out: the marker dot is there (v21: plain dot; the Try-out button is in the top bar)", p.locator("#trydot").count() == 1 and p.locator(".tmini [data-trytoggle]").inner_text() == "Leave try-out")
         nb = p.locator(".tfoot .btn.next"); bb = nb.bounding_box(); a = R.pos(p)
         p.mouse.click(bb["x"] + bb["width"] - 4, bb["y"] + bb["height"] / 2); p.wait_for_timeout(400)
         check("the glow never blocks a tap (Next at the screen edge still works)", R.pos(p) != a)

@@ -812,12 +812,48 @@ body.pointing,body.pointing *{cursor:crosshair!important}
 .thints .th + .th{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 
 /* v20 try-out: a small labelled button, and a soft orange glow round the window edges (never blocks a tap) */
-.trydot{width:auto;height:auto;border-radius:999px;padding:5px 11px 5px 8px;display:inline-flex;align-items:center;gap:6px;background:#FEF3C7;color:#7C4A03;border:1px solid #F59E0B;font:700 12px/1 var(--mono);letter-spacing:.04em;box-shadow:0 2px 10px rgba(245,158,11,.25);opacity:.92}
-.trydot i{width:9px;height:9px;border-radius:50%;background:#F59E0B;box-shadow:0 0 0 3px rgba(245,158,11,.3)}
-.trydot:hover,.trydot:focus-visible{opacity:1;box-shadow:0 2px 14px rgba(245,158,11,.45)}
 body.tryout::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:2147483000;box-shadow:inset 0 0 0 2px rgba(245,158,11,.55),inset 0 0 22px 2px rgba(245,158,11,.22)}
 /* maths questions set like an exam paper: Times-style text, KaTeX for the maths */
 body[data-subject="maths"] .qtext,body[data-subject="maths"] .stu-q,body[data-subject="maths"] .ans .prose,body[data-subject="maths"] .thints .prose{font-family:"Times New Roman",Tinos,Times,serif}
 body[data-subject="maths"] .qtext{font-size:1.6rem;line-height:1.55}
 body[data-subject="maths"] .stu-q{font-weight:400}
 body[data-subject="maths"] .qtext .katex,body[data-subject="maths"] .stu-q .katex{font-size:1.08em}
+
+/* v21: try-out on/off button; make-up minutes up front; Teach layouts without scrolling */
+.btn.trytoggle{border-color:#F59E0B;color:#9A5B05}
+body.tryout .btn.trytoggle{background:#FEF3C7}
+.mkchip{display:inline-flex;align-items:baseline;gap:8px;margin-top:12px;padding:8px 16px;border-radius:14px;background:var(--warn-wash,#FEF3C7);color:var(--text);text-decoration:none;border:1px solid var(--warn,#F59E0B);font-weight:700}
+.mkchip b{font-size:1.8rem;line-height:1;color:var(--warn,#B45309)}
+.mkchip span{font-size:var(--s-sm);color:var(--text-2)}
+.mkside{display:flex;align-items:baseline;gap:6px;margin:10px 4px 0;padding:10px 12px;border-radius:12px;background:var(--warn-wash,#FEF3C7);border:1px solid var(--warn,#F59E0B);color:var(--text);text-decoration:none;font-size:var(--s-sm);font-weight:600}
+.mkside b{font-size:1.25rem;color:var(--warn,#B45309)}
+.mkside[hidden]{display:none}
+.statcard.flash{outline:3px solid var(--warn,#F59E0B);outline-offset:3px;transition:outline-color .6s}
+.laysw{display:inline-flex;gap:6px;flex-wrap:wrap}
+.trypanel .laysw .chip{background:#fff;color:#3B2A05}
+.chunk.cur.fit{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr);gap:20px;overflow:hidden}
+.chunk.fit .fitq,.chunk.fit .fita{min-height:0;overflow:auto}
+.chunk.fit .fita{border-left:1px solid var(--line);padding-left:18px}
+.chunk.fit .fitq .fig img{width:auto;max-width:100%;height:auto;object-fit:contain;display:block;margin:0 auto}
+.chunk.fit .fitq .qtext{margin-bottom:8px}
+.tstage:has(.chunk.fit) .pastline,.tstage:has(.chunk.fit) .upnext{display:none}
+.fita-h{all:unset;box-sizing:border-box;cursor:pointer;display:flex;justify-content:space-between;align-items:center;width:100%;padding:10px 14px;border-bottom:1px solid var(--line);font-size:var(--s-sm)}
+body[data-tlayout="float"] .chunk.cur.fit{display:block}
+body[data-tlayout="float"] .chunk.fit .fitq{height:100%}
+body[data-tlayout="float"] .chunk.fit .fita{position:fixed;right:24px;bottom:calc(var(--footh,90px) + 12px);width:min(420px,calc(100vw - 32px));max-height:min(64vh,600px);z-index:30;background:var(--surface);border:1px solid var(--line-2);border-radius:18px;box-shadow:0 18px 50px rgba(0,0,0,.22);padding:0}
+body[data-tlayout="float"] .fita-b{padding:12px 14px}
+body[data-tlayout="float"] .fita.min .fita-b > :not(.ctl.big):not(.items),body[data-tlayout="float"] .fita.min .ctl.big > :not(.vmain){display:none}
+body[data-tlayout="float"] .fita.min .vb{min-height:48px}
+.ctl.big .mkin{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:var(--s-sm);color:var(--text-2)}
+.ctl.big .mkin input{width:64px;min-height:40px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);padding:0 8px;font:inherit}
+.chunk.fit .fita .tnote{margin:0 0 12px}
+.chunk.fit .fita .ctl.big .vmain{gap:8px}
+.chunk.fit .fita .ctl.big .vb{min-height:52px;font-size:1rem;gap:6px;padding:0 6px}
+.chunk.fit .fita .ctl.big kbd{display:none}
+@media (max-width:600px){
+  body[data-tlayout="float"] .chunk.fit .fita{right:8px;left:8px;width:auto;bottom:calc(var(--footh,90px) + 6px);border-radius:14px}
+  body[data-tlayout="float"] .fita-h{padding:6px 12px}
+  body[data-tlayout="float"] .fita-b{padding:8px}
+  body[data-tlayout="float"] .fita.min .vb{min-height:40px}
+  body[data-tlayout="float"] .chunk.fit .fitq{padding-bottom:110px}
+}

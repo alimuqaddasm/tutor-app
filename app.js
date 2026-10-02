@@ -217,6 +217,7 @@ function settingsView() {
     '<div class="field"><label for="s-dev">This device</label><input type="text" id="s-dev" value="' + esc(CFG.device) + '" placeholder="tablet, la57, mac"></div>' +
     '<div class="field"><label for="s-stu">Student</label><input type="text" id="s-stu" value="' + esc(CFG.student) + '"></div>' +
     '<div class="field"><label for="s-font">Text style</label><select id="s-font"><option value="figtree"' + (f === "figtree" ? " selected" : "") + '>Clean (Figtree)</option><option value="lexend"' + (f === "lexend" ? " selected" : "") + '>Extra readable (Lexend)</option><option value="serif"' + (f === "serif" ? " selected" : "") + '>Book (Source Serif)</option></select></div></div>' +
+    '<div class="field"><span class="lab">Teach layout for questions</span><span class="laysw" role="group">' + LAYOUTS.map(function (l) { return '<button type="button" class="chip" data-layout="' + l[0] + '" aria-pressed="' + (layoutPick() === l[0]) + '">' + l[1] + '</button>'; }).join("") + '</span><span class="hint">Side panel: question left, answer and verdicts right. Floating card: the question fills the screen; answer and verdicts in a card in the corner.</span></div>' +
     '<div class="field"><span class="lab">Hints in Teach</span><label class="mkchk"><input type="checkbox" data-fold="maths"' + (foldOn("maths") ? " checked" : "") + '> Maths: fold the hints under each question (open them only when he is stuck)</label><label class="mkchk"><input type="checkbox" data-fold="chem"' + (foldOn("chem") ? " checked" : "") + '> Chemistry: the same</label></div>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="submit">Save and test</button><button class="btn" type="button" id="s-cache">Clear this device’s cache</button><button class="btn danger" type="button" id="s-clear">Remove key from this device</button><span class="hint" id="s-msg"></span></div></form>' +
     '<div class="card" style="padding:18px 20px;margin-top:16px;max-width:820px"><h3 style="font-size:var(--s-lg)">Install on this device</h3><p class="hint" style="margin:6px 0 12px">Adds a Tutor Desk icon to the home screen. It opens full screen, and lessons you have opened before keep working without internet; taps upload when you are back online. On the Samsung tablet: browser menu \u2192 <b>Add page to</b> \u2192 <b>Home screen</b> (or <b>Install app</b>).</p><button class="btn primary" type="button" id="s-install" hidden>Install Tutor Desk</button></div>';
@@ -303,6 +304,8 @@ function makeupSum(items) { var d = MK && MK.data; if (!d || !d.start) return nu
   items.forEach(function (it) { var x = it.x; if (!x || x.status !== "finished" || dateOf(it) < d.start.date) return; var m = +(x.time && x.time.minutes) || 0;
     if (x.makeup) o.made += m; else o.over += Math.max(0, m - LESSON_MIN); });
   o.owed = Math.round(o.start + o.missed - o.over - o.made); return o; }
+function mkSide(o) { var el = $("#mkside"); if (!el) return; el.hidden = !o; if (o) el.querySelector("b").textContent = Math.max(0, o.owed); }
+document.addEventListener("click", function (e) { var a = e.target.closest && e.target.closest("[data-mkjump]"); if (!a) return; e.preventDefault(); var c = $("#mkcard"); if (c) { c.scrollIntoView({ block: "center", behavior: "smooth" }); c.classList.add("flash"); setTimeout(function () { c.classList.remove("flash"); }, 1200); } });
 function makeupCard(items) { var o = makeupSum(items); if (!o) return "";
   var ln = function (k, v) { return '<div class="statline"><span>' + k + '</span><b>' + v + '</b></div>'; };
   return '<div class="statcard mkcard" id="mkcard"><span class="k">MAKE-UP TIME OWED</span><div style="display:flex;align-items:baseline;gap:8px"><span class="big">' + Math.max(0, o.owed) + '</span><span class="hint">minutes</span></div>' +
@@ -335,7 +338,9 @@ function homeHTML(items) {
   items.forEach(function (it) { var d = dateOf(it); (byDay[d] = byDay[d] || []).push(subjOf(it)); });
   var week = '<div class="week" aria-label="This week">' + wk.map(function (d) { var dd = pdate(d), off = OFFDAYS.indexOf(dd.getDay()) >= 0;
     return '<div class="wd' + (d === t ? " today" : off ? " off" : "") + '"><span>' + DAY[dd.getDay()] + '</span><span class="n">' + dd.getDate() + '</span><span class="dots">' + (d === t ? "Today" : off ? "Off" : (byDay[d] || []).map(function (s) { return '<i class="' + esc(s) + '" title="' + esc(SUBJ[s] || s) + '"></i>'; }).join("")) + '</span></div>'; }).join("") + '</div>';
-  var h = '<header class="phead"><div class="phead-row"><div style="min-width:0"><div class="eyebrow">' + esc(CFG.student) + (sp !== "all" ? " · " + esc(SUBJ[sp]) + " only" : "") + '</div><h1>' + esc(DAYL[pdate(t).getDay()] + " " + pdate(t).getDate() + " " + MONL[pdate(t).getMonth()]) + '</h1><p>Lessons Mon, Wed, Thu, Sat, Sun · 45 minutes a subject</p></div>' + week + '</div></header>';
+  var mko = makeupSum(HOMEALL.length ? HOMEALL : items); mkSide(mko);
+  var h = '<header class="phead"><div class="phead-row"><div style="min-width:0"><div class="eyebrow">' + esc(CFG.student) + (sp !== "all" ? " · " + esc(SUBJ[sp]) + " only" : "") + '</div><h1>' + esc(DAYL[pdate(t).getDay()] + " " + pdate(t).getDate() + " " + MONL[pdate(t).getMonth()]) + '</h1><p>Lessons Mon, Wed, Thu, Sat, Sun · 45 minutes a subject</p>' +
+    (mko ? '<a class="mkchip" href="#mkcard" data-mkjump><span>Make-up owed</span><b class="num">' + Math.max(0, mko.owed) + '</b><span>min</span></a>' : "") + '</div>' + week + '</div></header>';
   /* up next: the first lesson from today on that is not logged yet, else an invitation to draft one */
   var subs = sp === "all" ? ["chem", "maths"] : [sp], shown = {};
   var tiles = subs.map(function (sj) {
@@ -563,10 +568,11 @@ function quizBlock(b) {
       return '<div class="item" data-v="' + esc(a.v || "") + '"' + (show ? "" : " hidden") + '><span class="qn">' + (i + 1) + '</span><div><div class="tags">' + (it.page ? '<span class="pill">' + esc(it.page) + '</span>' : "") + (it.kind ? '<span class="pill">' + esc({ recall: "Recall", reason: "Reason", draw: "Draw" }[it.kind] || it.kind) + '</span>' : "") + (it.star ? '<span class="pill warn">★</span>' : "") + '</div><div>' + clean(it.q) + '</div><button class="linkbtn" type="button" data-ans>Show answer</button><div class="qa prose" hidden>' + clean(it.a) + '</div></div>' + ctl(it.id) + '</div>';
     }).join("") + '</div>';
 }
-function questionBlock(q) {
+function questionBlock(q, big) {
   var h = '<div class="qcard"><div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap"><div><h3>' + esc(q.label || "Question") + '</h3>' + (q.source ? '<div class="src">' + esc(q.source) + '</div>' : "") + '</div>' + ((q.img || []).length ? '<button class="btn small" type="button" data-show="' + esc(q.id) + '">Show him</button>' : "") + '</div>' + (q.html ? '<div class="prose">' + clean(q.html) + '</div>' : "") + (q.img || []).map(function (i) { return img(i, q.label); }).join("");
   if (q.answer || (q.answerImg || []).length) h += '<details class="reveal"><summary>Mark scheme</summary><div class="prose">' + clean(q.answer || "") + (q.answerImg || []).map(function (i) { return img(i, "Mark scheme"); }).join("") + '</div></details>';
   var a = L.session.answers[q.id] || {};
+  if (big) return h + ctlBig(q.id, a, q.label, q.marks) + '</div>';
   return h + '<div class="items"><div class="item" data-v="' + esc(a.v || "") + '"><span class="qn">▸</span><div class="label" style="padding-top:12px">How he did</div>' + ctl(q.id, q.marks) + '</div></div></div>';
 }
 function drawTally() {
@@ -1070,11 +1076,12 @@ function answerBox(html, page) { var H = (L.script && L.script.pages) || {};
   return '<details class="ans"><summary>Show answer</summary><div class="ansbody">' + (page ? '<div class="src">CGP ' + esc(page) + (H[page] ? ' \u00b7 ' + esc(H[page]) : "") + ' \u00b7 the book\u2019s words</div>' : "") + '<div class="prose">' + clean(html) + '</div></div></details>'; }
 /* verdicts, laid out for a live lesson: the three you use most are big; keys 1 to 6 */
 var VBIG = [["right", "\u2713", "Right"], ["wrong", "\u2717", "Wrong"], ["partly", "\u00bd", "Partly"]], VSMALL = [["wording", "Wording"], ["terminology", "Terminology"]];
-function ctlBig(id, a, q) { a = a || {};
+function ctlBig(id, a, q, marks) { a = a || {};
   return '<div class="ctl big" data-item="' + esc(id) + '" data-q="' + esc(String(q || "").slice(0, 160)) + '"><div class="vmain">' +
     VBIG.map(function (v, i) { return '<button class="v vb vb-' + v[0] + '" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '"><span class="vi">' + v[1] + '</span>' + v[2] + '<kbd>' + (i + 1) + '</kbd></button>'; }).join("") +
     '</div><div class="vmore"><span class="hint">Right idea, wrong words:</span>' +
     VSMALL.map(function (v, i) { return '<button class="v vs" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '">' + v[1] + '<kbd>' + (i + 4) + '</kbd></button>'; }).join("") +
+    (marks ? '<label class="mkin">Marks <input class="mk" type="number" min="0" step="0.5" inputmode="decimal" aria-label="Marks out of ' + esc(marks) + '" data-mk value="' + (a.m != null ? esc(a.m) : "") + '"><span class="hint num">/ ' + esc(marks) + '</span></label>' : "") +
     '<span class="vsep" aria-hidden="true"></span><button class="v vs" type="button" data-v="skipped" title="He did not attempt it" aria-pressed="' + (a.v === "skipped") + '">He didn’t answer<kbd>6</kbd></button></div>' +
 
     (a.note ? "" : '<button class="linkbtn addnote" type="button">+ Note what he said</button>') + '<input class="note" type="text" data-note aria-label="What he said" placeholder="What he said / got wrong" value="' + esc(a.note || "") + '"' + (a.note ? "" : " hidden") + '></div>'; }
@@ -1111,7 +1118,7 @@ function chunkHTML(c) {
         qtags(c.it) + '<div class="qtext prose">' + clean(c.it.q) + '</div>' + answerBox(c.it.a, c.it.book ? c.it.page : null) + hintsHTML(c) + ctlBig(c.it.id, a, plain(c.it.q));
     case "drill": var a2 = L.session.answers[c.key] || {};
       return '<div class="qhead">' + tlabel("q", "?", (c.title || "Drill") + (c.of > 1 ? " \u00b7 " + c.n + " of " + c.of : "")) + '</div><div class="qtext prose">' + clean(c.d[0]) + '</div>' + answerBox(c.d[1]) + hintsHTML(c) + ctlBig(c.key, a2, plain(c.d[0]));
-    case "question": return tlabel("q", "Q", "Exam question") + questionBlock(c.b) + hintsHTML(c);
+    case "question": return tlabel("q", "Q", "Exam question") + questionBlock(c.b, true) + hintsHTML(c);
     case "end": return '<div class="tphase"><div class="label">Done</div><h2>End of the script</h2><p class="hint">Log times, notes and what to change next time.</p><button class="btn next" type="button" data-tgo="after">After the lesson →</button></div>';
     default: return block(c.b || {});
   }
@@ -1132,7 +1139,7 @@ function drawTeach() {
   if (c.p) L.phase = c.p.id;
   var h = '<div class="teach3">' + runwayHTML(c) + '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
     '<button class="btn small outl" type="button" id="toc" aria-label="Outline">☰ Outline</button><a class="back" style="margin:0" href="#/lesson/' + encodeURIComponent(L.id) + '">← Plan</a><span aria-hidden="true">·</span><b>' + esc((c.p && c.p.name) || "End") + '</b>' + (c.mod ? '<span aria-hidden="true">›</span><span>' + esc(c.mod) + '</span>' : "") + '</div>' +
-    '<div class="tmini"><button class="btn small" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn small" type="button" data-suggest>Suggest</button><a class="btn small" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a><span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
+    '<div class="tmini"><button class="btn small" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn small" type="button" data-suggest>Suggest</button><button class="btn small trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button><a class="btn small" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a><span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
     '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>' +
     (lv ? "" : '<div class="preview"><b>Preview</b> · nothing is ticked until you press <b>Start lesson</b>. You can still tick a chunk by hand.</div>') + '</div><div class="tstage">';
   /* the last two chunks of the same section as short grey lines, then the current one */
@@ -1144,7 +1151,7 @@ function drawTeach() {
   var nx = TCH.seq[TCH.pos + 1];
   h += '</div>' + (nx ? '<button type="button" class="upnext" data-tjump="' + (TCH.pos + 1) + '"><b>UP NEXT</b><span>' + esc(shortOf(nx, 130)) + '</span></button>' : "") + '</div>' + footHTML(c, lv) + '</section></div>';
   app.innerHTML = h; fillRows(app); loadImages(app); maths(app); tick();
-  window.scrollTo(0, 0); fitBoards(); warmCount(); prefetchLesson(); prefetchAhead(TCH.seq.slice(TCH.pos + 1, TCH.pos + 5));
+  window.scrollTo(0, 0); fitBoards(); applyFit(); layW = layoutOf(); warmCount(); prefetchLesson(); prefetchAhead(TCH.seq.slice(TCH.pos + 1, TCH.pos + 5));
   if (fgo) { var fb = $('.tfoot [data-tgo="' + fgo + '"]') || $(".tfoot .btn.next") || $(".tfoot .btn"); if (fb && !fb.disabled) fb.focus({ preventScroll: true }); }
   /* move only the outline's own scroll box: scrollIntoView also scrolled the page down (Ali, 2 Oct) */
   var ol = $(".outline"), oc = $(".outline .cur"); if (ol && oc && ol.clientHeight) ol.scrollTop += oc.getBoundingClientRect().top - ol.getBoundingClientRect().top - ol.clientHeight / 2 + oc.offsetHeight / 2;
@@ -1190,6 +1197,33 @@ function runwayHTML(c) {
     bar + '<div class="onclock" id="onclock" hidden><span id="onclockt"></span></div><nav class="outline">' + parts + '</nav></aside>';
 }
 /* a board or picture fills the space between the top bar and the buttons: no scrolling to see the bottom */
+/* question screens without scrolling. "side": question left, answer + verdicts right (wide screens; narrower ones use
+   "float"). "float": the question fills the screen, answer + verdicts in a small card over the bottom-right corner that
+   folds down to just the verdict buttons. Chosen in Settings or from the try-out dot; "classic" is the old page. */
+var LAYOUTS = [["classic", "Classic"], ["side", "Side panel"], ["float", "Floating card"]], fitOpen = false;
+function layoutPick() { return ls("tutor.layout") || "classic"; }
+function layoutOf() { var v = layoutPick(); return v === "side" && window.innerWidth < 1000 ? "float" : v; }
+function layPressed() { $$("[data-layout]").forEach(function (b) { if (b.tagName === "BUTTON") b.setAttribute("aria-pressed", String(b.getAttribute("data-layout") === layoutPick())); }); }
+function applyFit() { var lay = layoutOf(), cur = $(".chunk.cur"); document.body.setAttribute("data-tlayout", lay);
+  if (!cur || lay === "classic" || !/\bt-(question|quiz|drill)\b/.test(cur.className)) return;
+  var right = document.createElement("div"), body = document.createElement("div"), left = document.createElement("div");
+  right.className = "fita" + (lay === "float" && !fitOpen ? " min" : ""); body.className = "fita-b"; left.className = "fitq";
+  $$(".tnote", cur).forEach(function (n) { n.open = false; body.appendChild(n); });
+  $$(".ans, details.reveal, .thints, .ctl.big, .items", cur).filter(function (el) { return !el.parentNode.closest(".ans, details.reveal, .thints, .ctl.big, .items"); }).forEach(function (el) { body.appendChild(el); });
+  while (cur.firstChild) left.appendChild(cur.firstChild);
+  if (lay === "float") right.innerHTML = '<button type="button" class="fita-h" data-fitx aria-expanded="' + fitOpen + '"><b>Answer and marking</b><span aria-hidden="true">' + (fitOpen ? "\u25be" : "\u25b4") + '</span></button>';
+  right.appendChild(body); cur.appendChild(left); cur.appendChild(right); cur.classList.add("fit"); fitQ(); }
+function fitQ() { var cur = $(".chunk.cur.fit"), foot = $(".tfoot"); if (!cur || !foot) return;
+  var fh = foot.getBoundingClientRect().height; document.documentElement.style.setProperty("--footh", fh + "px");
+  var room = Math.max(300, window.innerHeight - cur.getBoundingClientRect().top - fh - 22); cur.style.height = room + "px";
+  var left = cur.querySelector(".fitq"), ims = $$(".fig img", left).filter(function (i) { return !i.hidden; });
+  ims.forEach(function (i) { i.style.maxHeight = "none"; });
+  var other = left.scrollHeight - ims.reduce(function (a, i) { return a + i.getBoundingClientRect().height; }, 0);
+  var per = Math.max(140, (room - other - 12) / Math.max(1, ims.length)); ims.forEach(function (i) { i.style.maxHeight = per + "px"; }); }
+document.addEventListener("load", function (e) { if (MODE === "teach" && e.target && e.target.tagName === "IMG" && $(".chunk.cur.fit")) fitQ(); }, true);
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-fitx]"); if (!t) return; fitOpen = !fitOpen; var f = t.closest(".fita"); f.classList.toggle("min", !fitOpen); t.setAttribute("aria-expanded", String(fitOpen)); t.lastChild.textContent = fitOpen ? "\u25be" : "\u25b4"; });
+document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("button[data-layout]"); if (!b) return; ls("tutor.layout", b.getAttribute("data-layout")); layPressed(); if (MODE === "teach" && L) drawTeach(); toast("Teach layout: " + b.textContent); });
+var layW = null; window.addEventListener("resize", function () { if (MODE !== "teach" || !L) return; var now = layoutOf(); if (layW && layW !== now) drawTeach(); else fitQ(); layW = now; });
 function fitBoards() { var f = $(".chunk.cur .tfig"), foot = $(".tfoot"); if (!f || !foot) return;
   var cap = f.querySelector("figcaption"), room = window.innerHeight - f.getBoundingClientRect().top - foot.getBoundingClientRect().height - (cap ? cap.offsetHeight + 10 : 0) - 34;
   var im = f.querySelector("img"); if (im) im.style.maxHeight = Math.max(220, room) + "px"; }
@@ -1307,7 +1341,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v20", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v21", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
@@ -1377,16 +1411,22 @@ document.addEventListener("click", function (e) {
   if (b.hasAttribute("data-sugtag")) { var k = b.getAttribute("data-sugtag"); SUG.tags[k] = !SUG.tags[k]; b.setAttribute("aria-pressed", String(SUG.tags[k])); }
 }, true);
 document.addEventListener("keydown", function (e) { if (e.key === "Escape" && SUG.open) closeSug(); if (e.key === "Escape" && SUG.pointing) { SUG.pointing = false; document.body.classList.remove("pointing"); } });
-/* the try-out strip */
+/* try-out on/off: the button in the sidebar and the Teach top bar (no need to type ?try) */
+function tryToggle() { if (TRY) { try { sessionStorage.removeItem("tutor.try"); } catch (e) {} location.href = location.pathname + location.hash; return; }
+  var go = function () { location.href = location.pathname + "?try" + location.hash; }; if (L && L.dirty) flush().then(go, go); else go(); }
+document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-trytoggle]"); if (b) { e.preventDefault(); tryToggle(); } });
+$$("[data-trytoggle]").forEach(function (b) { b.textContent = TRY ? "Leave try-out" : "Try-out"; });
+/* the try-out marker */
 if (TRY) { document.body.classList.add("tryout");
   var tb = document.createElement("div"); tb.className = "trybar";
-  tb.innerHTML = '<button class="trydot" type="button" id="trydot" aria-expanded="false" aria-label="Try-out mode: nothing is saved. Open to suggest a change" title="Try-out: nothing is saved"><i aria-hidden="true"></i>Try-out</button><div class="trypanel" hidden><b>Try-out</b><span>Nothing is saved in this tab.</span><button class="btn small" type="button" data-suggest>Suggest a change</button><button class="btn small" type="button" id="tryleave">Leave try-out</button><button class="btn small" type="button" id="tryx" aria-label="Close">\u00d7</button></div>';
+  tb.innerHTML = '<button class="trydot" type="button" id="trydot" aria-expanded="false" aria-label="Try-out mode: nothing is saved. Open to suggest a change" title="Try-out: nothing is saved"></button><div class="trypanel" hidden><b>Try-out</b><span>Nothing is saved in this tab.</span><button class="btn small" type="button" data-suggest>Suggest a change</button><span class="laysw" role="group" aria-label="Teach layout">' + LAYOUTS.map(function (l) { return '<button type="button" class="chip" data-layout="' + l[0] + '">' + l[1] + '</button>'; }).join("") + '</span><button class="btn small" type="button" id="tryleave">Leave try-out</button><button class="btn small" type="button" id="tryx" aria-label="Close">\u00d7</button></div>';
   document.body.appendChild(tb);
   var tryOpen = function (on) { tb.querySelector(".trypanel").hidden = !on; tb.classList.toggle("open", on); $("#trydot").setAttribute("aria-expanded", String(on)); };
   $("#trydot").addEventListener("click", function () { tryOpen(tb.querySelector(".trypanel").hidden); });
   $("#tryx").addEventListener("click", function () { tryOpen(false); });
   tb.querySelector("[data-suggest]").addEventListener("click", function () { tryOpen(false); });
-  tb.querySelector("#tryleave").addEventListener("click", function () { try { sessionStorage.removeItem("tutor.try"); } catch (e) {} location.href = location.pathname + location.hash; }); }
+  tb.querySelector("#tryleave").addEventListener("click", tryToggle); }
+layPressed();
 
 render();
 })();
