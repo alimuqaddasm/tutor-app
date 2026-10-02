@@ -49,7 +49,7 @@ try:
         p.screenshot(path=os.path.join(OUT, "s10-board.png"))
         # 12 maths: video examples during 7.1
         p.goto(B + "#/lesson/2026-10-01-maths/teach"); p.wait_for_selector(".teach3"); p.wait_for_timeout(800)
-        jump(p, "Expand cos(x + 30"); print("12 maths video example:", p.locator(".chunk.cur .tlabel").first.inner_text().replace("\n", " "))
+        jump(p, "Write cos(x + 30)"); print("12 maths video example:", p.locator(".chunk.cur .tlabel").first.inner_text().replace("\n", " "))
         p.screenshot(path=os.path.join(OUT, "s12-maths.png"))
         print("   Set 7 inside 7.1 part:", p.evaluate("Array.from(document.querySelectorAll('.opart')).filter(d => d.querySelector('summary .nm').textContent.indexOf('7.1') >= 0).map(d => Array.from(d.querySelectorAll('.tx')).filter(t => t.textContent.indexOf('Set 7') >= 0).length)"))
         # 1, 2 student view

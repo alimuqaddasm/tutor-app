@@ -27,7 +27,7 @@ try:
             check("no sideways scroll in Teach at %d px" % w, R.wide(p) <= 0, R.wide(p))
         p.set_viewport_size({"width": 1440, "height": 765}); p.wait_for_timeout(200)
         # 3. try-out: a dot, no strip
-        check("try-out: no strip text, one small dot", p.locator(".trydot").count() == 1 and p.locator(".trypanel").is_hidden() and p.locator(".trydot").bounding_box()["width"] <= 20)
+        check("try-out: no strip, one small button (v20: labelled 'Try-out')", p.locator(".trydot").count() == 1 and p.locator(".trypanel").is_hidden() and p.locator(".trydot").bounding_box()["height"] <= 32 and p.locator(".trydot").bounding_box()["width"] <= 120)
         p.click("#trydot"); p.wait_for_timeout(200)
         check("the dot opens Suggest / Leave try-out", p.locator(".trypanel [data-suggest]").is_visible() and p.locator("#tryleave").is_visible())
         p.screenshot(path=os.path.join(R.OUT, "r12-try-dot.png")); p.click("#tryx"); p.wait_for_timeout(200)

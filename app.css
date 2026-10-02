@@ -810,3 +810,14 @@ body.pointing,body.pointing *{cursor:crosshair!important}
 .thints[open] summary{border-bottom:1px dashed var(--line-2)}
 .thints .prose{padding:10px 16px 14px}
 .thints .th + .th{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+
+/* v20 try-out: a small labelled button, and a soft orange glow round the window edges (never blocks a tap) */
+.trydot{width:auto;height:auto;border-radius:999px;padding:5px 11px 5px 8px;display:inline-flex;align-items:center;gap:6px;background:#FEF3C7;color:#7C4A03;border:1px solid #F59E0B;font:700 12px/1 var(--mono);letter-spacing:.04em;box-shadow:0 2px 10px rgba(245,158,11,.25);opacity:.92}
+.trydot i{width:9px;height:9px;border-radius:50%;background:#F59E0B;box-shadow:0 0 0 3px rgba(245,158,11,.3)}
+.trydot:hover,.trydot:focus-visible{opacity:1;box-shadow:0 2px 14px rgba(245,158,11,.45)}
+body.tryout::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:2147483000;box-shadow:inset 0 0 0 2px rgba(245,158,11,.55),inset 0 0 22px 2px rgba(245,158,11,.22)}
+/* maths questions set like an exam paper: Times-style text, KaTeX for the maths */
+body[data-subject="maths"] .qtext,body[data-subject="maths"] .stu-q,body[data-subject="maths"] .ans .prose,body[data-subject="maths"] .thints .prose{font-family:"Times New Roman",Tinos,Times,serif}
+body[data-subject="maths"] .qtext{font-size:1.6rem;line-height:1.55}
+body[data-subject="maths"] .stu-q{font-weight:400}
+body[data-subject="maths"] .qtext .katex,body[data-subject="maths"] .stu-q .katex{font-size:1.08em}

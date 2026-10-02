@@ -41,7 +41,7 @@ try:
         check("key 6 is 'He didn't answer' and replaces it", p.locator('.chunk.cur .vs[data-v="skipped"]').get_attribute("aria-pressed") == "true")
         p.screenshot(path=os.path.join(R.OUT, "r11-quiz-skip.png")); c.close()
         # 2. three buttons while the clock runs
-        c = ctx_(b); p = page(c, "?try#/lesson/" + MA + "/teach")  # maths 1 Oct: nothing ticked yet
+        c = ctx_(b); c.add_init_script("localStorage.setItem('tutor.fold.maths', '0')"); p = page(c, "?try#/lesson/" + MA + "/teach")  # maths 1 Oct: nothing ticked yet; hints shown as steps for this check
         while p.locator(".chunk.cur.t-step").count() == 0: p.keyboard.press("ArrowRight"); p.wait_for_timeout(150)
         check("preview (clock off): only Next, no Taught/Skip", p.locator(".tfoot .btn.skip").count() == 0 and p.locator(".tfoot.three").count() == 0)
         p.click("#clkgo"); p.wait_for_timeout(400)
