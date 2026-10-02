@@ -26,7 +26,7 @@ try:
         p.click("#clkgo"); p.wait_for_timeout(400)
         for i in range(8): p.click(".tfoot .btn.next"); p.wait_for_timeout(150)
         p.evaluate("Array.from(document.querySelectorAll('.outline .oc')).find(b => b.querySelector('.ic').textContent == '?').click()"); p.wait_for_timeout(400)
-        p.locator('.chunk.cur [data-v="wrong"]').click(); p.locator(".chunk.cur .addnote").click(); p.locator(".chunk.cur input[data-note]").fill("test note"); p.wait_for_timeout(6000)
+        p.locator('.chunk.cur [data-v="wrong"]').click(); p.locator(".chunk.cur .addnote").click() if p.locator(".chunk.cur .addnote").count() else None; p.locator(".chunk.cur input[data-note]").fill("test note"); p.wait_for_timeout(6000)
         keys = p.evaluate("Object.keys(localStorage).filter(k => /^tutor\\.(s|review)\\./.test(k))")
         print("after clock, 8 Taught, a verdict and a note: writes", writes, "| device copies", keys, "| save label:", p.locator("#save").inner_text() if p.locator("#save").is_visible() else "(sidebar hidden in Teach)")
         p.goto(B + "?try#/revise"); p.wait_for_timeout(3000)

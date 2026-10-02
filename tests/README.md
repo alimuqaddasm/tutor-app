@@ -8,6 +8,9 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/test_tryout.py    # try-out mode sends nothing; a suggestion is the only write; normal mode still saves
     python tests/test_suggestions_1oct.py   # Ali's 12 suggestions of 1 Oct
     python tests/test_bugs_round10.py       # round 10 bug hunt: 24 PASS/FAIL checks (exit 1 on a FAIL); saves go to a pretend GitHub inside the test
+    python tests/test_round11.py            # round 11 (2 Oct): I-skipped-it, Taught/Next/Skip, student swipe/arrows, missed lessons + make-up time (27 checks)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
 On Windows run with PYTHONIOENCODING=utf-8, or printing ★ crashes the console.
+
+The tests read the real lessons, which change as Ali teaches; checks compare against what is already there, never against an empty lesson.

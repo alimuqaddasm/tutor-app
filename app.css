@@ -606,6 +606,10 @@ button.upnext:hover span{color:var(--text-2);text-decoration:underline}
   .teach3 .btn.skip{min-height:52px}
   .teach3 .tfoot{grid-template-columns:auto 1fr 2fr}
   .teach3 .tfoot:not(:has(.skip)){grid-template-columns:1fr 2fr}
+  .teach3 .tfoot.three{grid-template-columns:auto 1fr 1fr 1.5fr;gap:8px}
+  .teach3 .tfoot.three .btn{white-space:nowrap;padding-left:12px;padding-right:12px}
+  .teach3 .btn.look{min-height:52px}
+  .teach3 .tfoot.three kbd{display:none}
   .tmini a.btn{display:none}
 }
 /* student view: his screen, questions only */
@@ -709,7 +713,15 @@ body.pointing,body.pointing *{cursor:crosshair!important}
 .ctl.big .vmore .hint{font-size:13px}
 .ctl.big .vs{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border-radius:12px;border:1px solid var(--line-2);background:var(--surface);font-weight:700;font-size:var(--s-sm);color:var(--text-2)}
 .ctl.big .vs[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
-.ctl.big .vs[data-v="skipped"]{margin-left:auto}
+.ctl.big .vsep{flex:1 1 12px}
+/* "I skipped this question": Ali's own choice, kept apart from his verdicts */
+.ctl.big .vskip{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding-top:10px;border-top:1px dashed var(--line-2)}
+.ctl.big .vskip .hint{font-size:13px}
+.ctl.big .vt{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border-radius:12px;border:1px dashed var(--line-2);background:transparent;font-weight:700;font-size:var(--s-sm);color:var(--text-2)}
+.ctl.big .vt[aria-pressed="true"]{background:var(--surface-2,var(--line));border-style:solid;color:var(--text)}
+.ctl.big .vt:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.oc.v-tskip .ic{background:transparent;border:1px dashed var(--line-2);color:var(--text-2)}.pastline.v-tskip .mk{color:var(--text-2)}
+.oc.s-skip .ic{background:transparent;border:1px dashed var(--line-2);color:var(--text-2);text-decoration:line-through}.pastline.s-skip .mk{color:var(--text-2)}
 .ctl.big .addnote{justify-self:start;font-size:var(--s-sm)}
 .ctl.big input.note{width:100%;min-height:46px;border-radius:12px;border:1px solid var(--line-2);background:var(--surface);padding:0 14px}
 /* boards: sized in JS to the room between the top bar and the buttons */
@@ -751,3 +763,27 @@ body.tryout main{padding-bottom:calc(var(--tryh,76px) + 40px)}
   body.tryout main{padding-bottom:calc(var(--tryh,76px) + 140px)}
   body.tryout.teaching main{padding-bottom:0}
 }
+
+/* Teach, live: Skip (on purpose) · Next (look ahead, no tick) · Taught (tick and move on) */
+.teach3 .btn.look{min-height:56px;border-radius:18px;font-weight:700}
+.teach3 .btn.skip + .btn.look{margin-left:0}
+.teach3 .btn.look + .btn.next{margin-left:0}
+.teach3 .tfoot.three .btn kbd{font:600 11px var(--mono);padding:1px 6px;border-radius:5px;border:1px solid currentColor;opacity:.55;margin-left:6px}
+
+/* student view: faint edge arrows (tap targets for the tablet), on top of the question, below the drawer */
+.stu-edge{position:fixed;top:50%;transform:translateY(-50%);z-index:5;width:56px;height:120px;border:0;border-radius:16px;background:transparent;color:var(--text-2);font-size:44px;line-height:1;opacity:.18;cursor:pointer;transition:opacity .15s}
+.stu-edge.prev{left:6px}.stu-edge.next{right:6px}
+.stu-edge:hover,.stu-edge:focus-visible{opacity:.7;background:var(--surface)}
+.stu-edge:disabled{display:none}
+.stu-drawer{z-index:20}
+
+/* home: "was it taught?" for lessons whose day has passed, and the make-up counter */
+.asks{display:flex;flex-direction:column;gap:10px;margin:0 0 18px}
+.ask{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-left:4px solid var(--warn)}
+.ask-q{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;min-width:0}
+.ask-q b{font-size:var(--s-lg)}
+.ask-a{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.mkcard{margin-top:16px}
+.mkchk{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-weight:600;cursor:pointer}
+.mkchk input{width:20px;height:20px}
+@media (max-width:700px){.ask{padding:12px 14px}.ask-a .btn{flex:1 1 auto}}

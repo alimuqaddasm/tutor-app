@@ -87,8 +87,8 @@ try:
         check("Start after a reload counts time for the part on screen", live == [part], (part, live)); c.close()
         # 5. Ctrl/Alt + keys do nothing; 6. nothing moves behind a zoomed picture
         c = ctx_(b); p = page(c, "?try#/lesson/" + CH + "/teach"); jump(p, "Choose the quiz"); p.keyboard.press("ArrowRight"); p.wait_for_timeout(300)
-        p.keyboard.press("Control+1"); p.keyboard.press("Alt+2"); p.wait_for_timeout(200); a = pos(p); p.keyboard.press("Control+ArrowRight"); p.wait_for_timeout(200)
-        check("Ctrl/Alt + number sets no verdict, Ctrl+Right does not move", p.locator(".chunk.cur .ctl.big [aria-pressed=true]").count() == 0 and pos(p) == a, (p.locator(".chunk.cur .ctl.big [aria-pressed=true]").all_inner_texts(), a, pos(p)))
+        v0 = p.locator(".chunk.cur .ctl.big [aria-pressed=true]").all_inner_texts(); p.keyboard.press("Control+1"); p.keyboard.press("Alt+2"); p.wait_for_timeout(200); a = pos(p); p.keyboard.press("Control+ArrowRight"); p.wait_for_timeout(200)
+        check("Ctrl/Alt + number sets no verdict, Ctrl+Right does not move", p.locator(".chunk.cur .ctl.big [aria-pressed=true]").all_inner_texts() == v0 and pos(p) == a, (p.locator(".chunk.cur .ctl.big [aria-pressed=true]").all_inner_texts(), a, pos(p)))
         p.keyboard.press("1"); p.wait_for_timeout(200); check("plain key 1 still marks Right", p.locator(".chunk.cur .ctl.big [aria-pressed=true]").all_inner_texts()[:1] == ["\u2713\nRight\n1"])
         jump_ic(p, "\u25a7", 2); p.wait_for_timeout(1500); a = pos(p); p.locator(".chunk.cur .tfig img").click(); p.wait_for_timeout(300)
         p.keyboard.press("ArrowRight"); p.keyboard.press("ArrowRight"); p.wait_for_timeout(300)
@@ -135,7 +135,7 @@ try:
         check("second tab shows the clock running", P2.locator("#clkgo").inner_text() == "Pause", P2.locator("#clkgo").inner_text())
         P2.locator('.rail button[data-phase]').first.dispatch_event("click"); P2.wait_for_timeout(300); P2.locator('#phasebox [data-v="right"]').first.dispatch_event("click"); P2.wait_for_timeout(6000)
         A.bring_to_front(); A.wait_for_timeout(6000); s = F.session(CH)
-        check("both tabs' work saved: clock running, ticks and the verdict", [e["e"] for e in s["time"]["log"]][:1] == ["start"] and "pause" not in [e["e"] for e in s["time"]["log"]] and sum(1 for d in s["done"].values() if not d.get("off")) >= 1 and any(a.get("v") == "right" for a in s["answers"].values()),
+        check("both tabs' work saved: clock running, ticks and the verdict", [e["e"] for e in s["time"]["log"]][:1] == ["start"] and s["time"]["log"][-1]["e"] not in ("pause", "end") and sum(1 for d in s["done"].values() if not d.get("off")) >= 1 and any(a.get("v") == "right" for a in s["answers"].values()),
               ([e["e"] for e in s["time"]["log"]], sum(1 for d in s["done"].values() if not d.get("off")), [a.get("v") for a in s["answers"].values()]))
         check("first tab shows the second tab's verdict", A.evaluate("document.querySelectorAll('.outline .oc.v-right').length") >= 1)
         A.evaluate("Object.keys(localStorage).filter(k => k.indexOf('tutor.s.') == 0 || k.indexOf('tutor.tquiz') == 0).forEach(k => localStorage.removeItem(k))")
