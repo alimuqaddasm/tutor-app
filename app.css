@@ -643,7 +643,6 @@ body.student main{max-width:none;padding:0}
 .trybar{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:70;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 32px);padding:10px 14px;border-radius:16px;background:repeating-linear-gradient(135deg,#FFB547 0 14px,#FFC56B 14px 28px);color:#12152A;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:var(--s-sm)}
 .trybar b{letter-spacing:.06em}
 .trybar .btn{background:#12152A;color:#F4F5FA;border-color:#12152A}
-body.tryout .tfoot{padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}
 body.tryout .showov{z-index:90}
 .sug{position:fixed;inset:0;z-index:95;background:rgba(10,12,24,.45);display:grid;place-items:center;padding:16px}
 .sug-card{width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--surface);color:var(--text);border-radius:22px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:20px;display:flex;flex-direction:column;gap:12px}
@@ -754,14 +753,7 @@ body.pointing,body.pointing *{cursor:crosshair!important}
 .field select{min-width:0;max-width:100%}
 .upnext:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:8px}
 /* the try-out strip never covers the lesson buttons: room below them matches the strip's real height (set by app.js) */
-body.tryout .tfoot,body.tryout.teaching .teach3 .tfoot{padding-bottom:calc(var(--tryh,76px) + 24px + env(safe-area-inset-bottom,0px))}
-body.tryout main{padding-bottom:calc(var(--tryh,76px) + 40px)}
 @media (max-width:900px){
-  .trybar span{display:none}
-  .trybar{padding:8px 12px;gap:8px}
-  body.tryout:not(.teaching):not(.student) .trybar{bottom:calc(76px + env(safe-area-inset-bottom,0px))}
-  body.tryout main{padding-bottom:calc(var(--tryh,76px) + 140px)}
-  body.tryout.teaching main{padding-bottom:0}
 }
 
 /* Teach, live: Skip (on purpose) · Next (look ahead, no tick) · Taught (tick and move on) */
@@ -787,3 +779,34 @@ body.tryout main{padding-bottom:calc(var(--tryh,76px) + 40px)}
 .mkchk{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-weight:600;cursor:pointer}
 .mkchk input{width:20px;height:20px}
 @media (max-width:700px){.ask{padding:12px 14px}.ask-a .btn{flex:1 1 auto}}
+
+/* try-out (v19): the page looks exactly like the real app; one small orange dot in the bottom-left corner opens the tools */
+.trybar{all:unset;position:fixed;left:6px;bottom:calc(6px + env(safe-area-inset-bottom,0px));z-index:70;display:flex;align-items:flex-end;gap:8px;transform:none}
+.trydot{all:unset;box-sizing:border-box;width:16px;height:16px;border-radius:50%;background:#F59E0B;box-shadow:0 0 0 3px rgba(245,158,11,.25);cursor:pointer;opacity:.85}
+.trydot:hover,.trydot:focus-visible{opacity:1;box-shadow:0 0 0 5px rgba(245,158,11,.35)}
+.trybar.open .trydot{opacity:1}
+.trypanel{display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:calc(100vw - 48px);padding:8px 10px;border-radius:14px;background:#FEF3C7;color:#3B2A05;border:1px solid #F59E0B;box-shadow:0 8px 30px rgba(0,0,0,.18);font-size:var(--s-sm)}
+.trypanel[hidden]{display:none}
+.trypanel .btn{background:#12152A;color:#F4F5FA;border-color:#12152A}
+/* Teach top bar: one line, long part names end in "…" so the bar never changes height (Ali, 2 Oct) */
+@media (min-width:901px){
+  .teach3 .tbar-row{flex-wrap:wrap}
+  .teach3 .tcrumb{flex-wrap:nowrap;white-space:nowrap;overflow:hidden;flex:1 1 100%}
+  .teach3 .tcrumb b,.teach3 .tcrumb > span:last-child{overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .teach3 .tcrumb b{flex:0 1 auto}.teach3 .tcrumb > span:last-child{flex:0 1 auto}
+  .teach3 .tmini{flex:1 1 100%;justify-content:flex-end}
+}
+/* "I skipped it" next to Next */
+.teach3 .btn.iskip{min-height:56px;border-radius:18px;font-weight:700;border-style:dashed;margin-left:auto}
+.teach3 .btn.iskip + .btn.next{margin-left:0}
+.teach3 .btn.iskip[aria-pressed="true"]{border-style:solid;background:var(--surface-2)}
+.teach3 .btn.iskip kbd{font:600 11px var(--mono);padding:1px 6px;border-radius:5px;border:1px solid currentColor;opacity:.55;margin-left:6px}
+@media (max-width:900px){.teach3 .tfoot:has(.iskip){grid-template-columns:auto 1fr 1.5fr}.teach3 .btn.iskip{min-height:52px;white-space:nowrap}.teach3 .btn.iskip kbd{display:none}}
+/* folded hints under a question */
+.thints{margin:14px 0 4px;border:1px dashed var(--line-2);border-radius:14px;background:var(--surface)}
+.thints summary{cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 14px;list-style:none}
+.thints summary::-webkit-details-marker{display:none}
+.thints summary .ic{width:22px;height:22px;border-radius:7px;display:inline-grid;place-items:center;background:var(--surface-2);font-weight:800;font-size:12px}
+.thints[open] summary{border-bottom:1px dashed var(--line-2)}
+.thints .prose{padding:10px 16px 14px}
+.thints .th + .th{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}

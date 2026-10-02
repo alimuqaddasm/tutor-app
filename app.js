@@ -217,6 +217,7 @@ function settingsView() {
     '<div class="field"><label for="s-dev">This device</label><input type="text" id="s-dev" value="' + esc(CFG.device) + '" placeholder="tablet, la57, mac"></div>' +
     '<div class="field"><label for="s-stu">Student</label><input type="text" id="s-stu" value="' + esc(CFG.student) + '"></div>' +
     '<div class="field"><label for="s-font">Text style</label><select id="s-font"><option value="figtree"' + (f === "figtree" ? " selected" : "") + '>Clean (Figtree)</option><option value="lexend"' + (f === "lexend" ? " selected" : "") + '>Extra readable (Lexend)</option><option value="serif"' + (f === "serif" ? " selected" : "") + '>Book (Source Serif)</option></select></div></div>' +
+    '<div class="field"><span class="lab">Hints in Teach</span><label class="mkchk"><input type="checkbox" data-fold="maths"' + (foldOn("maths") ? " checked" : "") + '> Maths: fold the hints under each question (open them only when he is stuck)</label><label class="mkchk"><input type="checkbox" data-fold="chem"' + (foldOn("chem") ? " checked" : "") + '> Chemistry: the same</label></div>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="submit">Save and test</button><button class="btn" type="button" id="s-cache">Clear this device’s cache</button><button class="btn danger" type="button" id="s-clear">Remove key from this device</button><span class="hint" id="s-msg"></span></div></form>' +
     '<div class="card" style="padding:18px 20px;margin-top:16px;max-width:820px"><h3 style="font-size:var(--s-lg)">Install on this device</h3><p class="hint" style="margin:6px 0 12px">Adds a Tutor Desk icon to the home screen. It opens full screen, and lessons you have opened before keep working without internet; taps upload when you are back online. On the Samsung tablet: browser menu \u2192 <b>Add page to</b> \u2192 <b>Home screen</b> (or <b>Install app</b>).</p><button class="btn primary" type="button" id="s-install" hidden>Install Tutor Desk</button></div>';
 }
@@ -745,6 +746,7 @@ document.addEventListener("input", function (ev) {
     timeEdited(); }
   if (t.hasAttribute("data-tp")) { var ed2 = x.time.edit; ed2.phaseMinutes = ed2.phaseMinutes || {}; ed2.phaseMinutes[t.getAttribute("data-tp")] = t.value === "" ? null : +t.value; timeEdited(); }
 });
+document.addEventListener("change", function (e) { if (e.target.hasAttribute && e.target.hasAttribute("data-fold")) { ls("tutor.fold." + e.target.getAttribute("data-fold"), e.target.checked ? "1" : "0"); toast("Saved on this device"); } });
 document.addEventListener("change", function (e) { if (e.target.id !== "fb-makeup" || !L) return; L.session.makeup = e.target.checked; L.session.makeupAt = now(); touch(); toast(e.target.checked ? "Marked as a make-up lesson" : "Not a make-up lesson"); });
 document.addEventListener("submit", function (ev) {
   ev.preventDefault(); var f = ev.target;
@@ -1026,6 +1028,13 @@ function teachSeq() {
     })(p.blocks, null);
   });
   seq.push({ t: "end" });
+  /* hints: the steps and notes right after a question fold into that question's screen, closed (Ali, 2 Oct:
+     "he is good at maths, keep them hidden until I want them"). On by default for maths; Settings switches it. */
+  if (foldOn((L.script && L.script.subject) || L.session.subject)) { var fs = [], host = null;
+    seq.forEach(function (c) { var q = { quiz: 1, drill: 1, question: 1 }[c.t];
+      if (host && (c.t === "step" || c.t === "note") && c.p === host.p && c.mod === host.mod) { host.hints.push(c.t === "step" ? c.it.html : c.b.html); return; }
+      host = q ? c : null; if (q) c.hints = []; fs.push(c); });
+    seq = fs; }
   /* notes ride on the next screen of the same part; a note with nothing after it in its part stays a screen */
   var out = [], pend = [];
   seq.forEach(function (c) { if (c.t === "note") { pend.push(c); return; }
@@ -1033,6 +1042,9 @@ function teachSeq() {
     out.push(c); });
   return out;
 }
+function foldOn(subj) { var v = ls("tutor.fold." + subj); return v == null ? subj === "maths" : v === "1"; }
+function hintsHTML(c) { if (!c.hints || !c.hints.length) return "";
+  return '<details class="thints"><summary><span class="ic">?</span><b>Hints for you</b><span class="hint">' + c.hints.length + ' \u00b7 only if he gets stuck</span></summary><div class="prose">' + c.hints.map(function (h) { return '<div class="th">' + clean(h) + '</div>'; }).join("") + '</div></details>'; }
 function notesHTML(c) { if (!c.notes) return "";
   return c.notes.map(function (b) { var t = plain(b.html), open = t.length <= 700;
     return '<details class="tnote"' + (open ? " open" : "") + '><summary><span class="ic">i</span><b>Note for you</b>' + (open ? "" : '<span class="hint">' + esc(t.slice(0, 90)) + '\u2026</span>') + '</summary><div class="prose">' + clean(b.html) + '</div></details>'; }).join(""); }
@@ -1057,7 +1069,7 @@ function ctlBig(id, a, q) { a = a || {};
     '</div><div class="vmore"><span class="hint">Right idea, wrong words:</span>' +
     VSMALL.map(function (v, i) { return '<button class="v vs" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '">' + v[1] + '<kbd>' + (i + 4) + '</kbd></button>'; }).join("") +
     '<span class="vsep" aria-hidden="true"></span><button class="v vs" type="button" data-v="skipped" title="He did not attempt it" aria-pressed="' + (a.v === "skipped") + '">He didn’t answer<kbd>6</kbd></button></div>' +
-    '<div class="vskip"><button class="v vt" type="button" data-v="tskip" title="Not a verdict and not a mistake: you chose not to ask it" aria-pressed="' + (a.v === "tskip") + '">⏭ I skipped this question<kbd>0</kbd></button><span class="hint">You chose not to ask it. Not a mistake.</span></div>' +
+
     (a.note ? "" : '<button class="linkbtn addnote" type="button">+ Note what he said</button>') + '<input class="note" type="text" data-note aria-label="What he said" placeholder="What he said / got wrong" value="' + esc(a.note || "") + '"' + (a.note ? "" : " hidden") + '></div>'; }
 function tposKey() { return "tutor.tpos." + CFG.student + "." + L.id; }
 function live() { return replay(L.session.time.log).running; }
@@ -1085,10 +1097,10 @@ function chunkHTML(c) {
         '<div class="label" style="margin-top:18px">Book pages in this set</div>' + pageTags(its.filter(function (i) { return quizOn(i, f); }));
     case "quiz": var a = L.session.answers[c.it.id] || {}, pick = seqIndex(function (q) { return q.t === "quizpick" && q.b === c.b; });
       return '<div class="qhead">' + tlabel("q", "?", "Oral quiz \u00b7 " + c.n + " of " + c.of) + '<button class="linkbtn qset" type="button" data-tjump="' + pick + '">Set: ' + esc((quizChoices(c.b.items || []).filter(function (q) { return q.f === quizFilter(c.b.items || []); })[0] || {}).label || "All") + ' \u00b7 change</button></div>' +
-        qtags(c.it) + '<div class="qtext prose">' + clean(c.it.q) + '</div>' + answerBox(c.it.a, c.it.book ? c.it.page : null) + ctlBig(c.it.id, a, plain(c.it.q));
+        qtags(c.it) + '<div class="qtext prose">' + clean(c.it.q) + '</div>' + answerBox(c.it.a, c.it.book ? c.it.page : null) + hintsHTML(c) + ctlBig(c.it.id, a, plain(c.it.q));
     case "drill": var a2 = L.session.answers[c.key] || {};
-      return '<div class="qhead">' + tlabel("q", "?", (c.title || "Drill") + (c.of > 1 ? " \u00b7 " + c.n + " of " + c.of : "")) + '</div><div class="qtext prose">' + clean(c.d[0]) + '</div>' + answerBox(c.d[1]) + ctlBig(c.key, a2, plain(c.d[0]));
-    case "question": return tlabel("q", "Q", "Exam question") + questionBlock(c.b);
+      return '<div class="qhead">' + tlabel("q", "?", (c.title || "Drill") + (c.of > 1 ? " \u00b7 " + c.n + " of " + c.of : "")) + '</div><div class="qtext prose">' + clean(c.d[0]) + '</div>' + answerBox(c.d[1]) + hintsHTML(c) + ctlBig(c.key, a2, plain(c.d[0]));
+    case "question": return tlabel("q", "Q", "Exam question") + questionBlock(c.b) + hintsHTML(c);
     case "end": return '<div class="tphase"><div class="label">Done</div><h2>End of the script</h2><p class="hint">Log times, notes and what to change next time.</p><button class="btn next" type="button" data-tgo="after">After the lesson →</button></div>';
     default: return block(c.b || {});
   }
@@ -1123,7 +1135,9 @@ function drawTeach() {
   app.innerHTML = h; fillRows(app); loadImages(app); maths(app); tick();
   window.scrollTo(0, 0); fitBoards(); warmCount();
   if (fgo) { var fb = $('.tfoot [data-tgo="' + fgo + '"]') || $(".tfoot .btn.next") || $(".tfoot .btn"); if (fb && !fb.disabled) fb.focus({ preventScroll: true }); }
-  var oc = $(".outline .cur"); if (oc) oc.scrollIntoView({ block: "center" });
+  /* move only the outline's own scroll box: scrollIntoView also scrolled the page down (Ali, 2 Oct) */
+  var ol = $(".outline"), oc = $(".outline .cur"); if (ol && oc && ol.clientHeight) ol.scrollTop += oc.getBoundingClientRect().top - ol.getBoundingClientRect().top - ol.clientHeight / 2 + oc.offsetHeight / 2;
+  if (window.scrollY) window.scrollTo(0, 0);
   ls(tposKey(), String(TCH.pos));
 }
 function footHTML(c, lv) {
@@ -1131,12 +1145,13 @@ function footHTML(c, lv) {
   if (c.t === "question" && (c.b.img || []).length) mid += '<button class="btn small" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
   if (c.t === "mod") mid += '<button class="btn small" type="button" data-tskip="mod">Skip this section</button>';
   if (c.t === "phase") mid += '<button class="btn small" type="button" data-tskip="phase">Skip this part</button>';
-  var three = lv && taughtable && c.t !== "mod";
+  var three = lv && taughtable && c.t !== "mod", qk = { quiz: 1, drill: 1, question: 1 }[c.t] && chunkKey(c), qa = qk && L.session.answers[qk];
+  var iskip = qk ? '<button class="btn iskip" type="button" data-tiskip aria-pressed="' + !!(qa && qa.v === "tskip") + '" title="You chose not to ask it: not a verdict, never a mistake">\u23ed I skipped it <kbd>0</kbd></button>' : "";
   var lab = c.t === "phase" ? "Start this part" : c.t === "mod" ? "Teach this" : "Next";
   return '<div class="tfoot' + (three ? " three" : "") + '"><button class="btn" type="button" data-tgo="-1"' + (TCH.pos === 0 ? " disabled" : "") + '>← Back</button><div class="mid">' + mid + '</div>' +
     (c.t === "end" ? "" : three
       ? '<button class="btn skip" type="button" data-tgo="skip" title="You skipped this on purpose (recorded, not ticked)">Skip <kbd>S</kbd></button><button class="btn look" type="button" data-tgo="next" title="Move on without ticking, to look ahead">Next <kbd>→</kbd></button><button class="btn next" type="button" data-tgo="+1"><span class="ck" aria-hidden="true">✓</span>Taught <kbd>T</kbd></button>'
-      : '<button class="btn next" type="button" data-tgo="+1">' + lab + ' <kbd>→</kbd></button>') + '</div>';
+      : iskip + '<button class="btn next" type="button" data-tgo="+1">' + lab + ' <kbd>→</kbd></button>') + '</div>';
 }
 /* outline: every part, section and chunk, so any point can be reached; the clock as a pin on a time bar */
 function pw(p) { return p.start != null && p.end != null ? Math.max(2, p.end - p.start) : 4; }
@@ -1198,6 +1213,10 @@ function tmove(d, how) {
   document.body.classList.remove("toc-open");
   drawTeach();
 }
+/* "I skipped it": Ali chose not to ask this question. Stored as verdict "tskip" (no score, never a mistake), then on to the next */
+function iskipIt() { var c = TCH.seq[TCH.pos], k = chunkKey(c); if (!k || !{ quiz: 1, drill: 1, question: 1 }[c.t]) return;
+  var a = L.session.answers[k] || {}; if (a.v !== "tskip") { L.session.answers[k] = { v: "tskip", at: now(), d: CFG.device, q: shortOf(c, 160), note: a.note }; touch(); }
+  tmove(1, "next"); }
 function tskip(what) { var c = TCH.seq[TCH.pos], i = TCH.pos + 1;
   if (what === "mod") { while (i < TCH.seq.length && TCH.seq[i].p === c.p && TCH.seq[i].mod === c.b.name) i++; }
   else { while (i < TCH.seq.length && TCH.seq[i].t !== "phase" && TCH.seq[i].t !== "end") i++; }
@@ -1206,6 +1225,7 @@ document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) re
   if (t.hasAttribute("data-tgo")) { var g = t.getAttribute("data-tgo"); if (e.detail > 1 && g !== "-1") return; if (g === "after") { MODE = "plan"; L.phase = "_after"; location.hash = "#/lesson/" + encodeURIComponent(L.id); return; }
     if (g === "skip") return tmove(1, "skip"); if (g === "next") return tmove(1, "next"); return tmove(+g, +g > 0 ? "taught" : "jump"); }
   if (t.hasAttribute("data-tskip")) { tskip(t.getAttribute("data-tskip")); return; }
+  if (t.hasAttribute("data-tiskip")) { iskipIt(); return; }
   if (t.hasAttribute("data-tjump")) { tmove(+t.getAttribute("data-tjump") - TCH.pos, "jump"); return; }
   if (t.id === "toc") { document.body.classList.add("toc-open"); return; }
   if (t.classList.contains("addnote")) { var inp = t.parentNode.querySelector("input[data-note]"); inp.hidden = false; inp.focus(); t.remove(); return; }
@@ -1214,7 +1234,8 @@ document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) re
 document.addEventListener("toggle", function (e) { var d = e.target; if (MODE === "teach" && d.classList && d.classList.contains("opart")) TCH.open[d.getAttribute("data-pid")] = d.open; }, true);
 document.addEventListener("keydown", function (e) { if (MODE !== "teach" || SH || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || "")) return;
   if ($("#wuov") || $("#sug") || !$("#zoom").hidden || e.ctrlKey || e.altKey || e.metaKey) return;
-  if (/^[0-6]$/.test(e.key)) { var bs = $$(".chunk.cur .ctl.big .v"), vb = e.key === "0" ? $(".chunk.cur .ctl.big .vt") : bs[+e.key - 1]; if (vb) vb.click(); return; }
+  if (e.key === "0") { iskipIt(); return; }
+  if (/^[1-6]$/.test(e.key)) { var bs = $$(".chunk.cur .ctl.big .v"); if (bs[+e.key - 1]) bs[+e.key - 1].click(); return; }
   var three = !!$(".tfoot.three");
   if (e.key === "ArrowRight") tmove(1, three ? "next" : "taught"); else if (e.key === "ArrowLeft") tmove(-1, "jump");
   else if (three && (e.key === "t" || e.key === "T")) tmove(1, "taught"); else if (three && (e.key === "s" || e.key === "S")) tmove(1, "skip"); });
@@ -1275,7 +1296,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v18", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v19", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
@@ -1313,14 +1334,22 @@ function saveSug() {
   var text = ($("#sug-text").value || "").trim(); if (!text) { $("#sug-text").focus(); return; }
   var item = { id: "s" + Date.now().toString(36), at: now(), device: CFG.device, app: APP_VERSION, tryout: !!TRY, where: whereAmI(), pointed: SUG.target || undefined,
     tags: Object.keys(SUG.tags).filter(function (k) { return SUG.tags[k]; }), screen: window.innerWidth + "×" + window.innerHeight, theme: document.documentElement.getAttribute("data-theme") || "auto", text: text };
-  var btn = $("#sug-save"); btn.disabled = true; $("#sug-st").textContent = "Saving…";
+  sugQueue(item); SUG.draft = ""; SUG.target = ""; SUG.tags = {}; closeSug(); toast("Suggestion noted. Sending it\u2026"); sugSend();
+}
+/* suggestions wait in a small queue on this device until GitHub has them, so the box never makes Ali wait */
+var SUGQ_KEY = "tutor.sugq", sugBusy = false;
+function sugQueue(item) { var q = []; try { q = JSON.parse(ls(SUGQ_KEY) || "[]"); } catch (e) {} q.push(item); ls(SUGQ_KEY, JSON.stringify(q)); }
+function sugSend() { if (sugBusy || !navigator.onLine) return; var q = []; try { q = JSON.parse(ls(SUGQ_KEY) || "[]"); } catch (e) {} if (!q.length) return;
+  sugBusy = true;
   function attempt(n) { return gh("/repos/" + CFG.repo + "/contents/" + enc(SUGFILE), { allowTry: true }).then(function (r) {
       var cur = r.status === 404 ? "" : new TextDecoder().decode(b64bytes(r.json.content)), sha = r.status === 404 ? null : r.json.sha;
-      return gh("/repos/" + CFG.repo + "/contents/" + enc(SUGFILE), { method: "PUT", allowTry: true, body: { message: "UI suggestion (" + CFG.device + ")", content: b64enc(cur.replace(/\s*$/, cur ? "\n" : "") + JSON.stringify(item) + "\n"), sha: sha || undefined } }); })
+      return gh("/repos/" + CFG.repo + "/contents/" + enc(SUGFILE), { method: "PUT", allowTry: true, body: { message: "UI suggestion (" + CFG.device + ")", content: b64enc(cur.replace(/\s*$/, cur ? "\n" : "") + q.map(function (i) { return JSON.stringify(i); }).join("\n") + "\n"), sha: sha || undefined } }); })
     .catch(function (e) { if (n < 2 && (e.status === 409 || e.status === 422)) return attempt(n + 1); throw e; }); }
-  attempt(0).then(function () { SUG.draft = ""; SUG.target = ""; SUG.tags = {}; toast("Suggestion saved. Claude will see it."); closeSug(); })
-    .catch(function (e) { btn.disabled = false; $("#sug-st").textContent = "Couldn’t save (" + (e.message || e) + "). Your text is kept here; try again."; });
+  attempt(0).then(function () { var left = []; try { left = JSON.parse(ls(SUGQ_KEY) || "[]"); } catch (e) {} var ids = q.map(function (i) { return i.id; });
+      ls(SUGQ_KEY, JSON.stringify(left.filter(function (i) { return ids.indexOf(i.id) < 0; }))); sugBusy = false; toast(q.length > 1 ? q.length + " suggestions saved. Claude will see them." : "Suggestion saved. Claude will see it."); sugSend(); })
+    .catch(function (e) { sugBusy = false; toast("Suggestion kept on this device; it sends by itself (" + (e.status === 401 || e.status === 403 ? "GitHub refused the key" : "no connection") + ")."); setTimeout(sugSend, 30000); });
 }
+window.addEventListener("online", sugSend); setTimeout(sugSend, 3000);
 function closeSug() { var el = $("#sug"); if (el) el.remove(); SUG.open = false; }
 /* "Point at it": the next tap on the page names that element instead of doing anything */
 function describeEl(t) { var b = t.closest("button, a, .chunk, .tile, .lrow, .card, figure, li, h1, h2, h3, nav, aside, header") || t;
@@ -1340,9 +1369,12 @@ document.addEventListener("keydown", function (e) { if (e.key === "Escape" && SU
 /* the try-out strip */
 if (TRY) { document.body.classList.add("tryout");
   var tb = document.createElement("div"); tb.className = "trybar";
-  tb.innerHTML = '<b>TRY-OUT MODE</b><span>Tap anything: nothing is saved, and this tab forgets it all when you leave.</span><button class="btn small" type="button" data-suggest>Suggest a change</button><button class="btn small" type="button" id="tryleave">Leave try-out</button>';
+  tb.innerHTML = '<button class="trydot" type="button" id="trydot" aria-expanded="false" aria-label="Try-out mode: nothing is saved. Open to suggest a change" title="Try-out: nothing is saved"></button><div class="trypanel" hidden><b>Try-out</b><span>Nothing is saved in this tab.</span><button class="btn small" type="button" data-suggest>Suggest a change</button><button class="btn small" type="button" id="tryleave">Leave try-out</button><button class="btn small" type="button" id="tryx" aria-label="Close">\u00d7</button></div>';
   document.body.appendChild(tb);
-  var tryh = function () { document.documentElement.style.setProperty("--tryh", tb.offsetHeight + "px"); }; tryh(); window.addEventListener("resize", tryh); if (window.ResizeObserver) new ResizeObserver(tryh).observe(tb);
+  var tryOpen = function (on) { tb.querySelector(".trypanel").hidden = !on; tb.classList.toggle("open", on); $("#trydot").setAttribute("aria-expanded", String(on)); };
+  $("#trydot").addEventListener("click", function () { tryOpen(tb.querySelector(".trypanel").hidden); });
+  $("#tryx").addEventListener("click", function () { tryOpen(false); });
+  tb.querySelector("[data-suggest]").addEventListener("click", function () { tryOpen(false); });
   tb.querySelector("#tryleave").addEventListener("click", function () { try { sessionStorage.removeItem("tutor.try"); } catch (e) {} location.href = location.pathname + location.hash; }); }
 
 render();

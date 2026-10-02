@@ -40,7 +40,7 @@ try:
         print("pointed at:", p.locator(".sug-t").inner_text(), "| slide did not move:", p.locator(".tmini .num").inner_text())
         p.locator('[data-sugtag="Layout"]').click(); p.fill("#sug-text", "TEST ONLY: ignore"); p.click("#sug-save"); p.wait_for_timeout(2000)
         print("writes after Save suggestion:", writes, "| status:", p.locator("#sug-st").inner_text()[:80] if p.locator("#sug-st").count() else "closed")
-        p.keyboard.press("Escape"); p.wait_for_timeout(300); p.locator("#tryleave").click(); p.wait_for_timeout(1500); print("left try-out, bar:", p.locator(".trybar").count(), "url:", p.url)
+        p.keyboard.press("Escape"); p.wait_for_timeout(300); p.click("#trydot"); p.wait_for_timeout(200); p.locator("#tryleave").click(); p.wait_for_timeout(1500); print("left try-out, bar:", p.locator(".trybar").count(), "url:", p.url)
         # normal mode still saves
         writes.clear(); p.goto(B + "#/lesson/" + L + "/teach"); p.wait_for_selector(".teach3"); p.wait_for_timeout(500)
         p.evaluate("Array.from(document.querySelectorAll('.outline .oc')).find(b => b.querySelector('.ic').textContent == '?').click()"); p.wait_for_timeout(400)

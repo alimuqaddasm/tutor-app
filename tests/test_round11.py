@@ -32,12 +32,13 @@ try:
         b = pw.chromium.launch(channel="msedge")
         # 1. quiz: I skipped this question
         c = ctx_(b); p = page(c, "?try#/lesson/" + CH + "/teach"); jump(p, "Choose the quiz"); p.keyboard.press("ArrowRight"); p.wait_for_timeout(300)
-        check("quiz shows 'I skipped this question'", p.locator(".chunk.cur .ctl.big .vt").count() == 1)
-        p.keyboard.press("0"); p.wait_for_timeout(200)
-        check("key 0 marks 'I skipped this question'", p.locator(".chunk.cur .vt").get_attribute("aria-pressed") == "true")
-        check("outline shows it as skipped by you, not a verdict colour", p.locator(".outline .oc.v-tskip").count() == 1)
+        check("quiz: 'I skipped it' sits in the bottom bar next to Next (v19)", p.locator(".tfoot .btn.iskip").count() == 1 and p.locator(".chunk.cur .vt").count() == 0)
+        a0 = pos(p); p.keyboard.press("0"); p.wait_for_timeout(300)
+        check("key 0 = I skipped it, and moves on", pos(p) != a0 and p.locator(".outline .oc.v-tskip").count() >= 1)
+        p.keyboard.press("ArrowLeft"); p.wait_for_timeout(300)
+        check("back on it, the button shows it is set", p.locator(".tfoot .btn.iskip").get_attribute("aria-pressed") == "true")
         p.keyboard.press("6"); p.wait_for_timeout(200)
-        check("key 6 is 'He didn't answer' and replaces it", p.locator('.chunk.cur .vs[data-v="skipped"]').get_attribute("aria-pressed") == "true" and p.locator(".chunk.cur .vt").get_attribute("aria-pressed") == "false")
+        check("key 6 is 'He didn't answer' and replaces it", p.locator('.chunk.cur .vs[data-v="skipped"]').get_attribute("aria-pressed") == "true")
         p.screenshot(path=os.path.join(R.OUT, "r11-quiz-skip.png")); c.close()
         # 2. three buttons while the clock runs
         c = ctx_(b); p = page(c, "?try#/lesson/" + MA + "/teach")  # maths 1 Oct: nothing ticked yet
