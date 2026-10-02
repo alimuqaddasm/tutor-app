@@ -335,9 +335,12 @@ document.addEventListener("click", function (e) { var t = e.target.closest && e.
   recordMiss(box, "student", t.getAttribute("data-mkadd") === "1" ? LESSON_MIN : 0); });
 function homeHTML(items) {
   var sp = subjPick(), t = todayIso(), wk = weekDays(), byDay = {};
-  items.forEach(function (it) { var d = dateOf(it); (byDay[d] = byDay[d] || []).push(subjOf(it)); });
+  items.forEach(function (it) { var d = dateOf(it), sj = subjOf(it), done = !!(it.x && it.x.status === "finished");
+    if (done) { (byDay[d] = byDay[d] || []).push({ s: sj, k: "done", tip: SUBJ[sj] + ": taught" }); return; }
+    if (d < t) (byDay[d] = byDay[d] || []).push({ s: sj, k: "miss", tip: SUBJ[sj] + ": not taught" });
+    var due = dueOf(it); if (due >= t) (byDay[due] = byDay[due] || []).push({ s: sj, k: "plan", tip: SUBJ[sj] + ": planned" + (due !== d ? " (moved from " + fmtDate(d) + ")" : "") }); });
   var week = '<div class="week" aria-label="This week">' + wk.map(function (d) { var dd = pdate(d), off = OFFDAYS.indexOf(dd.getDay()) >= 0;
-    return '<div class="wd' + (d === t ? " today" : off ? " off" : "") + '"><span>' + DAY[dd.getDay()] + '</span><span class="n">' + dd.getDate() + '</span><span class="dots">' + (d === t ? "Today" : off ? "Off" : (byDay[d] || []).map(function (s) { return '<i class="' + esc(s) + '" title="' + esc(SUBJ[s] || s) + '"></i>'; }).join("")) + '</span></div>'; }).join("") + '</div>';
+    return '<div class="wd' + (d === t ? " today" : off ? " off" : "") + '"><span>' + DAY[dd.getDay()] + '</span><span class="n">' + dd.getDate() + '</span><span class="dots">' + (d === t ? "Today" : off ? "Off" : (byDay[d] || []).map(function (o) { return '<i class="' + esc(o.s) + ' ' + o.k + '" title="' + esc(o.tip) + '"></i>'; }).join("")) + '</span></div>'; }).join("") + '</div>';
   var mko = makeupSum(HOMEALL.length ? HOMEALL : items); mkSide(mko);
   var h = '<header class="phead"><div class="phead-row"><div style="min-width:0"><div class="eyebrow">' + esc(CFG.student) + (sp !== "all" ? " · " + esc(SUBJ[sp]) + " only" : "") + '</div><h1>' + esc(DAYL[pdate(t).getDay()] + " " + pdate(t).getDate() + " " + MONL[pdate(t).getMonth()]) + '</h1><p>Lessons Mon, Wed, Thu, Sat, Sun · 45 minutes a subject</p>' +
     (mko ? '<a class="mkchip" href="#mkcard" data-mkjump><span>Make-up owed</span><b class="num">' + Math.max(0, mko.owed) + '</b><span>min</span></a>' : "") + '</div>' + week + '</div></header>';
@@ -1201,7 +1204,7 @@ function runwayHTML(c) {
    "float"). "float": the question fills the screen, answer + verdicts in a small card over the bottom-right corner that
    folds down to just the verdict buttons. Chosen in Settings or from the try-out dot; "classic" is the old page. */
 var LAYOUTS = [["classic", "Classic"], ["side", "Side panel"], ["float", "Floating card"], ["flip", "Flip"]], fitOpen = false, flipOn = false;
-function layoutPick() { return ls("tutor.layout") || "classic"; }
+function layoutPick() { return ls("tutor.layout") || "flip"; }
 function layoutOf() { var v = layoutPick(); return v === "side" && window.innerWidth < 1000 ? "float" : v; }
 function layPressed() { $$("[data-layout]").forEach(function (b) { if (b.tagName === "BUTTON") b.setAttribute("aria-pressed", String(b.getAttribute("data-layout") === layoutPick())); }); }
 function applyFit() { var lay = layoutOf(), cur = $(".chunk.cur"); document.body.setAttribute("data-tlayout", lay);
@@ -1370,7 +1373,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v22", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v23", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];

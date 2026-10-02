@@ -97,7 +97,7 @@ try:
         ask.locator('[data-mkadd="1"]').click(); p.wait_for_timeout(3500)
         ent = json.loads(F.files[MK][1])["entries"]
         check("saved: a student miss of 45 min for Sat 3 Oct", ent[-1]["by"] == "student" and ent[-1]["minutes"] == 45 and ent[-1]["date"] == "2026-10-03", ent[-1])
-        check("counter now 215, question gone, lesson up next today (Sunday is a lesson day)", p.locator("#mkcard .big").inner_text() == "215" and p.locator(".ask").count() == 0 and "Sun 4 Oct" in p.locator('.tile[data-subject="maths"]').inner_text(),
+        check("counter now 215, question gone, lesson up next today (Sunday is a lesson day)", p.locator("#mkcard .big").inner_text() == "215" and p.locator('.ask[data-ask="%s"]' % MA).count() == 0 and "Sun 4 Oct" in p.locator('.tile[data-subject="maths"]').inner_text(),
               (p.locator("#mkcard .big").inner_text(), p.locator(".ask").count()))
         c.close()
         # my miss adds 45 at once; try-out sends nothing
@@ -108,7 +108,7 @@ try:
         check("my miss: 45 min added straight away", len(ent) == 1 and ent[0]["by"] == "ali" and ent[0]["minutes"] == 45, ent); c.close()
         F3 = R.FakeGH(); c = ctx_(b, fake=F3); at(c, "2026-10-04T10:00:00"); p = page(c, "?try#/", ".home"); p.wait_for_timeout(2500)
         p.locator('.ask[data-ask="%s"] [data-miss="ali"]' % MA).click(); p.wait_for_timeout(1500)
-        check("try-out: recording a miss sends nothing", F3.n == 0 and p.locator(".ask").count() == 0, F3.n); c.close()
+        check("try-out: recording a miss sends nothing", F3.n == 0 and p.locator('.ask[data-ask="%s"]' % MA).count() == 0, F3.n); c.close()
         # 5. the make-up switch is saved with the lesson
         F4 = R.FakeGH(); c = ctx_(b, fake=F4); p = page(c, "#/lesson/" + CH, ".rail"); p.wait_for_timeout(1500)
         p.locator('.rail button[data-phase="_after"]').dispatch_event("click"); p.wait_for_timeout(400)

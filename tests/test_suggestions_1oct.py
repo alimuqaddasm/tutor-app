@@ -11,7 +11,7 @@ time.sleep(1.2); errs = []; B = "http://localhost:8765/"
 
 def ctx_(b, w, h):
     c = b.new_context(viewport={"width": w, "height": h}, service_workers="block")
-    c.add_init_script("localStorage.setItem('tutor.token', %s); localStorage.setItem('tutor.device','test'); Object.keys(localStorage).filter(k=>k.indexOf('tutor.tpos')==0).forEach(k=>localStorage.removeItem(k));" % json.dumps(TOK))
+    c.add_init_script("localStorage.setItem('tutor.layout', 'classic'); localStorage.setItem('tutor.token', %s); localStorage.setItem('tutor.device','test'); Object.keys(localStorage).filter(k=>k.indexOf('tutor.tpos')==0).forEach(k=>localStorage.removeItem(k));" % json.dumps(TOK))
     c.route("https://api.github.com/**", lambda r: r.abort() if r.request.method != "GET" else r.continue_())
     return c
 

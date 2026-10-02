@@ -896,3 +896,6 @@ body[data-tlayout="flip"] .teach3 .tfoot > .btn{min-height:48px}
 .chunk.fit .figrow .fig{flex:0 1 auto;min-width:0;margin:0}
 body[data-tlayout="flip"] .chunk.flipped .prose.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:20px;align-items:start}
 @media (max-width:900px){body[data-tlayout="flip"] .chunk.flipped .prose.two{display:block}}
+.wd .dots i.miss,.wd .dots i.plan{background:transparent;border:2px solid var(--text-3);box-sizing:border-box}
+.wd .dots i.miss.chem,.wd .dots i.plan.chem{border-color:var(--chem)}.wd .dots i.miss.maths,.wd .dots i.plan.maths{border-color:var(--maths)}
+.wd .dots i.miss{opacity:.45}
