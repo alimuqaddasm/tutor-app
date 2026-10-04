@@ -8,7 +8,7 @@ workers_dev = true
 [[d1_databases]]
 binding = "DB"
 database_name = "tutor-exams"
-database_id = "00000000-0000-0000-0000-000000000000"   # replaced by the real id at the first deploy
+database_id = "f6057bfb-317b-4ec3-85ca-becd5dc7419a"
 migrations_dir = "migrations"
 
 [vars]
