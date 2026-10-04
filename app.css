@@ -874,7 +874,7 @@ body[data-tlayout="flip"] .ansfront .prose{font-size:var(--s-md);line-height:1.5
 body[data-tlayout="flip"] .ansf-l{font:800 var(--s-xs)/1 var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin:0 0 6px}
 body[data-tlayout="flip"] .ansmore{margin:12px 0 0;padding:10px 14px;border-radius:12px;background:var(--bg);border:1px dashed var(--line-2);color:var(--text-2);font-size:var(--s-sm)}
 body[data-tlayout="flip"] .ansback{margin:0 0 14px}
-body[data-tlayout="flip"] .flipa .figrow{margin:0 0 14px}
+body[data-tlayout="flip"] .flipa .figrow{margin:0 0 14px;flex-direction:column;align-items:stretch}
 body[data-tlayout="flip"] .flipa .figrow .fig{flex:1 1 0}
 body[data-tlayout="flip"] .flipa .figrow .fig img{width:100%;max-width:100%}
 .flip-h{font-weight:700;color:var(--text-2);font-size:var(--s-sm);margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}

@@ -1264,8 +1264,8 @@ function applyFlip(cur) {
   while (cur.firstChild) left.appendChild(cur.firstChild);
   if (front.childNodes.length) { left.appendChild(front); left.insertAdjacentHTML("beforeend", '<div class="ansmore" hidden>The answer is long: it is on the back. Press <b>Mark scheme</b> (A).</div>'); }
   ans.insertAdjacentHTML("afterbegin", '<div class="flip-h">' + esc(shortOf(TCH.seq[TCH.pos], 110)) + '</div>');
+  if (pics.childNodes.length) ans.appendChild(pics);   // mark scheme pictures first, at full size (Ali, 5 Oct)
   if (backText.childNodes.length) { backText.hidden = true; ans.appendChild(backText); }
-  if (pics.childNodes.length) ans.appendChild(pics);
   hints.forEach(function (h) { ans.appendChild(h); });
   var hasBack = !!(pics.childNodes.length || hints.length), hasAns = !!backText.childNodes.length;
   cur.appendChild(left); cur.appendChild(ans); cur.classList.add("fit", "flip"); cur.classList.toggle("flipped", flipOn && (hasBack || hasAns));
@@ -1292,6 +1292,7 @@ function fitQ() { var cur = $(".chunk.cur.fit"), foot = $(".tfoot"); if (!cur ||
   var room = Math.max(300, window.innerHeight - cur.getBoundingClientRect().top - fh - 22); cur.style.height = room + "px";
   var left = cur.classList.contains("flipped") ? cur.querySelector(".fita") : cur.querySelector(".fitq"), ims = $$(".fig img", left).filter(function (i) { return !i.hidden; });
   var front = !cur.classList.contains("flipped") && $(".ansfront", left); if (front) front.hidden = true;   // the question's picture is sized first, without the answer
+  if (cur.classList.contains("flipped")) { ims.forEach(function (i) { i.style.maxHeight = Math.max(200, left.clientHeight - 60) + "px"; }); return; }   // back: each picture as big as the card; the back scrolls
   fitPics(left, ims); if (front) fitFront(cur, left); }
 function fitPics(left, ims) {
   if (!ims.length) return;
