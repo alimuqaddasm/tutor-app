@@ -1,0 +1,357 @@
+[
+ {
+  "name": "Teach opens (cold cache)",
+  "ok": true,
+  "info": "0.44s"
+ },
+ {
+  "name": "cold open: requests",
+  "ok": true,
+  "info": "32 GitHub requests, 31 blobs in first 4 s"
+ },
+ {
+  "name": "no script errors on open",
+  "ok": false,
+  "info": "['console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)', 'console: Failed to load resource: the server responded with a status of 409 (Conflict)', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: the server responded with a status of 409 (Conflict)']"
+ },
+ {
+  "name": "preview banner shown",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "outline has a question chunk",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "question uses Flip layout",
+  "ok": true,
+  "info": "chunk cur t-drill fit flip"
+ },
+ {
+  "name": "verdict strip in the bottom bar",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "BUG? preview mode: a verdict tap is saved to GitHub while the banner says nothing is recorded",
+  "ok": true,
+  "info": "status=in-progress"
+ },
+ {
+  "name": "tapping the same verdict again clears it (toggle)",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "Show answer button present",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "answer-side pictures already loaded before Show answer (prefetch should make this true)",
+  "ok": false,
+  "info": "img src set: [False]"
+ },
+ {
+  "name": "answer picture visible after Show answer",
+  "ok": true,
+  "info": "0.05s"
+ },
+ {
+  "name": "answer picture appears within 0.3 s of Show answer",
+  "ok": true,
+  "info": "0.05s after the tap"
+ },
+ {
+  "name": "BUG? 'Note for you' is moved to the answer side in Flip (hidden until Show answer)",
+  "ok": true,
+  "info": "0 note(s) sit on the back of the card"
+ },
+ {
+  "name": "key A flips back",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "clock starts",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "10 rapid Next taps move 10 screens (none lost, none doubled)",
+  "ok": true,
+  "info": "moved 10"
+ },
+ {
+  "name": "a double tap on Next moves one screen only",
+  "ok": true,
+  "info": "moved 1"
+ },
+ {
+  "name": "Left arrow goes back one",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "refresh keeps the Teach position",
+  "ok": true,
+  "info": "15 -> 15"
+ },
+ {
+  "name": "refresh keeps the verdict (Partly)",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "refresh keeps the clock running",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "offline: status says kept on device",
+  "ok": true,
+  "info": "Offline \u00b7 kept on device"
+ },
+ {
+  "name": "back online: the save goes through by itself",
+  "ok": true,
+  "info": "Saved 04:56"
+ },
+ {
+  "name": "the offline verdict (Wrong) reached GitHub",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "GitHub 500: status warns, work kept",
+  "ok": true,
+  "info": "Not saved \u00b7 kept on device"
+ },
+ {
+  "name": "after a 500 the app retries by itself within 25 s",
+  "ok": true,
+  "info": "Saved 04:56"
+ },
+ {
+  "name": "409 conflict: the other device's extra question is merged, not overwritten",
+  "ok": true,
+  "info": "Saved 04:57"
+ },
+ {
+  "name": "409 conflict: my verdict (Partly) survives the merge",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "two tabs: tab A shows tab B's verdict within 5 s",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "Show him (same browser): sent to the student tab, not full screen here",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "student tab shows the picture",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "DESIGN GAP: Student view on another device (the tablet) does not follow Show him",
+  "ok": false,
+  "info": "tablet stayed at 1/10"
+ },
+ {
+  "name": "flip laptop: no horizontal scroll",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "flip laptop: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 219, 'qbottom': 259, 'foottop': 632, 'inner': 768}"
+ },
+ {
+  "name": "flip tab-land: no horizontal scroll",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "flip tab-land: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 219, 'qbottom': 259, 'foottop': 664, 'inner': 800}"
+ },
+ {
+  "name": "flip tab-port: no horizontal scroll",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "flip tab-port: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 247, 'qbottom': 287, 'foottop': 1144, 'inner': 1280}"
+ },
+ {
+  "name": "flip phone: no horizontal scroll",
+  "ok": false,
+  "info": ""
+ },
+ {
+  "name": "flip phone: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 327, 'qbottom': 406, 'foottop': 696, 'inner': 844}"
+ },
+ {
+  "name": "side laptop: no horizontal scroll",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "side laptop: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 219, 'qbottom': 259, 'foottop': 632, 'inner': 768}"
+ },
+ {
+  "name": "side tab-land: no horizontal scroll",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "side tab-land: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 219, 'qbottom': 259, 'foottop': 664, 'inner': 800}"
+ },
+ {
+  "name": "side tab-port: no horizontal scroll",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "side tab-port: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 247, 'qbottom': 287, 'foottop': 1144, 'inner': 1280}"
+ },
+ {
+  "name": "side phone: no horizontal scroll",
+  "ok": false,
+  "info": ""
+ },
+ {
+  "name": "side phone: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 327, 'qbottom': 406, 'foottop': 696, 'inner': 844}"
+ },
+ {
+  "name": "float laptop: no horizontal scroll",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "float laptop: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 219, 'qbottom': 259, 'foottop': 632, 'inner': 768}"
+ },
+ {
+  "name": "float tab-land: no horizontal scroll",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "float tab-land: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 219, 'qbottom': 259, 'foottop': 664, 'inner': 800}"
+ },
+ {
+  "name": "float tab-port: no horizontal scroll",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "float tab-port: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 247, 'qbottom': 287, 'foottop': 1144, 'inner': 1280}"
+ },
+ {
+  "name": "float phone: no horizontal scroll",
+  "ok": false,
+  "info": ""
+ },
+ {
+  "name": "float phone: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 327, 'qbottom': 406, 'foottop': 696, 'inner': 844}"
+ },
+ {
+  "name": "classic laptop: no horizontal scroll",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "classic laptop: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 219, 'qbottom': 259, 'foottop': 632, 'inner': 768}"
+ },
+ {
+  "name": "classic tab-land: no horizontal scroll",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "classic tab-land: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 219, 'qbottom': 259, 'foottop': 664, 'inner': 800}"
+ },
+ {
+  "name": "classic tab-port: no horizontal scroll",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "classic tab-port: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 247, 'qbottom': 287, 'foottop': 1144, 'inner': 1280}"
+ },
+ {
+  "name": "classic phone: no horizontal scroll",
+  "ok": false,
+  "info": ""
+ },
+ {
+  "name": "classic phone: question visible above the bottom bar",
+  "ok": true,
+  "info": "{'qtop': 327, 'qbottom': 406, 'foottop': 696, 'inner': 844}"
+ },
+ {
+  "name": "warm-up overlay opens with content",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "End of the script screen reached",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "Finish saves status finished with the note",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "double-tap on Finish does not double-save",
+  "ok": true,
+  "info": "2 PUTs"
+ },
+ {
+  "name": "clock ended on Finish",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "no script errors in the whole run",
+  "ok": false,
+  "info": "['console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID', 'console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)']"
+ }
+]

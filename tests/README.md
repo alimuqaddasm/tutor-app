@@ -33,3 +33,18 @@ Exam section (needs a local exam server, nothing touches GitHub or the real serv
     python tests/test_exams_tryout.py # Try-out: practice exams do everything, real exams are look-only, nothing goes to GitHub (26 checks)
 
 The maths and QR checks load KaTeX and the QR library from cdnjs, so they need internet.
+
+Running without a GitHub token (Linux, Mac, cloud sessions):
+
+    The tests above sign in with the GitHub CLI's token and read the real repo. `tests/review/fakegh.py` replaces GitHub
+    with a pretend one that serves a local clone of the tutoring repo (expected next to this folder as ../tutoring, or
+    set TUTORING_CLONE=/path) and records every write in memory, so nothing real is ever touched. It also serves
+    DOMPurify, KaTeX and the QR library from `tests/review/cdn/` for machines that cannot reach cdnjs.
+
+    python tests/review/runtest.py tests/test_teach.py        # any existing test, with GitHub and cdnjs replaced
+    CHROMIUM_PATH=/opt/pw-browsers/chromium python tests/review/runtest.py tests/test_round15.py   # a specific Chromium
+    python tests/review/hunt_teach.py                         # the 4 Oct review's Teach stress test (71 checks)
+    python tests/review/exams/s1_timer.py                     # exam scenarios s1 to s9 (need the local exam server)
+    python tests/review/screens/explore.py                    # every other screen at four sizes, light and dark
+
+    The review itself (bugs, upgrades, work plan) is in docs/review-2026-10-04/.
