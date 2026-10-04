@@ -11,6 +11,7 @@
 /* top bar: title, timer, save state */
 .ex-top{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 0 10px;border-bottom:1px solid var(--line)}
 .ex-title{font-weight:800;font-size:var(--s-md);flex:1 1 180px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ex-prac{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:.75em;font-weight:700;background:#fde7c4;color:#7a4a00;vertical-align:middle}
 .ex-timer{font:700 var(--s-xl)/1 var(--mono,monospace);font-variant-numeric:tabular-nums;padding:8px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--line-2)}
 .ex-timer.soon{color:var(--warn);border-color:var(--warn);background:var(--warn-wash)}
 .ex-timer.up{color:var(--bad);border-color:var(--bad);background:var(--bad-wash);font-size:var(--s-md)}
