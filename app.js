@@ -1279,6 +1279,7 @@ function applyFlip(cur) {
 function fitFront(cur, left) {
   var front = $(".ansfront", left), more = $(".ansmore", left), back = $(".ansback", cur); if (!front) return;
   front.hidden = false; if (more) more.hidden = true; if (back) back.hidden = true;
+  if (more) more.hidden = true;
   var long = left.scrollHeight > left.clientHeight + 1, btn = $("[data-flip]");
   front.hidden = long; if (more) more.hidden = !long; if (back) back.hidden = !long;
   if (long) cur.setAttribute("data-longans", "1"); else cur.removeAttribute("data-longans");
@@ -1291,7 +1292,8 @@ function fitQ() { var cur = $(".chunk.cur.fit"), foot = $(".tfoot"); if (!cur ||
   var fh = foot.getBoundingClientRect().height; document.documentElement.style.setProperty("--footh", fh + "px");
   var room = Math.max(300, window.innerHeight - cur.getBoundingClientRect().top - fh - 22); cur.style.height = room + "px";
   var left = cur.classList.contains("flipped") ? cur.querySelector(".fita") : cur.querySelector(".fitq"), ims = $$(".fig img", left).filter(function (i) { return !i.hidden; });
-  var front = !cur.classList.contains("flipped") && $(".ansfront", left); if (front) front.hidden = true;   // the question's picture is sized first, without the answer
+  var front = !cur.classList.contains("flipped") && $(".ansfront", left), more = front && $(".ansmore", left);
+  if (front) { front.hidden = true; if (more) more.hidden = false; }   // the question's picture is sized first, leaving room for the "on the back" line
   if (cur.classList.contains("flipped")) { ims.forEach(function (i) { i.style.maxHeight = Math.max(200, left.clientHeight - 60) + "px"; }); return; }   // back: each picture as big as the card; the back scrolls
   fitPics(left, ims); if (front) fitFront(cur, left); }
 function fitPics(left, ims) {
@@ -1423,7 +1425,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v26", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v27", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
