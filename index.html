@@ -14,14 +14,15 @@
 (function(){try{var t=localStorage.getItem("tutor.theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);
 var f=localStorage.getItem("tutor.font")||"figtree";document.documentElement.setAttribute("data-font",f);
 var fam={figtree:"Figtree:wght@400;500;600;700;800",lexend:"Lexend:wght@400;600;700;800",serif:"Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700;8..60,800"}[f]||"Figtree:wght@400;500;600;700;800";
-document.write('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family='+fam+'&display=swap">');}catch(e){}})();
+document.write('<link rel="stylesheet" media="print" onload="this.media=\'all\'" href="https://fonts.googleapis.com/css2?family='+fam+'&display=swap">');}catch(e){}})();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://api.github.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500;700&family=Tinos:ital,wght@0,400;0,700;1,400&display=swap">
-<link rel="stylesheet" href="app.css?v=24">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js" defer></script>
+<!-- fonts load without holding up the page: if Google Fonts is slow, the app shows in the built-in font first -->
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500;700&family=Tinos:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="app.css?v=25">
+<script src="vendor/purify.min.js" defer></script>
 </head>
 <body>
 <div class="shell">
@@ -46,8 +47,8 @@ document.write('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?f
 <div id="zoom" class="zoom" hidden><button class="btn small" id="zoomx" type="button">Close</button><img id="zimg" alt=""></div>
 <div id="toast" class="toast" hidden></div>
 <script src="exam-config.js?v=2"></script>
-<script src="app.js?v=25" defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
-<script src="exams.js?v=2" defer></script>
+<script src="app.js?v=26" defer></script>
+<script src="vendor/qrcode.js" defer></script>
+<script src="exams.js?v=3" defer></script>
 </body>
 </html>

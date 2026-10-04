@@ -317,7 +317,7 @@ function makeupCard(items) { var o = makeupSum(items); if (!o) return "";
 function askHTML(items) { var asks = pendingAsks(items); if (!asks.length) return "";
   return '<section class="asks" aria-label="Lessons to confirm">' + asks.map(function (a) { var it = a.it, s = it.s || {}, x = it.x, sj = subjOf(it);
     return '<div class="ask card" data-subject="' + esc(sj) + '" data-ask="' + esc(it.id) + '" data-due="' + esc(a.due) + '"><div class="ask-q"><span class="pill ' + esc(sj) + '">' + esc(SUBJ[sj] || sj) + '</span><b>Was ' + esc(fmtDate(a.due)) + '\u2019s lesson taught?</b><span class="hint">' + esc(s.title || (x && x.title) || "Lesson") + (a.due !== dateOf(it) ? " \u00b7 moved from " + esc(fmtDate(dateOf(it))) : "") + '</span></div>' +
-      '<div class="ask-a"><a class="btn" href="#/lesson/' + encodeURIComponent(it.id) + '" data-askyes>Yes: finish logging it</a><button class="btn" type="button" data-miss="ali">No, I missed it</button><button class="btn" type="button" data-miss="student">No, he missed it</button></div></div>'; }).join("") + '</section>'; }
+      '<div class="ask-a"><a class="btn" href="#/lesson/' + encodeURIComponent(it.id) + '" data-askyes="' + esc(it.id) + '">Yes: finish logging it</a><button class="btn" type="button" data-miss="ali">No, I missed it</button><button class="btn" type="button" data-miss="student">No, he missed it</button></div></div>'; }).join("") + '</section>'; }
 function saveMakeup(entry) { MK = MK || { student: CFG.student, data: null, sha: null }; MK.data = MK.data || { start: { date: todayIso(), owed: 0 }, entries: [] }; MK.data.entries = MK.data.entries || [];
   MK.data.entries.push(entry); if (TRY) return Promise.resolve("try");
   var path = mkPath();
@@ -332,6 +332,7 @@ function recordMiss(box, by, minutes) { var id = box.getAttribute("data-ask"), d
   box.innerHTML = '<div class="ask-q"><b>Saving\u2026</b></div>';
   saveMakeup(e).then(function (how) { toast((how === "try" ? "Try-out: not saved. " : "") + (minutes ? minutes + " min added to make-up time. " : "No make-up time added. ") + "The lesson is now up next for " + fmtDate(nextWork(due)) + "."); lessonsView(); },
     function (er) { MK.data.entries = MK.data.entries.filter(function (x) { return x.id !== e.id; }); toast("Not saved: " + (er.status === 401 || er.status === 403 ? "GitHub refused the key" : navigator.onLine ? "GitHub did not answer, try again" : "you are offline")); lessonsView(); }); }
+document.addEventListener("click", function (e) { var y = e.target.closest && e.target.closest("[data-askyes]"); if (y) OPENAT = { id: y.getAttribute("data-askyes"), phase: "_after" }; });
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-miss],[data-mkadd]"); if (!t) return; var box = t.closest("[data-ask]"); if (!box) return;
   if (t.getAttribute("data-miss") === "ali") return recordMiss(box, "ali", LESSON_MIN);
   if (t.getAttribute("data-miss") === "student") { box.querySelector(".ask-a").innerHTML = '<span class="hint">He missed it. Add ' + LESSON_MIN + ' min to the make-up time?</span><button class="btn" type="button" data-mkadd="1">Yes, add ' + LESSON_MIN + ' min</button><button class="btn" type="button" data-mkadd="0">No</button>'; return; }
@@ -400,6 +401,7 @@ function newView() {
 }
 
 /* ---------------- lesson view ---------------- */
+var OPENAT = null;   // {id, phase}: open a lesson on a given part (the make-up "Yes" opens After the lesson)
 function lessonView(id) {
   var base = lessonBase(id);
   function here() { var r = route(); return r.indexOf("/lesson/" + encodeURIComponent(id)) === 0 || r.indexOf("/lesson/" + id) === 0; }
@@ -415,12 +417,16 @@ function lessonView(id) {
         if (changed && !(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) drawLesson(); return;
       }
       var saved = null; try { saved = JSON.parse(ls(localKey(id)) || "null"); } catch (e) {}
+      var pid = parseId(id);
+      if (!script && !remote && !(saved && saved.session) && (!pid.date || !pid.subject)) {   // a mistyped or old address: don't make a lesson out of it
+        app.innerHTML = '<div class="empty"><h3>No lesson called “' + esc(id) + '”</h3><p>The address may be mistyped or old. <a href="#/">Back to lessons</a></p></div>'; return; }
       var session, sha = remote ? remote.sha : null, dirty = false;
       if (saved && saved.dirty) { session = remote ? merge(norm(saved.session), remote.data) : norm(saved.session); dirty = true; }
       else session = remote ? norm(remote.data) : newSession(id, script);
       if (!session.title && script) session.title = script.title;
       finalizeTime(session);
-      L = { id: id, script: script, session: session, sha: sha, dirty: dirty, marking: marking, phase: (L && L.id === id) ? L.phase : null, filter: null, rev: 0 };
+      var ph = (L && L.id === id) ? L.phase : OPENAT && OPENAT.id === id ? OPENAT.phase : null; OPENAT = null;
+      L = { id: id, script: script, session: session, sha: sha, dirty: dirty, marking: marking, phase: ph, filter: null, rev: 0 };
       if (dirty) flush();
       drawLesson();
     });
@@ -689,6 +695,7 @@ function afterView() {
   h += '<form class="form" id="fbform"><div class="field"><span class="lab">How did it go?</span><div style="display:flex;gap:6px;flex-wrap:wrap">' + [1, 2, 3, 4, 5].map(function (n) { return '<button class="chip" type="button" data-rate="' + n + '" aria-pressed="' + (fb.rating === n) + '">' + n + '</button>'; }).join("") + '</div><span class="hint">1 rough · 5 went really well</span></div>' +
     fld("fb-cov", "What you actually covered", "covered", "e.g. got to 3c, skipped the NaBH₄ drill", true) + fld("fb-stuck", "Where he got stuck", "stuck", "", true) + fld("fb-worked", "What worked", "worked", "", true) +
     fld("fb-change", "What to change next time (for Claude)", "change", "This shapes the next script", true) + fld("fb-hw", "Homework set", "hw", "", false, s.homeworkSummary) + fld("fb-pages", "Book pages set to memorise", "pages", "e.g. CGP 172–173 (Claude adds these to the next quiz)", false, s.pagesSet) +
+    (!(+x.time.minutes > 0) && !(x.time.log || []).length ? '<div class="field"><label for="fb-min">Minutes taught</label><input type="number" id="fb-min" min="1" step="1" inputmode="numeric" required><span class="hint">The clock didn\u2019t run for this lesson. Without minutes it doesn\u2019t count as taught.</span></div>' : "") +
     '<label class="mkchk"><input type="checkbox" id="fb-makeup"' + (x.makeup ? " checked" : "") + '> Make-up lesson <span class="hint">(all ' + (x.time && x.time.minutes ? esc(x.time.minutes) + " " : "its ") + 'minutes come off the make-up time; otherwise only minutes over ' + LESSON_MIN + ')</span></label>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="submit">' + (x.status === "finished" ? "Save changes" : "Finish and save the lesson") + '</button>' + (x.status === "finished" ? '<button class="btn" type="button" id="reopen">Reopen the lesson</button>' : "") + (fb.at ? '<span class="pill ok">Saved ' + esc(hhmm(fb.at)) + '</span>' : "") + '</div></form>';
   return h;
@@ -740,6 +747,7 @@ document.addEventListener("click", function (ev) {
   if (t.id === "reopen") { x.status = "in-progress"; x.statusAt = now(); touch(); drawLesson(); return; }
   if (t.hasAttribute("data-qf")) { L.filter = t.getAttribute("data-qf"); ls(qfKey(), L.filter); if (MODE === "teach") drawTeach(); else drawPhase(); return; }
   if (t.hasAttribute("data-ans")) { var qa = t.parentNode.querySelector(".qa"); qa.hidden = !qa.hidden; t.textContent = qa.hidden ? "Show answer" : "Hide answer"; return; }
+  if (t.hasAttribute("data-v") && !t.hasAttribute("data-rev") && previewing()) { toast("Preview: press Start lesson first to record verdicts"); return; }
   if (t.hasAttribute("data-v")) { var box = t.closest("[data-item]"), iid = box.getAttribute("data-item"), v = t.getAttribute("data-v"), a = target(iid);
     a.v = a.v === v ? null : v; a.at = now(); a.d = CFG.device; if (box.getAttribute("data-q")) a.q = box.getAttribute("data-q"); save(iid, a); railCount();
     $$(".v", box).forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-v") === a.v)); }); var row = box.closest(".item, tr[data-row]"); if (row) row.setAttribute("data-v", a.v || ""); drawTally();
@@ -772,13 +780,19 @@ document.addEventListener("submit", function (ev) {
   if (f.id === "setform") { ls("tutor.token", $("#s-token").value.trim()); ls("tutor.repo", $("#s-repo").value.trim() || "alimuqaddasm/tutoring"); ls("tutor.device", $("#s-dev").value.trim() || "tablet"); ls("tutor.student", $("#s-stu").value.trim() || "UK-1");
     ls("tutor.examApi", $("#s-xapi").value.trim().replace(/\/+$/, "") || null); ls("tutor.examPw", $("#s-xpw").value || null);
     var nf = $("#s-font").value; if (nf !== (ls("tutor.font") || "figtree")) { ls("tutor.font", nf); location.reload(); return; } TREE = null; nav(route()); testConnection(); return; }
-  if (f.id === "newform") { var id = $("#n-date").value + "-" + $("#n-subj").value; var sess = newSession(id, null); sess.title = $("#n-title").value.trim(); sess.subject = $("#n-subj").value; sess.date = $("#n-date").value; if ($("#n-makeup").checked) { sess.makeup = true; sess.makeupAt = now(); }
+  if (f.id === "newform") { var id = $("#n-date").value + "-" + $("#n-subj").value;
+    /* a lesson (with a script) already lives under this date and subject: open it, or log a separate one beside it */
+    var taken = function (k) { return ls(localKey(k)) || (TREE && TREE.some(function (t) { return t.path.indexOf(lessonBase(k)) === 0; })); };
+    if (taken(id)) { if (confirm("There is already a " + ($("#n-subj").value === "chem" ? "chemistry" : "maths") + " lesson on this date.\n\nOK: open that lesson.\nCancel: log a separate lesson.")) { location.hash = "#/lesson/" + encodeURIComponent(id); return; }
+      for (var n = 2; taken(id + "-" + n); n++) {} id = id + "-" + n; }
+    var sess = newSession(id, null); sess.title = $("#n-title").value.trim(); sess.subject = $("#n-subj").value; sess.date = $("#n-date").value; if ($("#n-makeup").checked) { sess.makeup = true; sess.makeupAt = now(); }
     ls(localKey(id), JSON.stringify({ session: sess, sha: null, dirty: true })); location.hash = "#/lesson/" + encodeURIComponent(id); return; }
   if (f.id === "tsform") return saveTest();
   if (!L) return; var x = L.session;
   if (f.id === "exform") { var q = $("#ex-q").value.trim(); if (!q) return; var sel = $("[data-exv][aria-pressed='true']");
     x.extra.push({ id: "x" + Date.now().toString(36), q: q, v: sel ? sel.getAttribute("data-exv") : null, note: $("#ex-note").value.trim(), at: now(), d: CFG.device }); touch(); drawLesson(); toast("Added"); return; }
   if (f.id === "fbform") { $$("[data-fb]", f).forEach(function (i) { x.feedback[i.getAttribute("data-fb")] = i.value; }); x.feedback.at = now();
+    var fm = $("#fb-min", f); if (fm && +fm.value > 0) { x.time.edit = x.time.edit || {}; x.time.edit.minutes = +fm.value; finalizeTime(x); }
     if (replay(x.time.log).running) logEvent("end"); x.status = "finished"; x.statusAt = now(); touch(); var mine = L;
     flush().then(function () { toast(TRY ? "Try-out: nothing was saved" : !mine.dirty ? "Lesson saved to GitHub" : navigator.onLine ? "Not saved yet: kept on this device, it retries by itself" : "Offline: kept on this device, it saves when you are back online"); if (L === mine) drawLesson(); }); return; }
   if (f.id === "wkform") uploadWork();
@@ -1009,7 +1023,7 @@ function phead(crumbs, title, sub, right) {
   return '<div class="phead"><div class="phead-row"><div style="min-width:0"><div class="crumb">' + crumbs.map(function (c, i) { return (i ? '<span aria-hidden="true">›</span>' : "") + (c[1] ? '<a href="' + c[1] + '">' + esc(c[0]) + '</a>' : '<span>' + esc(c[0]) + '</span>'); }).join("") + '</div><h1>' + esc(title) + '</h1>' + (sub ? '<p>' + sub + '</p>' : "") + '</div>' + (right || "") + '</div></div>';
 }
 /* maths typesetting: KaTeX loads only the first time a page actually contains \( \), \[ \] or $$ */
-var KTX = null, KCDN = "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/";
+var KTX = null, KCDN = "vendor/katex/";
 function loadKatex() { if (KTX) return KTX; KTX = new Promise(function (res, rej) {
   var l = document.createElement("link"); l.rel = "stylesheet"; l.href = KCDN + "katex.min.css"; document.head.appendChild(l);
   var k = document.createElement("script"); k.src = KCDN + "katex.min.js"; k.onerror = rej;
@@ -1070,7 +1084,7 @@ function hintsHTML(c) { if (!c.hints || !c.hints.length) return "";
   return '<details class="thints"><summary><span class="ic">?</span><b>Hints for you</b><span class="hint">' + c.hints.length + ' \u00b7 only if he gets stuck</span></summary><div class="prose">' + c.hints.map(function (h) { return '<div class="th">' + clean(h) + '</div>'; }).join("") + '</div></details>'; }
 function notesHTML(c) { if (!c.notes) return "";
   return c.notes.map(function (b) { var t = plain(b.html), open = t.length <= 700;
-    return '<details class="tnote"' + (open ? " open" : "") + '><summary><span class="ic">i</span><b>Note for you</b>' + (open ? "" : '<span class="hint">' + esc(t.slice(0, 90)) + '\u2026</span>') + '</summary><div class="prose">' + clean(b.html) + '</div></details>'; }).join(""); }
+    return '<details class="tnote"' + (open ? " open" : "") + '><summary><span class="ic">i</span><b>Note for you</b><span class="hint">' + esc(t.slice(0, 90)) + (t.length > 90 ? '\u2026' : "") + '</span></summary><div class="prose">' + clean(b.html) + '</div></details>'; }).join(""); }
 /* the CGP pages a quiz draws on, grouped under the page heading */
 function pageTags(items) { var H = (L.script && L.script.pages) || {}, by = {}, order = [];
   items.forEach(function (it) { if (!it.page) return; var h = H[it.page] || ""; if (!by[h]) { by[h] = {}; order.push(h); } by[h][it.page] = (by[h][it.page] || 0) + 1; });
@@ -1097,6 +1111,8 @@ function ctlBig(id, a, q, marks) { a = a || {};
     (a.note ? "" : '<button class="linkbtn addnote" type="button">+ Note what he said</button>') + '<input class="note" type="text" data-note aria-label="What he said" placeholder="What he said / got wrong" value="' + esc(a.note || "") + '"' + (a.note ? "" : " hidden") + '></div>'; }
 function tposKey() { return "tutor.tpos." + CFG.student + "." + L.id; }
 function live() { return replay(L.session.time.log).running; }
+/* Teach before the clock has ever started: rehearsing, so verdict taps are not recorded */
+function previewing() { return MODE === "teach" && L && !(L.session.time.log || []).length && L.session.status !== "finished"; }
 function tlabel(kind, ic, text) { return '<div class="tlabel k-' + kind + '"><span class="ic">' + ic + '</span>' + esc(text) + '</div>'; }
 var KIC = { say: "S", draw: "D", ask: "?", show: "▣", check: "✓" };
 function chunkKey(c) { return c.t === "quiz" ? c.it.id : c.t === "drill" ? c.key : c.t === "question" ? c.b.id : c.key || null; }
@@ -1151,7 +1167,8 @@ function drawTeach() {
     '<button class="btn small outl" type="button" id="toc" aria-label="Outline">☰ Outline</button><a class="back" style="margin:0" href="#/lesson/' + encodeURIComponent(L.id) + '">← Plan</a><span aria-hidden="true">·</span><b>' + esc((c.p && c.p.name) || "End") + '</b>' + (c.mod ? '<span aria-hidden="true">›</span><span>' + esc(c.mod) + '</span>' : "") + '</div>' +
     '<div class="tmini"><button class="btn small" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn small" type="button" data-suggest>Suggest</button><button class="btn small trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button><a class="btn small" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a><span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
     '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>' +
-    (lv ? "" : '<div class="preview"><b>Preview</b> · nothing is ticked until you press <b>Start lesson</b>. You can still tick a chunk by hand.</div>') + '</div><div class="tstage">';
+    (lv ? "" : previewing() ? '<div class="preview"><b>Preview</b> · nothing is recorded until you press <b>Start lesson</b>, verdicts included. You can still tick a chunk by hand.</div>'
+      : '<div class="preview"><b>Clock stopped</b> · chunks are not ticked by themselves. Verdicts you tap still count.</div>') + '</div><div class="tstage">';
   /* the last two chunks of the same section as short grey lines, then the current one */
   var keep = window.innerWidth < 900 ? 1 : 2, start = TCH.pos;
   while (start > 0 && TCH.pos - start < keep && TCH.seq[start - 1].p === c.p && TCH.seq[start - 1].mod === c.mod && TCH.seq[start - 1].t !== "phase") start--;
@@ -1219,7 +1236,7 @@ function applyFit() { var lay = layoutOf(), cur = $(".chunk.cur"); document.body
   if (lay === "flip") return applyFlip(cur);
   var right = document.createElement("div"), body = document.createElement("div"), left = document.createElement("div");
   right.className = "fita" + (lay === "float" && !fitOpen ? " min" : ""); body.className = "fita-b"; left.className = "fitq";
-  $$(".tnote", cur).forEach(function (n) { n.open = false; body.appendChild(n); });
+  $$(".tnote", cur).forEach(function (n) { n.open = false; });   // your notes stay with the question (before he starts), folded to one line
   $$(".ans, details.reveal, .thints, .ctl.big, .items", cur).filter(function (el) { return !el.parentNode.closest(".ans, details.reveal, .thints, .ctl.big, .items"); }).forEach(function (el) { body.appendChild(el); });
   while (cur.firstChild) left.appendChild(cur.firstChild);
   if (lay === "float") right.innerHTML = '<button type="button" class="fita-h" data-fitx aria-expanded="' + fitOpen + '"><b>Answer and marking</b><span aria-hidden="true">' + (fitOpen ? "\u25be" : "\u25b4") + '</span></button>';
@@ -1230,7 +1247,7 @@ function applyFit() { var lay = layoutOf(), cur = $(".chunk.cur"); document.body
 function applyFlip(cur) {
   var ans = document.createElement("div"), left = document.createElement("div"), strip = document.createElement("div");
   ans.className = "fita flipa"; left.className = "fitq"; strip.className = "vstrip";
-  $$(".tnote", cur).forEach(function (n) { n.open = false; ans.appendChild(n); });
+  $$(".tnote", cur).forEach(function (n) { n.open = false; });   // your notes stay with the question (before he starts), folded to one line
   $$(".ans, details.reveal", cur).filter(function (el) { return !el.parentNode.closest(".ans, details.reveal"); }).forEach(function (el) { el.open = true; ans.appendChild(el); });
   var ctlb = $(".ctl.big", cur);
   while (cur.firstChild) left.appendChild(cur.firstChild);
@@ -1380,7 +1397,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v23", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v26", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];

@@ -670,6 +670,7 @@ body.pointing,body.pointing *{cursor:crosshair!important}
 .tnote > summary::-webkit-details-marker{display:none}
 .tnote > summary .ic{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--ask);color:var(--on-fill);font:800 12px var(--font);font-style:italic}
 .tnote > summary .hint{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tnote[open] > summary .hint{display:none}
 .tnote > .prose{padding:0 16px 14px 46px;font-size:var(--s-md);line-height:1.6}
 .prose ul.points,.tnote ul.points{list-style:none;padding:0;margin:4px 0 10px;display:grid;gap:8px}
 .prose ul.points li{position:relative;padding-left:18px}

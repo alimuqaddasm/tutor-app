@@ -31,5 +31,12 @@ Exam section (needs a local exam server, nothing touches GitHub or the real serv
     python tests/test_exam.py         # student page + phone page: live start, +5 live, offline, pictures, drawing, QR, time up, hand in (32 checks)
     python tests/test_exams_tab.py    # Exams tab: load from repo, time suggestion, link, start, + minutes, lock, mark, save to repo (33 checks)
     python tests/test_exams_tryout.py # Try-out: practice exams do everything, real exams are look-only, nothing goes to GitHub (26 checks)
+    python tests/test_batch1_exam.py  # 5 Oct fixes: refused save kept and shown, hung request recovers, two tabs, lock with unsent work, no cdnjs (11 checks)
+
+Running without a GitHub token (Linux, Mac, cloud sessions): tests/fakegh.py is a pretend GitHub that serves a clone of
+the tutoring repo (next to this repo as ../tutoring, or set TUTORING_CLONE) and keeps every write in memory.
+
+    python tests/runtest.py tests/test_teach.py     # any older test, with GitHub replaced (CHROMIUM_PATH picks a Chromium)
+    python tests/test_batch1_lessons.py             # 5 Oct fixes: notes in Flip, preview, mistyped address, taken date, minutes (16 checks)
 
 The maths and QR checks load KaTeX and the QR library from cdnjs, so they need internet.

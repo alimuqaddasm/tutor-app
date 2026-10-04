@@ -21,9 +21,16 @@ function call(method, path, body, extra) {
   var opts = { method: method, headers: h, cache: "no-store" };
   if (body instanceof Blob) opts.body = body;
   else if (body !== undefined) { opts.body = JSON.stringify(body); h["Content-Type"] = "application/json"; }
+  // a request that never answers is given up, so the live page keeps polling
+  var ctl = window.AbortController ? new AbortController() : null, timer = ctl && setTimeout(function () { ctl.abort(); }, body instanceof Blob ? 60000 : 20000);
+  if (ctl) opts.signal = ctl.signal;
   return fetch(xapi() + path, opts).then(function (r) {
     var ct = r.headers.get("Content-Type") || "";
     return (ct.indexOf("json") >= 0 ? r.json() : r.blob()).then(function (d) { if (!r.ok) { var e = new Error((d && d.error) || "Exam server " + r.status); e.status = r.status; throw e; } return d; });
+  }).then(function (d) { clearTimeout(timer); return d; }, function (e) {
+    clearTimeout(timer);
+    if (!e.status) e = Object.assign(new Error("Can’t reach the exam server. Check the internet connection."), { status: 0 });
+    throw e;
   });
 }
 var blobs = {};
@@ -366,7 +373,9 @@ function drawMark() {
 
 var markTimers = {};
 function saveMark(qid) {
-  var s = $('[data-score="' + qid + '"]').value, c = $('[data-comment="' + qid + '"]').value, st = $('[data-mstate="' + qid + '"]');
+  var se = $('[data-score="' + qid + '"]'), ce = $('[data-comment="' + qid + '"]'), st = $('[data-mstate="' + qid + '"]');
+  if (!se || !ce || !st) return;   // the marking page was left; an earlier save already kept the comment
+  var s = se.value, c = ce.value;
   if (readOnly(R)) return;
   var q = R.questions.filter(function (x) { return x.id === qid; })[0];
   var score = s === "" ? null : Number(s);
