@@ -18,6 +18,8 @@
 .ex-save{font-size:var(--s-sm);color:var(--text-3);min-width:9em;text-align:right}
 .ex-save.off{color:var(--warn);font-weight:700}
 .ex-save.bad{color:var(--bad);font-weight:700}
+.ex-count{margin:4px 0 0;font-size:var(--s-sm)}
+.ex-count.bad{color:var(--bad);font-weight:700}
 .ex-banner{margin:12px 0 0;padding:12px 14px;border-radius:12px;font-weight:700}
 .ex-banner.up{background:var(--bad-wash);color:var(--bad)}
 .ex-banner.info{background:var(--accent-wash);color:var(--text)}

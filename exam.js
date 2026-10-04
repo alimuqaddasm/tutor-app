@@ -9,7 +9,7 @@ var H = parseHash();
 var API = (H.api || window.EXAM_API || "").replace(/\/+$/, "");
 var TOKEN = H.t || "", PHONE = H.p || "";
 var KEY = "exam." + (TOKEN || PHONE).slice(0, 12);
-var MAXSIDE = 2000, MAXBYTES = 1800000;
+var MAXSIDE = 2000, MAXBYTES = 1800000, MAXTEXT = 50000;
 
 function parseHash() {
   var o = {}; (location.hash || "").replace(/^#/, "").split("&").forEach(function (kv) { var i = kv.indexOf("="); if (i > 0) o[decodeURIComponent(kv.slice(0, i))] = decodeURIComponent(kv.slice(i + 1)); }); return o;
@@ -33,10 +33,17 @@ function api(method, path, body, extra) {
   var opts = { method: method, headers: headers(extra), cache: "no-store" };
   if (body instanceof Blob) opts.body = body;
   else if (body !== undefined) { opts.body = JSON.stringify(body); opts.headers["Content-Type"] = "application/json"; }
+  // A request that never answers (bad mobile signal) is given up after a while, so saving and the clock keep going.
+  var ctl = window.AbortController ? new AbortController() : null, timer = ctl && setTimeout(function () { ctl.abort(); }, body instanceof Blob ? 60000 : 15000);
+  if (ctl) opts.signal = ctl.signal;
   return fetch(API + path, opts).then(function (r) {
     var ct = r.headers.get("Content-Type") || "";
     var p = ct.indexOf("json") >= 0 ? r.json() : r.blob();
     return p.then(function (d) { if (!r.ok) { var e = new Error((d && d.error) || ("Error " + r.status)); e.status = r.status; throw e; } return d; });
+  }).then(function (d) { clearTimeout(timer); return d; }, function (e) {
+    clearTimeout(timer);
+    if (!e.status) e = Object.assign(new Error("No connection"), { status: 0 });   // never show "Failed to fetch"
+    throw e;
   });
 }
 var blobCache = {};
@@ -49,7 +56,7 @@ function shown(img, path) {
 }
 
 /* ---------- maths (KaTeX loads only when a question has \( \) or \[ \]) ---------- */
-var KTX = null, KCDN = "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/";
+var KTX = null, KCDN = "vendor/katex/";
 function loadKatex() {
   if (KTX) return KTX;
   KTX = new Promise(function (res, rej) {
@@ -160,9 +167,13 @@ function poll() {
 function mergeAnswers(server) {
   Object.keys(server).forEach(function (q) {
     var s = server[q], d = drafts[q];
-    if (!d) drafts[q] = { text: s.text, seq: s.seq, dirty: false, savedAt: s.savedAt, late: s.late };
+    if (!d) d = drafts[q] = { text: s.text, seq: s.seq, dirty: false, savedAt: s.savedAt, late: s.late };
     else if (d.dirty && d.seq > s.seq) { /* unsent work on this device is newer: keep it */ }
+    else if (d.rejected) { /* the server refused this text: keep it on screen and on this device */ }
     else if (!d.dirty) { d.text = s.text; d.seq = Math.max(d.seq || 0, s.seq); d.savedAt = s.savedAt; d.late = s.late; }
+    // the same link open in another tab saved newer text: show it here too, so this tab can't send its old copy
+    var a = $("#ans");
+    if (!d.dirty && !d.rejected && a && S && S.questions && S.questions[cur] && S.questions[cur].id === q && a.value !== d.text) { a.value = d.text; count(a); }
     else d.seq = Math.max(d.seq, s.seq + 1);
   });
   keepDrafts();
@@ -170,6 +181,7 @@ function mergeAnswers(server) {
 
 function group(st) { return st === "running" || st === "timeup" ? "open" : st; }
 function anyDirty() { return Object.keys(drafts).some(function (q) { return drafts[q].dirty; }); }
+function rejected() { return Object.keys(drafts).filter(function (q) { return drafts[q].rejected; }); }
 function writable() { return S && (S.status === "running" || S.status === "timeup"); }
 
 function fatal(title, msg) {
@@ -183,7 +195,7 @@ function setNet(n) { net = n; saveState(); }
 function onType(q, text) {
   var d = drafts[q] || (drafts[q] = { text: "", seq: 0, dirty: false });
   if (d.text === text) return;
-  d.text = text; d.seq = (d.seq || 0) + 1; d.dirty = true;
+  d.text = text; d.seq = (d.seq || 0) + 1; d.dirty = true; delete d.rejected;
   keepDrafts(); saveState();
   clearTimeout(flushTimer); flushTimer = setTimeout(flush, 900);
   dots();
@@ -206,7 +218,8 @@ function flush() {
         d.savedAt = r.savedAt; d.late = r.late; lastSaveAt = r.savedAt;
       }, function (e) {
         if (e.status === 409) { failed = true; poll(); return; }        // exam locked or handed in
-        if (e.status && e.status < 500 && e.status !== 429) { d.dirty = false; toast(e.message); return; }
+        // refused (too long, or anything else the server won't take): keep the text here and say clearly it is not saved
+        if (e.status && e.status < 500 && e.status !== 429) { if (d.seq === sentSeq) { d.dirty = false; d.rejected = e.message; } toast(e.message); return; }
         failed = true; setNet("off");
       });
     });
@@ -222,11 +235,22 @@ function flush() {
 function saveState(mode) {
   var el = $(".ex-save"); if (!el) return;
   el.className = "ex-save";
-  var waiting = anyDirty() || pending.length;
+  var waiting = anyDirty() || pending.length, bad = rejected();
+  if (bad.length) { el.classList.add("bad"); el.textContent = "Not saved: question " + bad.map(function (q) { return qNum(q); }).join(", ") + ". " + drafts[bad[0]].rejected; return; }
   if (net === "off" && waiting) { el.classList.add("off"); el.textContent = "Offline: kept on this computer, will send when back"; return; }
   if (net === "off") { el.classList.add("off"); el.textContent = "Offline: trying to reconnect"; return; }
   if (mode === "saving" || waiting) { el.textContent = "Saving"; return; }
   el.textContent = lastSaveAt ? "Saved " + clockTime(lastSaveAt) : "All saved";
+}
+
+function qNum(id) { var i = S && S.questions ? S.questions.map(function (q) { return q.id; }).indexOf(id) : -1; return i < 0 ? id : i + 1; }
+
+/* characters left, shown only near the limit */
+function count(a) {
+  var c = $(".ex-count"); if (!c || !a) return;
+  var left = MAXTEXT - a.value.length;
+  c.hidden = left > 5000; c.textContent = left >= 0 ? left + " characters left" : "Too long by " + (-left) + " characters: this will not save";
+  c.classList.toggle("bad", left < 0);
 }
 
 /* ---------- pictures ---------- */
@@ -276,7 +300,13 @@ function render() {
       (S.baseMinutes ? '<p class="hint" style="margin-top:12px">Time: ' + esc(minutesText(S.baseMinutes)) + '</p>' : "") + '</div></div>';
     return;
   }
-  if (S.status === "locked") { m.innerHTML = '<div class="ex-center"><div><h1>The exam has ended</h1><p>Your answers are saved. Your teacher will go through them.</p></div></div>'; return; }
+  if (S.status === "locked") {
+    var lost = anyDirty() || pending.length || rejected().length;
+    m.innerHTML = '<div class="ex-center"><div><h1>The exam has ended</h1>' + (lost
+      ? '<p><b>Some of your last work did not reach your teacher before the exam ended.</b> Tell your teacher now; it is still kept on this device.</p>'
+      : '<p>Your answers are saved. Your teacher will go through them.</p>') + '</div></div>';
+    return;
+  }
   if (!S.questions || !S.questions.length) { m.innerHTML = '<div class="ex-center"><div><h1>' + esc(S.title) + '</h1><p>No questions yet.</p></div></div>'; return; }
   cur = Math.min(cur, S.questions.length - 1);
   var done = S.status === "submitted";
@@ -339,7 +369,7 @@ function question() {
     '<div class="ex-qhead"><h2>Question ' + (cur + 1) + ' of ' + S.questions.length + (q.label ? ' <span class="hint">(' + esc(q.label) + ')</span>' : "") + '</h2><span class="ex-marks">' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</span></div>' +
     '<div class="ex-qtext">' + clean(q.text_html) + '</div>' +
     (q.has_img ? '<figure class="ex-qimg"><button type="button" data-zoom><img alt="Question ' + (cur + 1) + ' picture"></button></figure>' : "") +
-    '<div class="ex-answer"><label for="ans">' + (upload ? "Working or notes (optional)" : "Your answer") + '</label>' + input +
+    '<div class="ex-answer"><label for="ans">' + (upload ? "Working or notes (optional)" : "Your answer") + '</label>' + input + '<p class="ex-count hint" hidden></p>' +
     (q.type === "upload_required" ? '<p class="ex-need">This question needs a picture of your working.</p>' : "") + '</div>' +
     '<div class="ex-attach"' + (ro ? " hidden" : "") + '>' +
       '<label class="btn small"><input type="file" accept="image/*" multiple hidden data-file>Choose picture</label>' +
@@ -349,7 +379,8 @@ function question() {
   if (q.has_img) shown($(".ex-qimg img", box), "/api/s/questions/" + encodeURIComponent(q.id) + "/image");
   maths($(".ex-qtext", box));
   var a = $("#ans");
-  a.addEventListener("input", function () { onType(q.id, a.value); });
+  a.addEventListener("input", function () { onType(q.id, a.value); count(a); });
+  count(a);
   a.addEventListener("blur", function () { flush(); });
   pics();
   var prev = $("[data-prev]"), next = $("[data-next]");
@@ -394,6 +425,7 @@ function handIn() {
   var d = modal('<div class="ex-box" role="dialog" aria-modal="true" aria-labelledby="hi-h"><h2 id="hi-h">Hand in now?</h2><p>After this you can’t change your answers.</p>' +
     (empty ? '<p><b>' + empty + ' question' + (empty === 1 ? " has" : "s have") + ' no answer yet.</b></p>' : "") +
     (pending.length ? '<p><b>Some pictures are still sending. Wait a moment first.</b></p>' : "") +
+    (rejected().length ? '<p><b>Question ' + rejected().map(qNum).join(", ") + ' is not saved: ' + esc(drafts[rejected()[0]].rejected) + ' Fix it first.</b></p>' : "") +
     '<div class="row"><button class="btn" type="button" data-x>Keep working</button><button class="btn accent" type="button" data-ok' + (pending.length ? " disabled" : "") + '>Hand in</button></div></div>');
   $("[data-x]", d.el).onclick = d.close;
   $("[data-ok]", d.el).onclick = function () {
