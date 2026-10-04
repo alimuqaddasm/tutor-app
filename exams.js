@@ -40,6 +40,32 @@ var LABEL = { draft: "Not opened", waiting: "Waiting", running: "Running", timeu
 function chip(st) { return '<span class="xt-chip xt-' + esc(st) + '">' + esc(LABEL[st] || st) + '</span>'; }
 var TYPES = [["short", "Short answer"], ["long", "Long answer"], ["upload_required", "Picture needed"], ["upload_optional", "Picture optional"]];
 
+/* Try-out: practice exams only. They live on the exam server marked "practice", show up only in Try-out,
+   and never go to the tutoring repo. Real exams can be looked at in Try-out but not changed. */
+var SAMPLE = { title: "Practice exam", subject: "maths", minutes: 15, ratio: 1.2, questions: [
+  { id: "q1", label: "Q1", marks: 2, type: "short", text: "<p>Convert 135° to radians. Give your answer in terms of π.</p>", answer: "<p>135 × π/180 = 3π/4 (1 mark method, 1 mark answer)</p>" },
+  { id: "q2", label: "Q2", marks: 4, type: "long", text: "<p>Solve 2x² − 5x − 3 = 0. Show your working.</p>", answer: "<p>(2x + 1)(x − 3) = 0 (2 marks), x = 3 (1 mark), x = −1/2 (1 mark)</p>" },
+  { id: "q3", label: "Q3", marks: 3, type: "upload_required", text: "<p>Sketch y = x² − 4x + 3. Mark where it crosses both axes. Draw it on the page or take a photo of your paper.</p>", answer: "<p>U shape (1), crosses the x axis at 1 and 3 (1), crosses the y axis at 3 (1)</p>" },
+  { id: "q4", label: "Q4", marks: 2, type: "upload_optional", text: "<p>Differentiate y = 3x⁴ − 2x + 7.</p>", answer: "<p>dy/dx = 12x³ − 2 (1 mark each term)</p>" }
+] };
+function readOnly(e) { return T.isTry && e && !e.practice; }
+var RO_NOTE = '<div class="xt-up">Try-out: this is a real exam, so you can look but not change anything. Use a practice exam to try things.</div>';
+
+function makePractice(btn) {
+  btn.disabled = true; btn.textContent = "Making…";
+  var marks = SAMPLE.questions.reduce(function (s, q) { return s + q.marks; }, 0);
+  call("POST", "/api/t/exams", { title: SAMPLE.title + " " + day(Date.now()), subject: SAMPLE.subject, source_path: "", practice: true, ratio: SAMPLE.ratio, base_minutes: SAMPLE.minutes,
+    questions: SAMPLE.questions.map(function (q) { return { id: q.id, label: q.label, text_html: q.text, marks: q.marks, type: q.type, suggested_min: Math.round(q.marks * SAMPLE.ratio * 10) / 10 }; }) })
+    .then(function (made) { T.toast("Practice exam ready (" + marks + " marks)"); location.hash = "#/exams/" + made.id; },
+      function (e) { btn.disabled = false; btn.textContent = "Make a practice exam"; T.toast(e.message); });
+}
+function deletePractice(id, status) {
+  if (!confirm("Delete this practice exam and everything in it?")) return;
+  (status === "running" || status === "timeup" ? call("POST", "/api/t/exams/" + id + "/lock") : Promise.resolve())
+    .then(function () { return call("DELETE", "/api/t/exams/" + id); })
+    .then(function () { T.toast("Practice exam deleted"); if (location.hash === "#/exams") listView(); else location.hash = "#/exams"; }, function (e) { T.toast(e.message); });
+}
+
 function stop() { clearTimeout(live); live = null; }
 window.addEventListener("hashchange", function () { if ((location.hash || "").indexOf("#/exams/") !== 0) stop(); });
 
@@ -68,9 +94,19 @@ function listView() {
     }),
     call("GET", "/api/t/exams")
   ]).then(function (res) {
-    var repo = res[0].sort(function (a, b) { return b.path.localeCompare(a.path); }), server = res[1];
+    var repo = res[0].sort(function (a, b) { return b.path.localeCompare(a.path); }), all = res[1];
+    var server = all.filter(function (s) { return !s.practice; }), practice = all.filter(function (s) { return s.practice; });
     var loaded = {}; server.forEach(function (s) { if (s.sourcePath) loaded[s.sourcePath] = s; });
     var h = '<div class="section-h"><h2>Exams</h2></div>';
+    if (T.isTry) {
+      h += '<h3 class="xt-h3">Practice (Try-out)</h3><p class="hint">Do anything here: send the link to another device, start, add time, lock, mark. Practice exams stay out of the tutoring repo and only show in Try-out.</p>' +
+        '<div class="xt-acts"><button class="btn accent" type="button" data-practice>Make a practice exam</button></div>';
+      if (practice.length) h += '<div class="xt-list">' + practice.map(function (s) {
+        return '<div class="card xt-row"><a class="xt-grow xt-link" href="#/exams/' + esc(s.id) + '"><div class="xt-title">' + esc(s.title) + ' ' + chip(s.status) + '</div>' +
+          '<div class="hint">' + s.questions + ' questions · ' + s.totalMarks + ' marks</div></a><div class="xt-acts"><a class="btn small" href="#/exams/' + esc(s.id) + '">Open</a><button class="btn small" type="button" data-delprac="' + esc(s.id) + '" data-st="' + esc(s.status) + '">Delete</button></div></div>';
+      }).join("") + '</div>';
+      h += '<h3 class="xt-h3">Real exams (look only in Try-out)</h3>';
+    }
     h += '<h3 class="xt-h3">From Claude</h3>';
     if (!repo.length) h += '<div class="empty"><p>No exams yet. In the lesson chat, Claude proposes an exam when one is due, or ask: <i>“make a test on chapter 5”</i>.</p></div>';
     else h += '<div class="xt-list">' + repo.map(function (r) {
@@ -80,6 +116,7 @@ function listView() {
         '<div class="hint">' + qs.length + ' question' + (qs.length === 1 ? "" : "s") + ' · ' + marks + ' marks' + (e.date ? " · " + esc(e.date) : "") + '</div>' +
         (e.why ? '<p class="xt-why">' + esc(e.why) + '</p>' : "") + '</div><div class="xt-acts">' +
         (on ? '<a class="btn small" href="#/exams/' + esc(on.id) + '">Open</a>'
+            : st === "ready" && T.isTry ? '<span class="hint">Ready. Leave Try-out to load it.</span>'
             : st === "ready" ? '<button class="btn small accent" type="button" data-load="' + esc(r.path) + '">Load to exam server</button>'
             : '<span class="hint">Finish it with Claude first (status “ready”)</span>') +
         '</div></div>';
@@ -149,27 +186,29 @@ function ratioNow() { var mode = T.ls("tutor.examRatioMode") || "papers"; if (mo
 function link() { return X.token ? new URL("exam.html", location.href).href.split("#")[0] + "#t=" + X.token + (xapi() !== (window.EXAM_API || "").replace(/\/+$/, "") ? "&api=" + encodeURIComponent(xapi()) : "") : ""; }
 
 function drawExam() {
-  var st = X.status, started = X.startedAt != null, total = totalMarks();
+  var st = X.status, started = X.startedAt != null || readOnly(X), total = totalMarks();
   var mode = T.ls("tutor.examRatioMode") || "papers", ratio = ratioNow() || 1.2, sugg = Math.ceil(total * ratio / 5) * 5;
   app.setAttribute("data-subject", X.subject || "");
-  var h = '<div class="section-h xt-head"><h2>' + esc(X.title) + '</h2><span id="xt-st">' + chip(st) + '</span><span class="xt-grow"></span><a class="btn small" href="#/exams">All exams</a><a class="btn small" href="#/exams/' + esc(X.id) + '/mark">Mark</a></div>';
+  var h = '<div class="section-h xt-head"><h2>' + esc(X.title) + '</h2><span id="xt-st">' + chip(st) + '</span><span class="xt-grow"></span><a class="btn small" href="#/exams">All exams</a><a class="btn small" href="#/exams/' + esc(X.id) + '/mark">Mark</a>' + (X.practice ? '<button class="btn small" type="button" data-delprac="' + esc(X.id) + '" data-st="' + esc(st) + '">Delete</button>' : "") + '</div>';
+  if (readOnly(X)) h += RO_NOTE;
+  else if (X.practice) h += '<p class="hint">Practice exam: nothing here goes to the tutoring repo.</p>';
 
   /* run it */
   h += '<section class="card xt-card xt-run"><div class="xt-clock"><div class="xt-big num" id="xt-left">' + (started ? "" : mins(X.baseMinutes || 0)) + '</div><div class="hint" id="xt-times"></div><div class="hint" id="xt-seen"></div></div><div class="xt-btns" id="xt-btns"></div></section>';
 
   /* student link */
   h += '<section class="card xt-card"><h3>Student link</h3>' + (X.token
-    ? '<div class="xt-linkrow"><input type="text" readonly id="xt-link" value="' + esc(link()) + '"><button class="btn small accent" type="button" data-copy>Copy</button><button class="btn small" type="button" data-qr>QR</button></div><p class="hint">Send this to him. It opens the exam with no login. Making a new link stops the old one.</p><button class="btn small" type="button" data-newlink' + (st === "locked" ? " disabled" : "") + '>Make a new link</button><div id="xt-qr" class="xt-qrbox" hidden></div>'
-    : '<p class="hint">Make the link when you are ready to send it. He sees a waiting screen until you press Start.</p><button class="btn accent" type="button" data-newlink>Make student link</button>') + '</section>';
+    ? '<div class="xt-linkrow"><input type="text" readonly id="xt-link" value="' + esc(link()) + '"><button class="btn small accent" type="button" data-copy>Copy</button><button class="btn small" type="button" data-qr>QR</button></div><p class="hint">Send this to him. It opens the exam with no login. Making a new link stops the old one.</p><button class="btn small" type="button" data-newlink' + (st === "locked" || readOnly(X) ? " disabled" : "") + '>Make a new link</button><div id="xt-qr" class="xt-qrbox" hidden></div>'
+    : '<p class="hint">Make the link when you are ready to send it. He sees a waiting screen until you press Start.</p><button class="btn accent" type="button" data-newlink' + (readOnly(X) ? " disabled" : "") + '>Make student link</button>') + '</section>';
 
   /* time suggestion */
-  h += '<section class="card xt-card"><h3>Time</h3>' + (started ? '<p>Set at the start: <b>' + esc(mins(X.baseMinutes)) + '</b> for ' + total + ' marks. Use the + buttons above to add time.</p>' :
+  h += '<section class="card xt-card"><h3>Time</h3>' + (readOnly(X) && X.startedAt == null ? '<p>Exam time: <b>' + esc(mins(X.baseMinutes || 0)) + '</b> for ' + total + ' marks.</p>' : started ? '<p>Set at the start: <b>' + esc(mins(X.baseMinutes)) + '</b> for ' + total + ' marks. Use the + buttons above to add time.</p>' :
     '<div class="xt-ratio"><div class="xt-seg" role="group" aria-label="Where the minutes per mark come from"><button type="button" class="chip" data-rmode="papers" aria-pressed="' + (mode === "papers") + '">From past papers</button><button type="button" class="chip" data-rmode="number" aria-pressed="' + (mode === "number") + '">My own number</button></div>' +
     (mode === "number"
       ? '<div class="field xt-narrow"><label for="xt-ratio">Minutes per mark</label><input type="number" id="xt-ratio" step="0.05" min="0.1" value="' + esc(myRatio || X.ratio || 1.2) + '"></div>'
       : '<table class="xt-table"><thead><tr><th></th><th>Past paper</th><th>Marks</th><th>Minutes</th><th></th></tr></thead><tbody>' + papers.map(function (p, i) {
-          return '<tr><td><input type="checkbox" data-paper="' + i + '"' + (p.off ? "" : " checked") + ' aria-label="Use this paper"></td><td>' + esc(p.label) + '</td><td class="num">' + p.marks + '</td><td class="num">' + p.minutes + '</td><td><button class="btn small" type="button" data-delpaper="' + p.id + '" aria-label="Remove ' + esc(p.label) + '">Remove</button></td></tr>';
-        }).join("") + '<tr class="xt-add"><td></td><td><input type="text" id="pp-l" placeholder="e.g. Edexcel Paper 2 2022"></td><td><input type="number" id="pp-m" placeholder="100" min="1"></td><td><input type="number" id="pp-t" placeholder="120" min="1"></td><td><button class="btn small" type="button" data-addpaper>Add</button></td></tr></tbody></table>') +
+          return '<tr><td><input type="checkbox" data-paper="' + i + '"' + (p.off ? "" : " checked") + ' aria-label="Use this paper"></td><td>' + esc(p.label) + '</td><td class="num">' + p.marks + '</td><td class="num">' + p.minutes + '</td><td>' + (T.isTry ? "" : '<button class="btn small" type="button" data-delpaper="' + p.id + '" aria-label="Remove ' + esc(p.label) + '">Remove</button>') + '</td></tr>';
+        }).join("") + (T.isTry ? "" : '<tr class="xt-add"><td></td><td><input type="text" id="pp-l" placeholder="e.g. Edexcel Paper 2 2022"></td><td><input type="number" id="pp-m" placeholder="100" min="1"></td><td><input type="number" id="pp-t" placeholder="120" min="1"></td><td><button class="btn small" type="button" data-addpaper>Add</button></td></tr>') + '</tbody></table>') +
     '<p class="xt-sugg">' + (ratioNow() ? 'That is <b>' + r2(ratio) + ' min per mark</b>. For ' + total + ' marks: <b>' + sugg + ' min</b> suggested.' : 'Tick a past paper or enter a number.') + ' <button class="btn small" type="button" data-usesugg>Use suggestion</button></p>' +
     '<div class="field xt-narrow"><label for="xt-dur">Exam time (minutes)</label><input type="number" id="xt-dur" min="1" step="1" value="' + esc(X.baseMinutes || sugg) + '"></div></div>') + '</section>';
 
@@ -193,6 +232,8 @@ function drawRun() {
   var st = X.status, b = $("#xt-btns"); if (!b) return;
   $("#xt-st").innerHTML = chip(st);
   var html = "";
+  if (readOnly(X)) { b.innerHTML = '<p class="hint">Look only in Try-out.</p>'; b.setAttribute("data-k", ""); }
+  else {
   if (st === "draft") html = '<p class="hint">Make the student link first (below).</p>';
   if (st === "waiting") html = '<button class="btn accent xt-start" type="button" data-start>Start the exam</button><p class="hint">' + (X.lastSeenAt && Date.now() + offset - X.lastSeenAt < 10000 ? "He has the exam open and is waiting." : "He hasn’t opened the link yet.") + '</p>';
   if (st === "running" || st === "timeup") html = (st === "timeup" ? '<p class="xt-up">Time is up. Add time or lock.</p>' : "") +
@@ -201,6 +242,7 @@ function drawRun() {
   if (st === "submitted") html = '<p><b>He handed in at ' + esc(t12(X.submittedAt)) + '.</b></p><a class="btn accent" href="#/exams/' + esc(X.id) + '/mark">Mark it</a> <button class="btn" type="button" data-lock>Lock</button> <button class="btn" type="button" data-reopen>Reopen</button>';
   if (st === "locked") html = '<p><b>Locked at ' + esc(t12(X.lockedAt)) + '.</b></p><a class="btn accent" href="#/exams/' + esc(X.id) + '/mark">Mark it</a> <button class="btn" type="button" data-reopen>Reopen</button>';
   if (b.getAttribute("data-k") !== st + html.length) { b.innerHTML = html; b.setAttribute("data-k", st + html.length); }
+  }
   var tm = $("#xt-times");
   if (tm) tm.textContent = X.startedAt ? "Started " + t12(X.startedAt) + " · original end " + t12(X.originalEndAt) + (X.endAt !== X.originalEndAt ? " · now ends " + t12(X.endAt) : "") : "";
   var seen = $("#xt-seen");
@@ -275,6 +317,7 @@ function markView(id) {
   app.innerHTML = '<div class="empty"><h3>Loading</h3></div>';
   call("GET", "/api/t/exams/" + encodeURIComponent(id) + "/review").then(function (r) {
     R = r; repoExam = null;
+    if (r.practice) { repoExam = SAMPLE; return drawMark(); }
     // The mark scheme lives in the repo, next to the exam file Claude wrote.
     return T.loadTree().then(function () { return r.sourcePath ? T.fileJSON(r.sourcePath) : null; })
       .then(function (j) { repoExam = j && j.data; }, function () {}).then(drawMark);
@@ -296,7 +339,8 @@ function drawMark() {
     '<div class="hint">' + (R.startedAt ? "Started " + esc(t12(R.startedAt)) + " · original end " + esc(t12(R.originalEndAt)) : "Not started") +
     ((R.extensions || []).length ? "<br>Time added: " + R.extensions.map(function (e) { return "+" + e.minutes + " min at " + t12(e.at); }).map(esc).join(", ") : "") +
     (R.submittedAt ? "<br>Handed in " + esc(t12(R.submittedAt)) : "") + (R.lockedAt ? "<br>Locked " + esc(t12(R.lockedAt)) : "") + '</div>' +
-    '<div class="xt-acts"><button class="btn accent" type="button" data-torepo' + (T.isTry ? " disabled title=\"Try-out mode: nothing is saved\"" : "") + '>Save to tutoring repo</button><span class="hint" id="xt-repomsg"></span></div></div>';
+    '<div class="xt-acts">' + (R.practice ? '<span class="hint">Practice exam: marks stay on the exam server only.</span>' : '<button class="btn accent" type="button" data-torepo' + (T.isTry ? " disabled title=\"Try-out mode: nothing is saved\"" : "") + '>Save to tutoring repo</button>') + '<span class="hint" id="xt-repomsg"></span></div></div>';
+  if (readOnly(R)) h += RO_NOTE;
   if (R.status === "running" || R.status === "timeup" || R.status === "waiting") h += '<div class="xt-up">The exam is still open. You can mark now, but answers may still change.</div>';
   h += R.questions.map(function (q, i) {
     var r = rq[q.id] || {}, ms = (r.msImg || []).map(function (p) { return /^(students|books)\//.test(p) ? p : folder + p; });
@@ -312,8 +356,8 @@ function drawMark() {
         '<div class="xt-col"><div class="xt-lab">Mark scheme</div>' + (ms.length ? ms.map(function (p) { return '<img class="xt-zoomable" alt="Mark scheme" data-rsrc="' + esc(p) + '">'; }).join("") : '<p class="hint">' + (repoExam ? "No mark scheme picture for this question." : "The exam file isn’t in the repo, so no mark scheme.") + '</p>') +
           (r.answer ? '<div class="xt-qtext">' + T.clean(r.answer) + '</div>' : "") + '</div>' +
       '</div>' +
-      '<div class="xt-markrow"><label>Mark <span class="xt-of"><input type="number" class="xt-score" data-score="' + esc(q.id) + '" min="0" max="' + q.marks + '" step="0.5" value="' + (q.score == null ? "" : q.score) + '"> / ' + q.marks + '</span></label>' +
-        '<label class="xt-grow">Comment <textarea data-comment="' + esc(q.id) + '" rows="2">' + esc(q.comment || "") + '</textarea></label><span class="hint" data-mstate="' + esc(q.id) + '"></span></div>' +
+      '<div class="xt-markrow"><label>Mark <span class="xt-of"><input type="number" class="xt-score" data-score="' + esc(q.id) + '" min="0" max="' + q.marks + '" step="0.5" value="' + (q.score == null ? "" : q.score) + '"' + (readOnly(R) ? " disabled" : "") + '> / ' + q.marks + '</span></label>' +
+        '<label class="xt-grow">Comment <textarea data-comment="' + esc(q.id) + '" rows="2"' + (readOnly(R) ? " disabled" : "") + '>' + esc(q.comment || "") + '</textarea></label><span class="hint" data-mstate="' + esc(q.id) + '"></span></div>' +
     '</section>';
   }).join("");
   app.innerHTML = h;
@@ -323,6 +367,7 @@ function drawMark() {
 var markTimers = {};
 function saveMark(qid) {
   var s = $('[data-score="' + qid + '"]').value, c = $('[data-comment="' + qid + '"]').value, st = $('[data-mstate="' + qid + '"]');
+  if (readOnly(R)) return;
   var q = R.questions.filter(function (x) { return x.id === qid; })[0];
   var score = s === "" ? null : Number(s);
   if (score != null && (score < 0 || score > q.marks)) { st.textContent = "0 to " + q.marks; return; }
@@ -330,12 +375,14 @@ function saveMark(qid) {
   call("PUT", "/api/t/exams/" + R.id + "/marks/" + encodeURIComponent(qid), { score: score, comment: c }).then(function () {
     q.score = score; q.comment = c; st.textContent = "Saved";
     R.total = R.questions.reduce(function (a, x) { return a + (x.score || 0); }, 0); R.marked = R.questions.filter(function (x) { return x.score != null; }).length;
-    $("#xt-total").textContent = r2(R.total) + " / " + R.max; $("#xt-marked").textContent = R.marked + " of " + R.questions.length + " marked";
+    var tot = $("#xt-total"), mk = $("#xt-marked");   // gone if the marking page was left before the save came back
+    if (tot) tot.textContent = r2(R.total) + " / " + R.max; if (mk) mk.textContent = R.marked + " of " + R.questions.length + " marked";
   }, function (e) { st.textContent = e.message; });
 }
 
 /* Copy everything into students/<s>/exams/<folder>/result.json and work/ so Claude can close the exam. */
 function saveToRepo(btn) {
+  if (T.isTry || R.practice) return;
   var msg = $("#xt-repomsg");
   var folder = R.sourcePath ? examFolder(R.sourcePath) : T.studentBase() + "exams/" + new Date(R.startedAt || Date.now()).toISOString().slice(0, 10) + "-" + (R.subject || "exam") + "-" + R.id + "/";
   btn.disabled = true;
@@ -380,7 +427,12 @@ document.addEventListener("click", function (e) {
   if ((location.hash || "").indexOf("#/exams") !== 0) return;
   var b = e.target.closest && e.target.closest("button, img.xt-zoomable"); if (!b) return;
   if (b.tagName === "IMG") { if (b.src) { $("#zimg").src = b.src; $("#zoom").hidden = false; } return; }
+  if (b.hasAttribute("data-practice")) return makePractice(b);
+  if (b.hasAttribute("data-delprac")) return deletePractice(b.getAttribute("data-delprac"), b.getAttribute("data-st"));
+  if (T.isTry && b.hasAttribute("data-load")) return;
   if (b.hasAttribute("data-load")) return loadToServer(b.getAttribute("data-load"), b);
+  if (X && readOnly(X) && b.matches("[data-newlink],[data-start],[data-ext],[data-extc],[data-lock],[data-reopen],[data-savesetup],[data-usesugg]")) return;
+  if (T.isTry && b.matches("[data-addpaper],[data-delpaper]")) return;
   if (b.hasAttribute("data-newlink")) { if (X.token && !confirm("Make a new link? The old link will stop working.")) return; return act("/link", undefined, "Link ready"); }
   if (b.hasAttribute("data-copy")) { var l = $("#xt-link"); l.select(); (navigator.clipboard ? navigator.clipboard.writeText(l.value) : Promise.reject()).then(function () { T.toast("Link copied"); }, function () { document.execCommand("copy"); T.toast("Link copied"); }); return; }
   if (b.hasAttribute("data-qr")) { var box = $("#xt-qr"); box.hidden = !box.hidden; if (!box.hidden && window.qrcode) { var q = qrcode(0, "M"); q.addData(link()); q.make(); box.innerHTML = q.createSvgTag({ cellSize: 5, margin: 2, scalable: true }); } return; }

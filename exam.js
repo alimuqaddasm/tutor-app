@@ -281,7 +281,7 @@ function render() {
   cur = Math.min(cur, S.questions.length - 1);
   var done = S.status === "submitted";
   m.innerHTML =
-    '<header class="ex-top"><div class="ex-title">' + esc(S.title) + '</div><div class="ex-timer num" role="timer" aria-live="off"></div><div class="ex-save" aria-live="polite"></div></header>' +
+    '<header class="ex-top"><div class="ex-title">' + esc(S.title) + (S.practice ? ' <span class="ex-prac">Practice</span>' : "") + '</div><div class="ex-timer num" role="timer" aria-live="off"></div><div class="ex-save" aria-live="polite"></div></header>' +
     '<div class="ex-bannerslot"></div>' +
     '<nav class="ex-dots" aria-label="Questions"></nav>' +
     '<section class="ex-q card"></section>' +

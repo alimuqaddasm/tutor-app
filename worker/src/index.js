@@ -221,7 +221,7 @@ async function route(request, env, now) {
 
     if (p === "/api/s/state" && m === "GET") {
       await env.DB.prepare("UPDATE exams SET last_seen_at = ? WHERE id = ?").bind(now, exam.id).run();
-      const out = { title: exam.title, subject: exam.subject, ...clock(exam, now, await extensionsOf(env, exam.id)) };
+      const out = { title: exam.title, subject: exam.subject, practice: !!exam.practice, ...clock(exam, now, await extensionsOf(env, exam.id)) };
       // Questions only from Start on, and not once the exam is locked.
       if (started(exam) && exam.status !== "locked") {
         out.questions = (await questionRows(env, exam.id)).map((q) => ({ id: q.id, pos: q.pos, label: q.label, text_html: q.text_html, marks: q.marks, type: q.type, suggested_min: q.suggested_min, has_img: q.has_img }));
@@ -335,7 +335,7 @@ async function route(request, env, now) {
 
     if (p === "/api/t/exams" && m === "GET") {
       const r = await env.DB.prepare("SELECT e.*, (SELECT COUNT(*) FROM questions q WHERE q.exam_id = e.id) AS n_questions, (SELECT COALESCE(SUM(marks), 0) FROM questions q WHERE q.exam_id = e.id) AS total_marks FROM exams e ORDER BY created_at DESC").all();
-      return json(r.results.map((e) => ({ id: e.id, title: e.title, subject: e.subject, sourcePath: e.source_path, status: liveStatus(e, now), createdAt: e.created_at, startedAt: e.started_at, endAt: e.end_at, questions: e.n_questions, totalMarks: e.total_marks })));
+      return json(r.results.map((e) => ({ id: e.id, title: e.title, subject: e.subject, sourcePath: e.source_path, practice: !!e.practice, status: liveStatus(e, now), createdAt: e.created_at, startedAt: e.started_at, endAt: e.end_at, questions: e.n_questions, totalMarks: e.total_marks })));
     }
     if (p === "/api/t/exams" && m === "POST") {
       const b = await body(request);
@@ -345,8 +345,8 @@ async function route(request, env, now) {
       const id = randomToken(9);
       const ratio = b.ratio == null || b.ratio === "" ? null : Number(b.ratio);
       const base = Number(b.base_minutes) || 0;
-      const stmts = [env.DB.prepare("INSERT INTO exams (id, title, subject, source_path, ratio, base_minutes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        .bind(id, title, String(b.subject || "").slice(0, 40), String(b.source_path || "").slice(0, 300), Number.isFinite(ratio) ? ratio : null, base, now)];
+      const stmts = [env.DB.prepare("INSERT INTO exams (id, title, subject, source_path, ratio, base_minutes, practice, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(id, title, String(b.subject || "").slice(0, 40), String(b.source_path || "").slice(0, 300), Number.isFinite(ratio) ? ratio : null, base, b.practice ? 1 : 0, now)];
       for (const q of qs) stmts.push(env.DB.prepare("INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(q.id, id, q.pos, q.label, q.text_html, q.marks, q.type, q.suggested_min));
       stmts.push(env.DB.prepare("INSERT INTO events (exam_id, at, kind, detail) VALUES (?, ?, 'created', ?)").bind(id, now, String(b.source_path || "")));
       await env.DB.batch(stmts);
@@ -367,7 +367,7 @@ async function route(request, env, now) {
 
       if (sub === "" && m === "GET") {
         return json({
-          id: exam.id, title: exam.title, subject: exam.subject, sourcePath: exam.source_path, token: exam.token, ratio: exam.ratio, createdAt: exam.created_at, lastSeenAt: exam.last_seen_at,
+          id: exam.id, title: exam.title, subject: exam.subject, sourcePath: exam.source_path, practice: !!exam.practice, token: exam.token, ratio: exam.ratio, createdAt: exam.created_at, lastSeenAt: exam.last_seen_at,
           ...clock(exam, now, await extensionsOf(env, exam.id)),
           questions: await questionRows(env, exam.id),
           events: (await env.DB.prepare("SELECT at, kind, detail FROM events WHERE exam_id = ? ORDER BY id").bind(exam.id).all()).results
@@ -492,7 +492,7 @@ async function route(request, env, now) {
         const total = questions.reduce((s, q) => s + (q.score || 0), 0);
         const max = questions.reduce((s, q) => s + q.marks, 0);
         return json({
-          id: exam.id, title: exam.title, subject: exam.subject, sourcePath: exam.source_path,
+          id: exam.id, title: exam.title, subject: exam.subject, sourcePath: exam.source_path, practice: !!exam.practice,
           ...clock(exam, now, await extensionsOf(env, exam.id)),
           questions, total, max, marked: questions.filter((q) => q.score != null).length,
           events: (await env.DB.prepare("SELECT at, kind, detail FROM events WHERE exam_id = ? ORDER BY id").bind(exam.id).all()).results
