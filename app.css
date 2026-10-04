@@ -868,6 +868,15 @@ body[data-tlayout="flip"] .chunk.fit.flipped .fitq{display:none}
 body[data-tlayout="flip"] .fita details.ans > summary,body[data-tlayout="flip"] .fita details.reveal > summary{display:none}
 body[data-tlayout="flip"] .fita details.ans,body[data-tlayout="flip"] .fita details.reveal{border:0;background:none;margin:0}
 body[data-tlayout="flip"] .fita .fig img{width:auto;max-width:100%;height:auto;object-fit:contain;display:block;margin:0 auto}
+/* Flip, 5 Oct: answer text in a band under the question; the back holds pictures at full width, then hints */
+body[data-tlayout="flip"] .ansfront{margin:14px 0 0;padding:12px 16px 14px;border-radius:14px;background:var(--bg);border:1px solid var(--line);border-left:4px solid var(--ok)}
+body[data-tlayout="flip"] .ansfront .prose{font-size:var(--s-md);line-height:1.55}
+body[data-tlayout="flip"] .ansf-l{font:800 var(--s-xs)/1 var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin:0 0 6px}
+body[data-tlayout="flip"] .ansmore{margin:12px 0 0;padding:10px 14px;border-radius:12px;background:var(--bg);border:1px dashed var(--line-2);color:var(--text-2);font-size:var(--s-sm)}
+body[data-tlayout="flip"] .ansback{margin:0 0 14px}
+body[data-tlayout="flip"] .flipa .figrow{margin:0 0 14px}
+body[data-tlayout="flip"] .flipa .figrow .fig{flex:1 1 0}
+body[data-tlayout="flip"] .flipa .figrow .fig img{width:100%;max-width:100%}
 .flip-h{font-weight:700;color:var(--text-2);font-size:var(--s-sm);margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .vstrip{flex:1 1 100%;order:-2;grid-column:1 / -1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 0 12px;margin-bottom:2px;border-bottom:1px solid var(--line)}
 .vstrip .btn.flipbtn{min-height:44px;border-radius:12px;font-weight:800;background:var(--accent-wash);color:var(--accent);border-color:transparent}
