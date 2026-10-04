@@ -1,0 +1,19 @@
+{
+  "name": "tutor-exams",
+  "version": "1.0.0",
+  "description": "Exam server for Tutor Desk",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@vitest/runner": "^4.1.11",
+    "@vitest/snapshot": "^4.1.11",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.147.0"
+  },
+  "private": true,
+  "type": "module"
+}

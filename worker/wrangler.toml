@@ -1,0 +1,15 @@
+# Tutor Desk exam server. Deploy: npx wrangler deploy
+# The exam password is a secret, never in this file: npx wrangler secret put TEACHER_PASSWORD
+name = "tutor-exams"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tutor-exams"
+database_id = "00000000-0000-0000-0000-000000000000"   # replaced by the real id at the first deploy
+migrations_dir = "migrations"
+
+[vars]
+ALLOWED_ORIGINS = "https://alimuqaddasm.github.io,http://localhost:8765,http://127.0.0.1:8765"
