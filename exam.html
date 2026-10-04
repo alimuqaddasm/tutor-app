@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#12152A">
+<link rel="icon" href="icon-192.png">
+<title>Exam</title>
+<script>
+(function(){try{var t=localStorage.getItem("tutor.theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}document.documentElement.setAttribute("data-font","figtree");})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500;700&family=Tinos:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="app.css?v=24">
+<link rel="stylesheet" href="exam.css?v=1">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
+</head>
+<body class="ex-body">
+<main id="ex" class="ex-main" aria-live="polite"><div class="ex-center"><p>Loading the exam</p></div></main>
+<div id="toast" class="toast" hidden></div>
+<script src="exam-config.js?v=1"></script>
+<script src="exam.js?v=1" defer></script>
+</body>
+</html>
