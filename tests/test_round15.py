@@ -18,9 +18,10 @@ try:
             for tx in ["Set 5 Q6", "Set 6 Q14", "Set 1 Q4", "exact value of tan 75", "Given that tan A"]:
                 p.evaluate(GO, tx); p.wait_for_timeout(1500)
                 q = p.evaluate(SC, ".chunk.cur .fitq"); p.keyboard.press("a"); p.wait_for_timeout(1200); a = p.evaluate(SC, ".chunk.cur.flipped .fita")
-                if q[0] or q[1] > 2 or a[0] or a[1] > 2: bad.append((tx, q, a))
+                # since 5 Oct the back may scroll (mark scheme pictures at full size, then the answer); the front may not
+                if q[0] or q[1] > 2 or a[0]: bad.append((tx, q, a))
                 p.keyboard.press("a"); p.wait_for_timeout(300)
-            check("flip at %dx%d: question and answer screens need no scrolling" % (w, h), not bad, bad)
+            check("flip at %dx%d: question screens need no scrolling, the back no sideways scrolling" % (w, h), not bad, bad)
             if w == 1280:
                 p.evaluate(GO, "Set 5 Q6"); p.wait_for_timeout(1200)
                 check("question screen: nothing covers it, verdicts are in the bottom bar", p.locator(".tfoot .vstrip .vb").count() == 3 and p.locator(".chunk.cur .fita").is_hidden())

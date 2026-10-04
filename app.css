@@ -230,8 +230,9 @@ details.reveal > div{padding:0 14px 14px}
 .show-top{display:flex;align-items:center;gap:16px;padding:12px 18px;font-weight:700;padding-top:calc(12px + env(safe-area-inset-top,0px))}
 .show-top #sh-lab{flex:1;min-width:0;opacity:.75;font-size:var(--s-sm)}
 .show-x{width:48px;height:48px;border-radius:50%;border:1px solid #394050;background:#161a21;color:#fff;font-size:1.6rem;cursor:pointer}
-.show-body{overflow:auto;display:grid;justify-items:center;align-content:start;gap:14px;padding:8px 18px 18px}
-.show-body img{max-width:min(100%,1400px);max-height:calc(100vh - 170px);width:auto;border-radius:10px;background:#fff}
+.show-body{overflow:auto;display:grid;justify-items:center;align-content:safe center;gap:14px;padding:8px 18px 18px}
+/* Show him: small crops grow to fill the screen (width or height, whichever fits first) */
+.show-body img{width:min(100%,1400px);height:auto;max-height:calc(100vh - 170px);object-fit:contain;border-radius:10px;background:#fff}
 .show-body .ph{color:#9aa2af}
 .show-nav{display:flex;justify-content:space-between;padding:10px 18px calc(14px + env(safe-area-inset-bottom,0px))}
 .show-nav button{width:64px;height:64px;border-radius:50%;border:1px solid #394050;background:#161a21;color:#fff;font-size:2rem;cursor:pointer}
@@ -868,6 +869,15 @@ body[data-tlayout="flip"] .chunk.fit.flipped .fitq{display:none}
 body[data-tlayout="flip"] .fita details.ans > summary,body[data-tlayout="flip"] .fita details.reveal > summary{display:none}
 body[data-tlayout="flip"] .fita details.ans,body[data-tlayout="flip"] .fita details.reveal{border:0;background:none;margin:0}
 body[data-tlayout="flip"] .fita .fig img{width:auto;max-width:100%;height:auto;object-fit:contain;display:block;margin:0 auto}
+/* Flip, 5 Oct: answer text in a band under the question; the back holds pictures at full width, then hints */
+body[data-tlayout="flip"] .ansfront{margin:14px 0 0;padding:12px 16px 14px;border-radius:14px;background:var(--bg);border:1px solid var(--line);border-left:4px solid var(--ok)}
+body[data-tlayout="flip"] .ansfront .prose{font-size:var(--s-md);line-height:1.55}
+body[data-tlayout="flip"] .ansf-l{font:800 var(--s-xs)/1 var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin:0 0 6px}
+body[data-tlayout="flip"] .ansmore{margin:12px 0 0;padding:10px 14px;border-radius:12px;background:var(--bg);border:1px dashed var(--line-2);color:var(--text-2);font-size:var(--s-sm)}
+body[data-tlayout="flip"] .ansback{margin:0 0 14px}
+body[data-tlayout="flip"] .flipa .figrow{margin:0 0 14px;flex-direction:column;align-items:stretch}
+body[data-tlayout="flip"] .flipa .figrow .fig{flex:1 1 0}
+body[data-tlayout="flip"] .flipa .figrow .fig img{width:100%;max-width:100%}
 .flip-h{font-weight:700;color:var(--text-2);font-size:var(--s-sm);margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .vstrip{flex:1 1 100%;order:-2;grid-column:1 / -1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 0 12px;margin-bottom:2px;border-bottom:1px solid var(--line)}
 .vstrip .btn.flipbtn{min-height:44px;border-radius:12px;font-weight:800;background:var(--accent-wash);color:var(--accent);border-color:transparent}

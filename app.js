@@ -1245,30 +1245,58 @@ function applyFit() { var lay = layoutOf(), cur = $(".chunk.cur"); document.body
    screen at full size; the verdict buttons sit in a strip in the bottom bar, so nothing covers it; "Show answer" (key A)
    turns the whole screen into the answer and mark scheme at full size, and back */
 function applyFlip(cur) {
-  var ans = document.createElement("div"), left = document.createElement("div"), strip = document.createElement("div");
-  ans.className = "fita flipa"; left.className = "fitq"; strip.className = "vstrip";
+  /* front: the question, your notes, and the answer text under it when it fits (Ali, 5 Oct).
+     back ("Mark scheme", key A): the answer's pictures and mark schemes at full width, then your hints;
+     an answer too long for the front goes to the back as well (fitFront decides, after the pictures load) */
+  var ans = document.createElement("div"), left = document.createElement("div"), strip = document.createElement("div"), pics = document.createElement("div");
+  ans.className = "fita flipa"; left.className = "fitq"; strip.className = "vstrip"; pics.className = "figrow";
   $$(".tnote", cur).forEach(function (n) { n.open = false; });   // your notes stay with the question (before he starts), folded to one line
-  $$(".ans, details.reveal", cur).filter(function (el) { return !el.parentNode.closest(".ans, details.reveal"); }).forEach(function (el) { el.open = true; ans.appendChild(el); });
+  var front = document.createElement("div"), backText = document.createElement("div");
+  front.className = "ansfront"; backText.className = "ansback";
+  $$(".ans, details.reveal", cur).filter(function (el) { return !el.parentNode.closest(".ans, details.reveal"); }).forEach(function (el) {
+    $$("figure.fig", el).forEach(function (f) { pics.appendChild(f); });
+    var src = el.querySelector(".src"), pr = el.querySelector(".prose"), txt = pr && pr.textContent.replace(/Loading image/g, "").trim();
+    if (txt || src) { var blk = '<div class="ansf-l">Answer</div>' + (src ? src.outerHTML : "") + (pr ? '<div class="prose">' + pr.innerHTML + '</div>' : "");
+      front.insertAdjacentHTML("beforeend", blk); backText.insertAdjacentHTML("beforeend", blk); }
+    el.remove(); });
+  var hints = $$(".thints", cur); hints.forEach(function (h) { h.open = true; });
   var ctlb = $(".ctl.big", cur);
   while (cur.firstChild) left.appendChild(cur.firstChild);
-  var hasAns = !!ans.querySelector(".ans, details.reveal");
-  $$(".ans .prose, details.reveal > .prose", ans).forEach(function (pr) { var figs = $$(":scope > figure.fig", pr); if (!figs.length) return;
-    var row = document.createElement("div"); row.className = "figrow"; figs.forEach(function (f) { row.appendChild(f); }); pr.appendChild(row);
-    if (pr.textContent.replace(/Loading image/g, "").trim()) pr.classList.add("two"); });
+  if (front.childNodes.length) { left.appendChild(front); left.insertAdjacentHTML("beforeend", '<div class="ansmore" hidden>The answer is long: it is on the back. Press <b>Mark scheme</b> (A).</div>'); }
   ans.insertAdjacentHTML("afterbegin", '<div class="flip-h">' + esc(shortOf(TCH.seq[TCH.pos], 110)) + '</div>');
-  cur.appendChild(left); cur.appendChild(ans); cur.classList.add("fit", "flip"); cur.classList.toggle("flipped", flipOn && hasAns);
-  strip.innerHTML = hasAns ? '<button type="button" class="btn flipbtn" data-flip>' + (flipOn ? "\u2190 Question" : "Show answer") + ' <kbd>A</kbd></button>' : "";
+  if (pics.childNodes.length) ans.appendChild(pics);   // mark scheme pictures first, at full size (Ali, 5 Oct)
+  if (backText.childNodes.length) { backText.hidden = true; ans.appendChild(backText); }
+  hints.forEach(function (h) { ans.appendChild(h); });
+  var hasBack = !!(pics.childNodes.length || hints.length), hasAns = !!backText.childNodes.length;
+  cur.appendChild(left); cur.appendChild(ans); cur.classList.add("fit", "flip"); cur.classList.toggle("flipped", flipOn && (hasBack || hasAns));
+  // the button is there whenever there is an answer; fitFront hides it when the back would be empty
+  strip.innerHTML = hasBack || hasAns ? '<button type="button" class="btn flipbtn" data-flip' + (hasBack ? "" : " hidden") + '>' + (flipOn ? "\u2190 Question" : "Mark scheme") + ' <kbd>A</kbd></button>' : "";
   if (ctlb) { strip.appendChild(ctlb); strip.insertAdjacentHTML("beforeend", '<button type="button" class="btn vmorebtn" data-vmore aria-expanded="false" title="Wording, terminology, marks, note">⋯</button>'); }
-  var foot = $(".tfoot"); if (foot && (hasAns || ctlb)) foot.insertBefore(strip, foot.firstChild);
+  var foot = $(".tfoot"); if (foot && (hasBack || hasAns || ctlb)) foot.insertBefore(strip, foot.firstChild);
+  if (front.childNodes.length) maths(front); if (hasAns) maths(backText);
   loadImages(ans); fitQ(); }
-function flipIt() { var cur = $(".chunk.cur.flip"); if (!cur || !$("[data-flip]")) return; flipOn = !flipOn; cur.classList.toggle("flipped", flipOn);
-  $("[data-flip]").firstChild.textContent = flipOn ? "\u2190 Question " : "Show answer "; fitQ(); }
+/* the answer text sits on the front only when the question (with its picture at full fit) leaves room for it */
+function fitFront(cur, left) {
+  var front = $(".ansfront", left), more = $(".ansmore", left), back = $(".ansback", cur); if (!front) return;
+  front.hidden = false; if (more) more.hidden = true; if (back) back.hidden = true;
+  if (more) more.hidden = true;
+  var long = left.scrollHeight > left.clientHeight + 1, btn = $("[data-flip]");
+  front.hidden = long; if (more) more.hidden = !long; if (back) back.hidden = !long;
+  if (long) cur.setAttribute("data-longans", "1"); else cur.removeAttribute("data-longans");
+  if (btn) btn.hidden = !long && !$(".flipa .figrow .fig, .flipa .thints", cur); }
+function flipIt() { var cur = $(".chunk.cur.flip"); if (!cur || !$("[data-flip]") || $("[data-flip]").hidden) return; flipOn = !flipOn; cur.classList.toggle("flipped", flipOn);
+  $("[data-flip]").firstChild.textContent = flipOn ? "\u2190 Question " : "Mark scheme "; fitQ(); }
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-flip]"); if (t) flipIt(); });
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-vmore]"); if (!t) return; var st = t.closest(".vstrip"), on = !st.classList.contains("more"); st.classList.toggle("more", on); t.setAttribute("aria-expanded", String(on)); fitQ(); });
 function fitQ() { var cur = $(".chunk.cur.fit"), foot = $(".tfoot"); if (!cur || !foot) return;
   var fh = foot.getBoundingClientRect().height; document.documentElement.style.setProperty("--footh", fh + "px");
   var room = Math.max(300, window.innerHeight - cur.getBoundingClientRect().top - fh - 22); cur.style.height = room + "px";
   var left = cur.classList.contains("flipped") ? cur.querySelector(".fita") : cur.querySelector(".fitq"), ims = $$(".fig img", left).filter(function (i) { return !i.hidden; });
+  var front = !cur.classList.contains("flipped") && $(".ansfront", left), more = front && $(".ansmore", left);
+  if (front) { front.hidden = true; if (more) more.hidden = false; }   // the question's picture is sized first, leaving room for the "on the back" line
+  if (cur.classList.contains("flipped")) { ims.forEach(function (i) { i.style.maxHeight = Math.max(200, left.clientHeight - 60) + "px"; }); return; }   // back: each picture as big as the card; the back scrolls
+  fitPics(left, ims); if (front) fitFront(cur, left); }
+function fitPics(left, ims) {
   if (!ims.length) return;
   var rows = []; ims.forEach(function (i) { var r = i.closest(".figrow") || i; if (rows.indexOf(r) < 0) rows.push(r); });
   var per = left.clientHeight; ims.forEach(function (i) { i.style.maxHeight = per + "px"; });
@@ -1397,7 +1425,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v26", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v27", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
