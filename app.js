@@ -190,7 +190,7 @@ setInterval(function () { if (L && L.dirty) flush(); }, 25000);
 var app = $("#app");
 function route() { return (location.hash || "#/").slice(1) || "/"; }
 window.addEventListener("hashchange", function () { if (L && L.dirty) flush(); render(); window.scrollTo(0, 0); });
-function nav(r) { var k = r.indexOf("/record") === 0 ? "record" : r.indexOf("/settings") === 0 ? "settings" : r.indexOf("/revise") === 0 ? "revise" : r.indexOf("/videos") === 0 ? "videos" : "lessons";
+function nav(r) { var k = r.indexOf("/record") === 0 ? "record" : r.indexOf("/settings") === 0 ? "settings" : r.indexOf("/revise") === 0 ? "revise" : r.indexOf("/videos") === 0 ? "videos" : r.indexOf("/exams") === 0 ? "exams" : "lessons";
   $$("[data-nav]").forEach(function (a) { if (a.getAttribute("data-nav") === k) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   $("#who").textContent = CFG.token ? CFG.student + " · " + CFG.device : ""; if (typeof subjSync === "function") subjSync(); }
 function render() {
@@ -202,6 +202,7 @@ function render() {
   if (r.indexOf("/record") === 0) return recordView();
   if (r.indexOf("/revise") === 0) return reviseView();
   if (r.indexOf("/videos") === 0) return videosView();
+  if (r.indexOf("/exams") === 0) { if (window.examsView) return window.examsView(r); app.innerHTML = '<div class="empty"><h3>Loading</h3></div>'; return; }
   return lessonsView();
 }
 function fail(e) { if (e && e.broken) { app.innerHTML = '<div class="empty"><h3>This file is broken</h3><p>' + esc(e.message) + '</p><p><a href="#/">Back to lessons</a></p></div>'; return; }
@@ -216,6 +217,8 @@ function settingsView() {
     '<div class="row2"><div class="field"><label for="s-repo">Repo</label><input type="text" id="s-repo" value="' + esc(CFG.repo) + '"></div>' +
     '<div class="field"><label for="s-dev">This device</label><input type="text" id="s-dev" value="' + esc(CFG.device) + '" placeholder="tablet, la57, mac"></div>' +
     '<div class="field"><label for="s-stu">Student</label><input type="text" id="s-stu" value="' + esc(CFG.student) + '"></div>' +
+    '<div class="field"><label for="s-xapi">Exam server</label><input type="text" id="s-xapi" value="' + esc(ls("tutor.examApi") || window.EXAM_API || "") + '" placeholder="https://tutor-exams….workers.dev"></div>' +
+    '<div class="field"><label for="s-xpw">Exam password</label><input type="password" id="s-xpw" autocomplete="off" value="' + esc(ls("tutor.examPw") || "") + '"><span class="hint">For the Exams tab. It stays in this browser only.</span></div>' +
     '<div class="field"><label for="s-font">Text style</label><select id="s-font"><option value="figtree"' + (f === "figtree" ? " selected" : "") + '>Clean (Figtree)</option><option value="lexend"' + (f === "lexend" ? " selected" : "") + '>Extra readable (Lexend)</option><option value="serif"' + (f === "serif" ? " selected" : "") + '>Book (Source Serif)</option></select></div></div>' +
     '<div class="field"><span class="lab">Teach layout for questions</span><span class="laysw" role="group">' + LAYOUTS.map(function (l) { return '<button type="button" class="chip" data-layout="' + l[0] + '" aria-pressed="' + (layoutPick() === l[0]) + '">' + l[1] + '</button>'; }).join("") + '</span><span class="hint">Side panel: question left, answer and verdicts right. Floating card: the question fills the screen; answer and verdicts in a card in the corner. Flip: the question fills the screen with the verdicts in the bottom bar; Show answer (key A) turns the screen to the answer.</span></div>' +
     '<div class="field"><span class="lab">Hints in Teach</span><label class="mkchk"><input type="checkbox" data-fold="maths"' + (foldOn("maths") ? " checked" : "") + '> Maths: fold the hints under each question (open them only when he is stuck)</label><label class="mkchk"><input type="checkbox" data-fold="chem"' + (foldOn("chem") ? " checked" : "") + '> Chemistry: the same</label></div>' +
@@ -767,6 +770,7 @@ document.addEventListener("change", function (e) { if (e.target.id !== "fb-makeu
 document.addEventListener("submit", function (ev) {
   ev.preventDefault(); var f = ev.target;
   if (f.id === "setform") { ls("tutor.token", $("#s-token").value.trim()); ls("tutor.repo", $("#s-repo").value.trim() || "alimuqaddasm/tutoring"); ls("tutor.device", $("#s-dev").value.trim() || "tablet"); ls("tutor.student", $("#s-stu").value.trim() || "UK-1");
+    ls("tutor.examApi", $("#s-xapi").value.trim().replace(/\/+$/, "") || null); ls("tutor.examPw", $("#s-xpw").value || null);
     var nf = $("#s-font").value; if (nf !== (ls("tutor.font") || "figtree")) { ls("tutor.font", nf); location.reload(); return; } TREE = null; nav(route()); testConnection(); return; }
   if (f.id === "newform") { var id = $("#n-date").value + "-" + $("#n-subj").value; var sess = newSession(id, null); sess.title = $("#n-title").value.trim(); sess.subject = $("#n-subj").value; sess.date = $("#n-date").value; if ($("#n-makeup").checked) { sess.makeup = true; sess.makeupAt = now(); }
     ls(localKey(id), JSON.stringify({ session: sess, sha: null, dirty: true })); location.hash = "#/lesson/" + encodeURIComponent(id); return; }
@@ -1459,6 +1463,9 @@ if (TRY) { document.body.classList.add("tryout");
   tb.querySelector("[data-suggest]").addEventListener("click", function () { tryOpen(false); });
   tb.querySelector("#tryleave").addEventListener("click", tryToggle); }
 layPressed();
+
+/* the Exams tab (exams.js) works through these */
+window.TD = { app: app, $: $, $$: $$, esc: esc, clean: clean, ls: ls, toast: toast, maths: maths, CFG: CFG, gh: gh, putB64: putB64, b64enc: b64enc, loadTree: loadTree, shaOf: shaOf, blobBytes: blobBytes, fileJSON: fileJSON, fileURL: fileURL, studentBase: studentBase, isTry: TRY, render: render };
 
 render();
 })();

@@ -20,3 +20,15 @@ On Windows run with PYTHONIOENCODING=utf-8, or printing ★ crashes the console.
 
 The tests read the real lessons, which change as Ali teaches; checks compare against what is already there, never against an empty lesson.
 Since v23 the default Teach layout is Flip; tests written for the Classic page set tutor.layout = classic in their browser.
+
+Exam section (needs a local exam server, nothing touches GitHub or the real server):
+
+    cd worker && npm install && npx vitest run                 # server: timer, extensions, time up, autosave, uploads, access (32 tests)
+    cd worker && npx wrangler d1 migrations apply tutor-exams --local
+    echo TEACHER_PASSWORD=local-test > worker/.dev.vars
+    (cd worker && npx wrangler dev --port 8787 --local) &      # the exam server on this machine
+    python -m http.server 8765 &                               # the app
+    python tests/test_exam.py         # student page + phone page: live start, +5 live, offline, pictures, drawing, QR, time up, hand in (32 checks)
+    python tests/test_exams_tab.py    # Exams tab: load from repo, time suggestion, link, start, + minutes, lock, mark, save to repo (33 checks)
+
+The maths and QR checks load KaTeX and the QR library from cdnjs, so they need internet.
