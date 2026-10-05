@@ -44,7 +44,7 @@ try:
         check("Settings: maths hints back as their own steps", p.locator(".outline .oc").filter(has_text="Q12 (3 min)").count() == 1); c.close()
         # 5. suggestion closes at once; sent in the background (to the pretend GitHub)
         F = R.FakeGH(); c = ctx_(b, fake=F); p = page(c, "?try#/lesson/" + CH + "/teach")
-        p.locator(".tmini [data-suggest]").click(); p.wait_for_timeout(300); p.fill("#sug-text", "TEST ONLY: ignore"); p.click("#sug-save"); p.wait_for_timeout(150)
+        p.click("[data-tmore]"); p.locator(".tmini [data-suggest]").click(); p.wait_for_timeout(300); p.fill("#sug-text", "TEST ONLY: ignore"); p.click("#sug-save"); p.wait_for_timeout(150)
         check("suggestion box closes at once", p.locator("#sug").count() == 0)
         p.wait_for_timeout(4000); body = F.files.get("docs/ui-feedback.jsonl", (None, b""))[1].decode("utf-8")
         check("the note reaches GitHub in the background", "TEST ONLY: ignore" in body and p.evaluate("localStorage.getItem('tutor.sugq')") == "[]"); c.close()

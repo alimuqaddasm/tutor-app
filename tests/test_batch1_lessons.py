@@ -68,7 +68,7 @@ with sync_playwright() as p:
         check("  folded to one line, with its first words showing", pg.evaluate("document.querySelector('.chunk.cur .fitq .tnote').open") is False and len(pg.inner_text(".chunk.cur .fitq .tnote summary .hint").strip()) > 5)
 
     # 2. preview: a verdict tap is not recorded
-    check("preview bar says verdicts are not recorded", "verdicts included" in pg.inner_text(".preview"))
+    check("preview label says verdicts are not recorded", "verdicts included" in pg.get_attribute(".preview", "title"))
     pg.click(".vstrip .vb-right")
     pg.wait_for_timeout(4500)
     path = "students/UK-1/lessons/%s/session.json" % LID

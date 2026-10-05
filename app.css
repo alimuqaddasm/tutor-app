@@ -546,7 +546,7 @@ body.teaching main{max-width:none;padding:0}
 /* =========================================================================
    v4 teach: preview vs live, Skip, one picture per screen, outline to any chunk, student view
    ========================================================================= */
-.preview{margin-top:10px;padding:9px 14px;border-radius:12px;background:var(--live-wash);color:var(--text);font-size:var(--s-sm)}
+.preview{align-self:center;padding:5px 10px;border-radius:999px;border:0;background:var(--live-wash);color:var(--live);font:800 11px var(--font);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;cursor:help}
 .preview b:first-child{color:var(--live);letter-spacing:.04em;text-transform:uppercase;font-size:12px}
 /* earlier chunks: one short grey line each, click to go back */
 .pastline{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:12px;color:var(--text-3);font-size:var(--s-sm);line-height:1.35}
@@ -1083,3 +1083,16 @@ body[data-tlayout="flip"] .chunk.fit .fitq .fig img{width:100%;object-fit:contai
 @keyframes micpulse{50%{box-shadow:0 0 0 6px rgba(209,47,47,.15)}}
 .vstrip .ctl.big .vmic{margin-top:0;min-height:44px}
 .bbody .ctl.big .vmic{margin-top:8px}
+/* Teach top bar in one slim row (5 Oct) */
+.teach3 .tbar-row{flex-wrap:nowrap}
+.teach3 .tcrumb{flex-wrap:nowrap;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.teach3 .tcrumb > *{flex:none}
+.teach3 .tcrumb > span:last-child{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.teach3 .tmini{flex:none;flex-wrap:nowrap}
+.tmore{position:relative}
+.tmore > .btn{min-width:44px;font-size:1.15rem;font-weight:800;position:relative}
+.tdot{position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--live)}
+.tmenu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;display:grid;gap:6px;min-width:200px;padding:8px;border-radius:14px;background:var(--surface);border:1px solid var(--line);box-shadow:0 12px 32px rgba(16,24,40,.18)}
+.tmenu[hidden]{display:none}
+.tmenu .btn{justify-content:flex-start;width:100%}
+@media (max-width:1200px){.teach3 .tbar-row{flex-wrap:wrap}.teach3 .tcrumb{flex:1 1 100%}.teach3 .tmini{flex:1 1 100%;flex-wrap:wrap;justify-content:flex-end;min-width:0}}

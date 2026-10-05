@@ -34,7 +34,7 @@ try:
         print("after a warm-up answer: writes", writes)
         # suggestion with point-at
         p.goto(B + "?try#/lesson/" + L + "/teach"); p.wait_for_selector(".teach3"); p.wait_for_timeout(500)
-        p.locator(".tmini [data-suggest]").click(); p.wait_for_timeout(1000)
+        p.click("[data-tmore]"); p.locator(".tmini [data-suggest]").click(); p.wait_for_timeout(1000)
         print("suggest where:", p.locator("#sug-w").inner_text())
         p.click("#sug-point"); p.wait_for_timeout(300); p.locator(".tfoot .btn.next").click(); p.wait_for_timeout(500)
         print("pointed at:", p.locator(".sug-t").inner_text(), "| slide did not move:", p.locator(".tmini .num").inner_text())

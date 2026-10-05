@@ -50,7 +50,9 @@ with sync_playwright() as p:
             check(tag + " short answer: under the question, or on the back if no room", on_front or pg.locator(".chunk.cur .fitq .ansmore:not([hidden])").count() == 1)
         check(tag + "   and the front doesn't scroll", scroll(".chunk.cur .fitq") <= 2, scroll(".chunk.cur .fitq"))
         go("Set 6 Q16")   # long answer with a mark scheme picture
-        check(tag + " long answer: the front says it is on the back", pg.locator(".chunk.cur .fitq .ansmore:not([hidden])").count() == 1 and pg.locator(".chunk.cur .fitq .ansfront[hidden]").count() == 1)
+        # with the slim top bar (5 Oct) the big screen may have room for it: then it shows whole on the front
+        check(tag + " long answer: on the back with a note, or whole on the front", (pg.locator(".chunk.cur .fitq .ansmore:not([hidden])").count() == 1 and pg.locator(".chunk.cur .fitq .ansfront[hidden]").count() == 1)
+              or (pg.locator(".chunk.cur .fitq .ansfront:not([hidden])").count() == 1 and scroll(".chunk.cur .fitq") <= 2))
         check(tag + "   and the front doesn't scroll", scroll(".chunk.cur .fitq") <= 2, scroll(".chunk.cur .fitq"))
         check(tag + "   the button says Mark scheme", pg.inner_text("[data-flip]").startswith("Mark scheme"))
         pg.keyboard.press("a")
