@@ -587,7 +587,7 @@ function quizBlock(b) {
     }).join("") + '</div>';
 }
 function questionBlock(q, big) {
-  var h = '<div class="qcard"><div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap"><div><h3>' + esc(q.label || "Question") + '</h3>' + (q.source ? '<div class="src">' + esc(q.source) + '</div>' : "") + '</div>' + ((q.img || []).length ? '<button class="btn small" type="button" data-show="' + esc(q.id) + '">Show him</button>' : "") + '</div>' + (q.html ? '<div class="prose">' + clean(q.html) + '</div>' : "") + (q.img || []).map(function (i) { return img(i, q.label); }).join("");
+  var h = '<div class="qcard"><div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap"><div><h3>' + esc(q.label || "Question") + '</h3>' + (q.source ? '<div class="src">' + esc(q.source) + '</div>' : "") + '</div>' + ((q.img || []).length || (q.parts || []).length ? '<button class="btn small" type="button" data-show="' + esc(q.id) + '">Show him</button>' : "") + '</div>' + (q.html ? '<div class="prose">' + clean(q.html) + '</div>' : "") + (q.parts && !big ? twinHTML(q) : "") + (q.img || []).map(function (i) { return img(i, q.label); }).join("");
   if (q.answer || (q.answerImg || []).length) h += '<details class="reveal"><summary>Mark scheme</summary><div class="prose">' + clean(q.answer || "") + (q.answerImg || []).map(function (i) { return img(i, "Mark scheme"); }).join("") + '</div></details>';
   var a = L.session.answers[q.id] || {};
   if (big) return h + ctlBig(q.id, a, q.label, q.marks) + '</div>';
@@ -596,7 +596,7 @@ function questionBlock(q, big) {
 function drawTally() {
   var old = $("#tally"); if (old) old.remove(); var box = $("#phasebox"); if (!box || L.phase === "_after" || L.phase === "_time") return;
   var c = { right: 0, wrong: 0, wording: 0, terminology: 0, partly: 0 }, n = 0;
-  Object.keys(L.session.answers).forEach(function (k) { var v = L.session.answers[k].v; if (c[v] != null) { c[v]++; n++; } });
+  Object.keys(L.session.answers).forEach(function (k) { if (k.indexOf("~") > 0) return; var v = L.session.answers[k].v; if (c[v] != null) { c[v]++; n++; } });
   L.session.extra.forEach(function (e) { if (c[e.v] != null) { c[e.v]++; n++; } });
   var d = document.createElement("div"); d.className = "tally"; d.id = "tally";
   d.innerHTML = n ? '<b>' + c.right + ' / ' + n + '</b><span>right</span><span>✗ ' + c.wrong + '</span><span>wording ' + c.wording + '</span><span>terminology ' + c.terminology + '</span><span>partly ' + c.partly + '</span>' : '<span>Tap a verdict on each answer. Tap it again to undo. Everything saves as you go.</span>';
@@ -670,7 +670,7 @@ function workView() {
 function itemsList() { var out = [];
   phases().forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) { if (b.type === "question") out.push({ id: b.id, label: b.label || b.id }); if (b.type === "quiz") (b.items || []).forEach(function (q, i) { out.push({ id: q.id, label: "Quiz " + (i + 1) + ": " + String(q.q).replace(/<[^>]+>/g, "").slice(0, 60) }); }); if (b.blocks) walk(b.blocks); }); })(p.blocks); });
   L.session.extra.forEach(function (e, i) { out.push({ id: "x:" + e.id, label: "Extra " + (i + 1) + ": " + e.q.slice(0, 60) }); }); return out; }
-function labelOf(id) { if (!id) return ""; var a = L.session.answers[id]; if (a && a.q && /^[dr]:/.test(id)) return a.q; var f = itemsList().filter(function (i) { return i.id === id; })[0]; return f ? f.label : id; }
+function labelOf(id) { if (!id) return ""; var a = L.session.answers[id]; if (a && a.q && (/^[dr]:/.test(id) || id.indexOf("~") > 0)) return a.q; var f = itemsList().filter(function (i) { return i.id === id; })[0]; return f ? f.label : id; }
 
 /* times: everything editable, including undoing "End lesson" */
 function tval(iso) { return iso ? hhmm(iso) : ""; }
@@ -704,11 +704,16 @@ function afterView() {
     cov.push('<li>' + line + '</li>'); covTxt.push(line.replace(/&amp;/g, "&")); });
   if (cov.length) h += '<div class="card" style="padding:16px 18px"><div class="label" style="margin-bottom:8px">What you covered (from your ticks)</div><ul class="list-plain" style="gap:4px">' + cov.join("") + '</ul>' + (fb.covered != null ? '<button class="btn small" type="button" id="usecov" data-cov="' + esc(covTxt.join("\n")) + '" style="margin-top:10px">Put this in \u201cWhat you actually covered\u201d</button>' : "") + '</div>';
   var wrong = [], stuckTxt = [];
-  Object.keys(x.answers).forEach(function (k) { var a = x.answers[k]; if (asked(a.v) && a.v !== "right" && a.v !== "skipped") stuckTxt.push(labelOf(k) + " (" + VHELP[a.v] + ")" + (a.note ? ": " + a.note : ""));
+  Object.keys(x.answers).forEach(function (k) { var a = x.answers[k]; if (a.parts) return; if (asked(a.v) && a.v !== "right" && a.v !== "skipped") stuckTxt.push(labelOf(k) + " (" + VHELP[a.v] + ")" + (a.note ? ": " + a.note : ""));
     if (asked(a.v) && a.v !== "right" && a.v !== "skipped") wrong.push('<li class="mistake ' + esc(a.v) + '"><div><b>' + esc(labelOf(k)) + '</b> <span class="pill">' + esc(VHELP[a.v]) + '</span></div>' + (a.note ? '<div class="fix">' + esc(a.note) + '</div>' : "") + '</li>'); });
   x.extra.forEach(function (e) { if (asked(e.v) && e.v !== "right" && e.v !== "skipped") stuckTxt.push(e.q + " (" + VHELP[e.v] + ")" + (e.note ? ": " + e.note : ""));
     if (asked(e.v) && e.v !== "right" && e.v !== "skipped") wrong.push('<li class="mistake ' + esc(e.v) + '"><div><b>' + esc(e.q) + '</b> <span class="pill">' + esc(VHELP[e.v]) + '</span></div>' + (e.note ? '<div class="fix">' + esc(e.note) + '</div>' : "") + '</li>'); });
   if (wrong.length) h += '<div><div class="label" style="margin-bottom:8px">Going into his mistakes log</div><ul class="list-plain">' + wrong.join("") + '</ul></div>';
+  /* every note you typed or said in the lesson, right answers included, so nothing said with the mic is lost (Ali, 5 Oct) */
+  var notes = Object.keys(x.answers).filter(function (k) { return x.answers[k].note; }).map(function (k) { var a = x.answers[k];
+    return '<li><b>' + esc(labelOf(k)) + '</b>' + (a.v ? ' <span class="pill">' + esc(VHELP[a.v] || a.v) + '</span>' : "") + '<div class="fix">' + esc(a.note) + '</div></li>'; })
+    .concat(x.extra.filter(function (e) { return e.note; }).map(function (e) { return '<li><b>' + esc(e.q) + '</b><div class="fix">' + esc(e.note) + '</div></li>'; }));
+  if (notes.length) h += '<div id="lessonnotes"><div class="label" style="margin-bottom:8px">Your notes from the lesson (' + notes.length + ')</div><ul class="list-plain notes-list">' + notes.join("") + '</ul><p class="hint" style="margin:6px 0 0">Saved with the lesson in GitHub (session.json), where the tutoring chat can read them.</p></div>';
   function fld(id, label, key, ph, area, def) { var v = fb[key] != null ? fb[key] : (def || ""); return '<div class="field"><label for="' + id + '">' + esc(label) + '</label>' + (area ? '<textarea id="' + id + '" data-fb="' + key + '" placeholder="' + esc(ph || "") + '">' + esc(v) + '</textarea>' : '<input type="text" id="' + id + '" data-fb="' + key + '" value="' + esc(v) + '" placeholder="' + esc(ph || "") + '">') + '</div>'; }
   h += '<form class="form" id="fbform"><div class="field"><span class="lab">How did it go?</span><div style="display:flex;gap:6px;flex-wrap:wrap">' + [1, 2, 3, 4, 5].map(function (n) { return '<button class="chip" type="button" data-rate="' + n + '" aria-pressed="' + (fb.rating === n) + '">' + n + '</button>'; }).join("") + '</div><span class="hint">1 rough · 5 went really well</span></div>' +
     (fb.at ? "" : '<p class="hint prefill">Filled in from your ticks and the notes you made during the lesson. Check it, add anything missing, then Finish.</p>') +
@@ -775,7 +780,9 @@ document.addEventListener("click", function (ev) {
     if (a.v === v) { var vw = VHELP[v] || v; toast(vw.charAt(0).toUpperCase() + vw.slice(1) + ": removed"); }
     a.v = a.v === v ? null : v; a.at = now(); a.d = CFG.device; if (box.getAttribute("data-q")) a.q = box.getAttribute("data-q"); save(iid, a); railCount();
     $$(".v", box).forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-v") === a.v)); }); var row = box.closest(".item, tr[data-row]"); if (row) row.setAttribute("data-v", a.v || ""); drawTally();
-    if (MODE === "teach" && (box.closest(".board") || box.classList.contains("vrail"))) { if (a.v === "wrong" || a.v === "partly" || a.v === "terminology" || a.v === "wording") BOARD.near = iid; else if (a.v === "right") BOARD.open = BOARD.open === iid ? boardJump(iid) : BOARD.open; setTimeout(redrawBoard, a.v === "right" ? 350 : 0); if (a.v === "right") BOARD.jumped = Date.now() + 350; }
+    if (box.classList.contains("vrail")) { box.classList.toggle("has", asked_(a.v)); var vm = $(".vr-more", box); if (vm) vm.setAttribute("aria-pressed", String(a.v === "wording" || a.v === "terminology" || a.v === "skipped")); }
+    if (MODE === "teach" && box.closest(".slider")) slMarked(iid, a);
+    else if (MODE === "teach" && (box.closest(".board") || (box.classList.contains("vrail") && box.closest(".t-board")))) { if (a.v === "wrong" || a.v === "partly" || a.v === "terminology" || a.v === "wording") BOARD.near = iid; else if (a.v === "right") BOARD.open = BOARD.open === iid ? boardJump(iid) : BOARD.open; setTimeout(redrawBoard, a.v === "right" ? 350 : 0); if (a.v === "right") BOARD.jumped = Date.now() + 350; }
     var oc = MODE === "teach" && $(".outline .oc.cur"); if (oc && TCH.seq[TCH.pos]) oc.className = oc.className.replace(/\b[vs]-[a-z]+\b/g, "").trim() + " " + stateOf(TCH.seq[TCH.pos]); return; }
   if (t.hasAttribute("data-exv")) { $$("[data-exv]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === t && b.getAttribute("aria-pressed") !== "true")); }); return; }
   if (t.hasAttribute("data-exdel")) { var did = t.getAttribute("data-exdel"); x.extra = x.extra.filter(function (e) { return e.id !== did; }); touch(); drawLesson(); return; }
@@ -788,7 +795,8 @@ function save(iid, a) { if (iid.indexOf("x:") !== 0) L.session.answers[iid] = a;
 document.addEventListener("input", function (ev) {
   var t = ev.target; if (!L) return; var x = L.session;
   if (t.hasAttribute("data-note") || t.hasAttribute("data-mk")) { var iid = t.closest("[data-item]").getAttribute("data-item"), a = target(iid);
-    if (t.hasAttribute("data-note")) a.note = t.value; else a.m = t.value === "" ? null : +t.value; a.at = now(); save(iid, a); }
+    if (t.hasAttribute("data-note")) a.note = t.value; else a.m = t.value === "" ? null : +t.value; a.at = now(); save(iid, a);
+    if (t.hasAttribute("data-mk") && t.closest(".slider")) { slSum(SL.q); var tot = $(".chunk.cur .sl-tot"); if (tot) tot.textContent = slTotal(SL.q); } }
   if (t.hasAttribute("data-exq")) { var e = x.extra.filter(function (z) { return z.id === t.getAttribute("data-exq"); })[0]; if (e) { e.q = t.value; e.at = now(); touch(); } }
   if (t.hasAttribute("data-fb")) { x.feedback[t.getAttribute("data-fb")] = t.value; x.feedback.at = now(); touch(); }
   if (t.hasAttribute("data-tm")) { var k = t.getAttribute("data-tm"), ed = x.time.edit;
@@ -1196,19 +1204,71 @@ var VIC = { right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
   partly: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>',
   mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18.5" cy="12" r="2"/></svg>' };
-function vrail(id, a, q) { a = a || {}; var off = id ? "" : " disabled", lab = { right: "Right", wrong: "Wrong", partly: "Partly" }, other = a.v === "wording" || a.v === "terminology" || a.v === "skipped";
+function vrail(id, a, q, o) { a = a || {}; o = o || {}; var off = id ? "" : " disabled", lab = { right: "Right", wrong: "Wrong", partly: "Partly" }, other = a.v === "wording" || a.v === "terminology" || a.v === "skipped";
   return '<div class="ctl big vrail' + (id ? "" : " idle") + (asked_(a.v) ? " has" : "") + '"' + (id ? ' data-item="' + esc(id) + '" data-q="' + esc(String(q || "").slice(0, 160)) + '"' : "") + ' role="toolbar" aria-label="Mark the open question">' +
+    (o.flip ? '<button class="vr vr-flip" type="button" ' + o.flip + ' aria-pressed="' + !!o.flipped + '" title="Mark scheme (A)" aria-label="Mark scheme"' + (o.flipHidden ? " hidden" : "") + '><span class="vd">A</span><kbd>A</kbd></button><span class="vrsep" aria-hidden="true"></span>' : "") +
     VBIG.map(function (v, i) { return '<button class="v vr vr-' + v[0] + '" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '" title="' + lab[v[0]] + ' (' + (i + 1) + ')" aria-label="' + lab[v[0]] + '"' + off + '><span class="vd">' + VIC[v[0]] + '</span><kbd>' + (i + 1) + '</kbd></button>'; }).join("") +
     (SR ? '<button class="vr vr-mic" type="button" data-mic title="Say what he said: tap, speak, it stops by itself (or hold M)" aria-label="Say what he said"' + off + '><span class="vd">' + VIC.mic + '</span><span class="vt">Say it</span><kbd>M</kbd></button>' : "") +
     '<button class="vr vr-more" type="button" data-vrmore aria-expanded="false" aria-pressed="' + other + '" title="Wording, terminology, didn\u2019t answer, note" aria-label="More"' + off + '><span class="vd">' + VIC.more + '</span><kbd>4-6</kbd></button>' +
     (id ? '<div class="vrmenu" hidden><span class="hint">Right idea, wrong words:</span>' + VSMALL.map(function (v, i) { return '<button class="v vs" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '">' + v[1] + '<kbd>' + (i + 4) + '</kbd></button>'; }).join("") +
       '<button class="v vs" type="button" data-v="skipped" title="He did not attempt it" aria-pressed="' + (a.v === "skipped") + '">He didn\u2019t answer<kbd>6</kbd></button>' +
+      (o.marks ? '<label class="mkin">Marks <input class="mk" type="number" min="0" step="0.5" inputmode="decimal" aria-label="Marks out of ' + esc(o.marks) + '" data-mk value="' + (a.m != null ? esc(a.m) : "") + '"><span class="hint num">/ ' + esc(o.marks) + '</span></label>' : "") +
       '<input class="note" type="text" data-note aria-label="What he said" placeholder="What he said / got wrong" value="' + esc(a.note || "") + '"></div>' : "") + '</div>'; }
 function boardJump(iid) { var c = TCH.seq[TCH.pos]; if (!c || c.t !== "board") return null;
   var keys = $$(".chunk.cur .brow .bq").map(function (b) { return b.getAttribute("data-bopen"); }), byk = {};
   c.items.forEach(function (it) { byk[boardKey(it)] = it; });
   var items = keys.map(function (k) { return byk[k]; }).filter(Boolean), it = byk[iid], n = it && items.indexOf(it) >= 0 ? boardNextIt(items, it) : null;
   return n ? boardKey(n) : null; }
+/* exam questions part by part (Ali, 5 Oct): the text set as a twin of the paper; one part big in the middle, the one
+   before shrunk above it with its mark, the next peeking below. ✓ gives the part its marks and slides the next one up;
+   ✗ and ½ stay. Each part is saved as "<question id>~<part>", and the question keeps the total. */
+var SL = { q: null, i: 0, back: false };
+function twinPart(p) { var mk = p.mk || (p.marks != null ? "(" + p.marks + ")" : "");
+  return '<div class="tw-pt"><span class="tw-lab">' + esc(p.lab || "") + '</span><div class="tw-q">' + clean(p.q || "") + '</div></div>' +
+    (p.img || []).map(function (i) { return img(i, "Diagram"); }).join("") + (mk ? '<div class="tw-mk">' + esc(mk) + '</div>' : ""); }
+function twinStem(q) { return q.stem || q.num ? '<div class="tw-stem">' + (q.num ? '<span class="tw-num">' + clean(q.num) + '</span>' : "") + '<div class="tw-q">' + clean(q.stem || "") + '</div></div>' : ""; }
+function twinHTML(q) { return '<div class="twin"><div class="tw">' + twinStem(q) + (q.parts || []).map(twinPart).join("") + '</div></div>'; }
+function slKey(q, i) { return q.id + "~" + (q.parts[i].lab || String(i + 1)); }
+function slMax(q) { return q.parts.reduce(function (t, p) { return t + (+p.marks || 0); }, 0) || +q.marks || 0; }
+function slTotal(q) { var a = L.session.answers[q.id]; return (a && a.m != null ? a.m : 0) + " / " + slMax(q); }
+function slSum(q) { var ps = q.parts.map(function (p, i) { return L.session.answers[slKey(q, i)] || {}; }), done = ps.filter(function (a) { return asked_(a.v); });
+  var a = L.session.answers[q.id] || {}; a.parts = q.parts.length;
+  a.m = done.length ? ps.reduce(function (t, x) { return t + (+x.m || 0); }, 0) : null;
+  a.v = !done.length ? null : done.length === ps.length && done.every(function (x) { return x.v === "right"; }) ? "right" : done.every(function (x) { return x.v === "wrong" || x.v === "skipped"; }) && done.length === ps.length ? "wrong" : "partly";
+  a.at = now(); a.d = CFG.device; a.q = q.label || ""; L.session.answers[q.id] = a; touch(); }
+function slMarked(iid, a) { var q = SL.q; if (!q) return; var i = SL.i, p = q.parts[i], mx = +p.marks || 0;
+  if (a.v === "right") a.m = mx; else if (a.v === "wrong" || a.v === "skipped") a.m = 0; else if (a.v === "partly") a.m = Math.floor(mx) / 2; else if (!a.v) a.m = null;
+  a.mk = mx; a.q = (q.label || "Question") + " " + (p.lab || "part " + (i + 1)); save(iid, a); slSum(q);
+  if (a.v === "right") { BOARD.jumped = Date.now() + 350; var n = slNextOpen(q, i); setTimeout(function () { if (n != null) SL.i = n; SL.back = false; slDraw(); }, 350); }
+  else slDraw(); }
+function slNextOpen(q, i) { for (var j = i + 1; j < q.parts.length; j++) if (!asked_((L.session.answers[slKey(q, j)] || {}).v)) return j; return i + 1 < q.parts.length ? i + 1 : null; }
+function slGo(i) { var q = SL.q; if (!q || i < 0 || i >= q.parts.length || i === SL.i) return; SL.i = i; SL.back = false; slDraw(); }
+function slFlip() { SL.back = !SL.back; slDraw(); }
+function slDraw() { var c = TCH.seq[TCH.pos], cur = $(".chunk.cur"); if (!c || !cur || !$(".slider", cur)) return; cur.innerHTML = stripHTML(c) + chunkHTML(c); maths(cur); loadImages(cur); }
+function sliderHTML(c) { var q = c.b;
+  if (SL.q !== q) { SL = { q: q, i: 0, back: false }; for (var j = 0; j < q.parts.length; j++) if (!asked_((L.session.answers[slKey(q, j)] || {}).v)) { SL.i = j; break; } }
+  var i = SL.i, p = q.parts[i], k = slKey(q, i), a = L.session.answers[k] || {}, hasBack = !!(p.answer || (p.ms || []).length);
+  var sym = { right: "\u2713", wrong: "\u2717", partly: "\u00bd", wording: "W", terminology: "T", skipped: "\u2013" };
+  var pills = q.parts.map(function (x, j) { var b = L.session.answers[slKey(q, j)] || {};
+    return '<button type="button" class="sl-pill' + (j === i ? " cur" : "") + (asked_(b.v) ? " v-" + b.v : "") + '" data-slgo="' + j + '">' + esc(x.lab || String(j + 1)) + (asked_(b.v) ? " " + (b.m != null ? esc(b.m) : sym[b.v] || "") : "") + '</button>'; }).join("");
+  function peek(j, cls) { var x = q.parts[j], b = L.session.answers[slKey(q, j)] || {};
+    return '<button type="button" class="sl-peek ' + cls + '" data-slgo="' + j + '"><span class="sl-pl">' + esc(x.lab || "") + '</span><span class="sl-pt">' + esc(plain(x.q || "")) + '</span>' + (asked_(b.v) ? '<span class="sl-badge v-' + esc(b.v) + '">' + (sym[b.v] || "") + (b.m != null ? " " + esc(b.m) + "/" + esc(x.marks) : "") + '</span>' : "") + '</button>'; }
+  var front = '<div class="twin"><div class="tw tw-solo">' + twinPart(p) + '</div></div>';
+  var back = '<div class="sl-ms"><div class="sl-msh">Mark scheme \u00b7 ' + esc(p.lab || "") + ' only</div>' + (p.answer ? '<div class="prose">' + clean(p.answer) + '</div>' : "") + (p.ms || []).map(function (m) { return img(m, "Mark scheme"); }).join("") +
+    '<label class="sl-mk">Marks <input class="mk" type="number" min="0" step="0.5" inputmode="decimal" data-mk aria-label="Marks out of ' + esc(p.marks) + '" value="' + (a.m != null ? esc(a.m) : "") + '"> / ' + esc(p.marks) + '</label></div>';
+  var h = '<div class="slider" data-qid="' + esc(q.id) + '"><div class="sl-hd"><span class="tl-q" aria-hidden="true">Q</span><b>' + esc(q.label || "Exam question") + '</b>' + (q.source ? '<span class="hint">' + esc(q.source) + '</span>' : "") +
+    '<span class="sl-pills">' + pills + '</span><span class="sl-tot num">' + slTotal(q) + '</span>' + ((q.img || []).length || q.parts.length ? '<button class="btn small" type="button" data-show="' + esc(q.id) + '">Show him</button>' : "") + '</div>' +
+    (twinStem(q) ? '<div class="twin sl-stem"><div class="tw">' + twinStem(q) + '</div></div>' : "") +
+    '<div class="sl-deck">' + (i > 0 ? peek(i - 1, "prev") : '<span class="sl-gap"></span>') +
+    '<div class="sl-cur' + (SL.back ? " back" : "") + '" data-item="' + esc(k) + '">' + (SL.back ? back : front) + '</div>' +
+    (i + 1 < q.parts.length ? peek(i + 1, "next") : '<span class="sl-gap"></span>') + '</div>' +
+    '<div class="sl-foot"><span class="hint">' + (i + 1 < q.parts.length ? "\u2713 and " + esc(q.parts[i + 1].lab || "the next part") + " slides up \u00b7 \u2191 \u2193 to move" : "Last part \u00b7 total " + slTotal(q)) + '</span>' +
+    (i + 1 < q.parts.length ? '<button type="button" class="btn small" data-slgo="' + (i + 1) + '">Next part \u2193</button>' : "") + '</div>' +
+    vrail(k, a, (q.label || "") + " " + (p.lab || ""), { flip: hasBack ? "data-flip" : "", flipped: SL.back }) + '</div>';
+  return h; }
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-slgo]"); if (!t || MODE !== "teach") return; slGo(+t.getAttribute("data-slgo")); });
+(function () { var y0 = null; document.addEventListener("touchstart", function (e) { y0 = e.target.closest && e.target.closest(".sl-deck") ? e.touches[0].clientY : null; }, { passive: true });
+  document.addEventListener("touchend", function (e) { if (y0 == null) return; var dy = e.changedTouches[0].clientY - y0; y0 = null; if (Math.abs(dy) > 60) slGo(SL.i + (dy < 0 ? 1 : -1)); }, { passive: true }); })();
 function asked_(v) { return !!v && v !== "tskip"; }
 function conceptHTML(c) {
   var pts = c.steps.map(function (st) { var kd = st.it.kind || "do"; return '<li class="cp k-' + esc(kd) + '"><span class="ck" aria-hidden="true">' + esc(KIC[kd] || "\u2192") + '</span><div><div class="prose">' + clean(st.it.html) + '</div>' + warmBtn(st) + '</div></li>'; }).join("");
@@ -1325,7 +1385,7 @@ function chunkHTML(c) {
         qtags(c.it) + '<div class="qtext prose">' + paperHTML(c.it.q, subjNow()) + '</div>' + answerBox(c.it.a, c.it.book ? c.it.page : null) + hintsHTML(c) + ctlBig(c.it.id, a, plain(c.it.q));
     case "drill": var a2 = L.session.answers[c.key] || {};
       return '<div class="qhead">' + tlabel("q", "?", (c.title || "Drill") + (c.of > 1 ? " \u00b7 " + c.n + " of " + c.of : "")) + '</div><div class="qtext prose">' + paperHTML(c.d[0], subjNow()) + '</div>' + answerBox(c.d[1]) + hintsHTML(c) + ctlBig(c.key, a2, plain(c.d[0]));
-    case "question": return tlabel("q", "Q", "Exam question") + questionBlock(c.b, true) + hintsHTML(c);
+    case "question": return (c.b.parts || []).length ? sliderHTML(c) + hintsHTML(c) : tlabel("q", "Q", "Exam question") + questionBlock(c.b, true) + hintsHTML(c);
     case "board": return boardHTML(c);
     case "concept": return conceptHTML(c);
     case "end": return '<div class="tphase"><div class="label">Done</div><h2>End of the script</h2><p class="hint">Log times, notes and what to change next time.</p><button class="btn next" type="button" data-tgo="after">After the lesson →</button></div>';
@@ -1421,7 +1481,7 @@ function layoutPick() { return ls("tutor.layout") || "flip"; }
 function layoutOf() { var v = layoutPick(); return v === "side" && window.innerWidth < 1000 ? "float" : v; }
 function layPressed() { $$("[data-layout]").forEach(function (b) { if (b.tagName === "BUTTON") b.setAttribute("aria-pressed", String(b.getAttribute("data-layout") === layoutPick())); }); }
 function applyFit() { var lay = layoutOf(), cur = $(".chunk.cur"); document.body.setAttribute("data-tlayout", lay);
-  if (!cur || lay === "classic" || !/\bt-(question|quiz|drill)\b/.test(cur.className)) return;
+  if (!cur || lay === "classic" || !/\bt-(question|quiz|drill)\b/.test(cur.className) || $(".slider", cur)) return;
   if (lay === "flip") return applyFlip(cur);
   var right = document.createElement("div"), body = document.createElement("div"), left = document.createElement("div");
   right.className = "fita" + (lay === "float" && !fitOpen ? " min" : ""); body.className = "fita-b"; left.className = "fitq";
@@ -1451,7 +1511,7 @@ function applyFlip(cur) {
   var hints = $$(".thints", cur); hints.forEach(function (h) { h.open = true; });
   var ctlb = $(".ctl.big", cur);
   while (cur.firstChild) left.appendChild(cur.firstChild);
-  if (front.childNodes.length) { left.appendChild(front); left.insertAdjacentHTML("beforeend", '<div class="ansmore" hidden>The answer is long: it is on the back. Press <b>Mark scheme</b> (A).</div>'); }
+  if (front.childNodes.length) { left.appendChild(front); left.insertAdjacentHTML("beforeend", '<div class="ansmore" hidden>The answer is long: it is on the back. Press <b>A</b>.</div>'); }
   ans.insertAdjacentHTML("afterbegin", '<div class="flip-h">' + esc(shortOf(TCH.seq[TCH.pos], 110)) + '</div>');
   if (pics.childNodes.length) ans.appendChild(pics);   // mark scheme pictures first, at full size (Ali, 5 Oct)
   if (backText.childNodes.length) { backText.hidden = true; ans.appendChild(backText); }
@@ -1459,9 +1519,10 @@ function applyFlip(cur) {
   var hasBack = !!(pics.childNodes.length || hints.length), hasAns = !!backText.childNodes.length;
   cur.appendChild(left); cur.appendChild(ans); cur.classList.add("fit", "flip"); cur.classList.toggle("flipped", flipOn && (hasBack || hasAns));
   // the button is there whenever there is an answer; fitFront hides it when the back would be empty
-  strip.innerHTML = hasBack || hasAns ? '<button type="button" class="btn flipbtn" data-flip' + (hasBack ? "" : " hidden") + '>' + (flipOn ? "\u2190 Question" : "Mark scheme") + ' <kbd>A</kbd></button>' : "";
-  if (ctlb) { strip.appendChild(ctlb); strip.insertAdjacentHTML("beforeend", '<button type="button" class="btn vmorebtn" data-vmore aria-expanded="false" title="Wording, terminology, marks, note">⋯</button>'); }
-  var foot = $(".tfoot"); if (foot && (hasBack || hasAns || ctlb)) foot.insertBefore(strip, foot.firstChild);
+  if (ctlb) { var iid = ctlb.getAttribute("data-item"), mk = $("input[data-mk]", ctlb);
+    ctlb.remove(); cur.insertAdjacentHTML("beforeend", vrail(iid, target(iid), ctlb.getAttribute("data-q"), { flip: hasBack || hasAns ? "data-flip" : "", flipped: flipOn && (hasBack || hasAns), flipHidden: !hasBack, marks: mk && mk.getAttribute("aria-label").replace(/\D+/g, "") })); }
+  else { strip.innerHTML = hasBack || hasAns ? '<button type="button" class="btn flipbtn" data-flip' + (hasBack ? "" : " hidden") + '>' + (flipOn ? "\u2190 Question" : "Mark scheme") + ' <kbd>A</kbd></button>' : "";
+    var foot = $(".tfoot"); if (foot && (hasBack || hasAns)) foot.insertBefore(strip, foot.firstChild); }
   if (front.childNodes.length) maths(front); if (hasAns) maths(backText);
   loadImages(ans); fitQ(); }
 /* the answer text sits on the front only when the question (with its picture at full fit) leaves room for it */
@@ -1473,8 +1534,9 @@ function fitFront(cur, left) {
   front.hidden = long; if (more) more.hidden = !long; if (back) back.hidden = !long;
   if (long) cur.setAttribute("data-longans", "1"); else cur.removeAttribute("data-longans");
   if (btn) btn.hidden = !long && !$(".flipa .figrow .fig, .flipa .thints", cur); }
-function flipIt() { var cur = $(".chunk.cur.flip"); if (!cur || !$("[data-flip]") || $("[data-flip]").hidden) return; flipOn = !flipOn; cur.classList.toggle("flipped", flipOn);
-  $("[data-flip]").firstChild.textContent = flipOn ? "\u2190 Question " : "Mark scheme "; fitQ(); }
+function flipIt() { if ($(".chunk.cur .slider")) { slFlip(); return; }
+  var cur = $(".chunk.cur.flip"), fb = $("[data-flip]"); if (!cur || !fb || fb.hidden) return; flipOn = !flipOn; cur.classList.toggle("flipped", flipOn);
+  if (fb.classList.contains("vr")) fb.setAttribute("aria-pressed", String(flipOn)); else fb.firstChild.textContent = flipOn ? "\u2190 Question " : "Mark scheme "; fitQ(); }
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-flip]"); if (t) flipIt(); });
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-bopen],[data-qnote],[data-qpages],[data-pgimg]"); if (!t || MODE !== "teach") return;
   if (t.hasAttribute("data-qpages")) { var pr = $(".chunk.cur .qs-pages"); if (pr) { pr.hidden = !pr.hidden; t.setAttribute("aria-expanded", String(!pr.hidden)); } return; }
@@ -1576,7 +1638,8 @@ document.addEventListener("toggle", function (e) { var d = e.target; if (MODE ==
 document.addEventListener("keydown", function (e) { if (MODE !== "teach" || SH || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || "")) return;
   if ($("#wuov") || $("#sug") || !$("#zoom").hidden || e.ctrlKey || e.altKey || e.metaKey) return;
   if (e.key === "0") { iskipIt(); return; }
-  if ((e.key === "a" || e.key === "A") && $(".chunk.cur.flip")) { flipIt(); return; }
+  if ((e.key === "a" || e.key === "A") && ($(".chunk.cur.flip") || $(".chunk.cur .slider"))) { flipIt(); return; }
+  if ((e.key === "ArrowDown" || e.key === "ArrowUp") && $(".chunk.cur .slider")) { e.preventDefault(); slGo(SL.i + (e.key === "ArrowDown" ? 1 : -1)); return; }
   if (/^[1-6]$/.test(e.key)) { var bs = $$(".chunk.cur .vrail [data-v]"); if (!bs.length) bs = $$(".chunk.cur .ctl.big [data-v]"); if (bs[+e.key - 1]) bs[+e.key - 1].click(); return; }
   var three = !!$(".tfoot.three");
   if (e.key === "ArrowRight") tmove(1, three ? "next" : "taught"); else if (e.key === "ArrowLeft") tmove(-1, "jump");
@@ -1596,7 +1659,8 @@ setInterval(function () { if (BC && MODE === "student" && L) BC.postMessage({ ty
 function showHim(id) { if (BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 10000 && id !== "*") { BC.postMessage({ type: "show", lesson: L.id, id: id }); toast("Sent to the student view"); return; } openShow(id); }
 function studentItems() { var out = [];
   phases().filter(function (p) { return !p.sys; }).forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) {
-    if (b.type === "question" && (b.img || []).length) out.push({ kind: "exam", id: b.id, img: b.img, p: p });
+    if (b.type === "question" && (b.parts || []).length) out.push({ kind: "exam", id: b.id, img: [], twin: b, p: p });
+    else if (b.type === "question" && (b.img || []).length) out.push({ kind: "exam", id: b.id, img: b.img, p: p });
     else if (b.type === "quiz") (b.items || []).forEach(function (it) { out.push({ kind: "quick", id: it.id, text: it.q, p: p }); });
     else if (b.type === "drill") (b.items || []).forEach(function (d) { out.push({ kind: "quick", id: drillKey(d[0]), text: d[0], p: p }); });
     if (b.blocks) walk(b.blocks); }); })(p.blocks); });
@@ -1608,7 +1672,7 @@ function drawStudent() {
   if (STU.i < 0 || !STU.items[STU.i] || STU.items[STU.i].kind !== STU.tab) STU.i = list.length ? list[0].i : -1;
   var ne = STU.items.filter(function (q) { return q.kind === "exam"; }).length, nq = STU.items.length - ne, cur = STU.items[STU.i], pos = list.indexOf(cur);
   var view = !cur ? '<div class="empty"><h3>No questions here</h3></div>' : cur.kind === "exam"
-    ? '<div class="stu-fit ' + (cur.img.length > 1 ? "many" : "one") + '">' + cur.img.map(function (i) { return '<img data-src="' + esc(i) + '" alt="Question" hidden>'; }).join("") + '</div>'
+    ? cur.twin ? '<div class="stu-twin">' + twinHTML(cur.twin) + '</div>' : '<div class="stu-fit ' + (cur.img.length > 1 ? "many" : "one") + '">' + cur.img.map(function (i) { return '<img data-src="' + esc(i) + '" alt="Question" hidden>'; }).join("") + '</div>'
     : '<div class="stu-q">' + paperHTML(cur.text, subjNow()) + '</div>';
   var drawer = '<aside class="stu-drawer"' + (STU.drawer ? "" : " hidden") + ' aria-label="Questions"><div class="stu-dh"><div class="modes"><button type="button" data-stab="exam" aria-pressed="' + (STU.tab === "exam") + '">Exam ' + ne + '</button><button type="button" data-stab="quick" aria-pressed="' + (STU.tab === "quick") + '">Quick ' + nq + '</button></div><button class="btn small" type="button" id="stufs">Full screen</button><button class="btn small" type="button" id="stux">Close</button></div>' +
     '<p class="hint">Only the question shows on his screen. Move with the arrow keys, a swipe, or the faint \u2039 \u203a at the edges; \u201cShow him\u201d in Teach sends a question here.</p><nav class="stu-list">' +
@@ -1638,7 +1702,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v34", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v35", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];

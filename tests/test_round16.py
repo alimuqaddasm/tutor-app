@@ -17,7 +17,7 @@ try:
         R.check("Thu 1 Oct: one solid dot (chemistry taught), maths shown as not taught", solid == 1 and thu == 2, (solid, thu))
         p.evaluate("location.hash = '#/lesson/%s/teach'" % R.MA); p.wait_for_selector(".teach3"); p.wait_for_timeout(800)
         p.evaluate("Array.from(document.querySelectorAll('.outline .oc')).find(x => x.textContent.indexOf('Set 5 Q6') >= 0).click()"); p.wait_for_timeout(1200)
-        R.check("Flip is the default layout", p.locator(".chunk.cur.flip").count() == 1 and p.locator(".vstrip").count() == 1)
+        R.check("Flip is the default layout", p.locator(".chunk.cur.flip").count() == 1 and p.locator(".chunk.cur .vrail").count() == 1)
         c.close(); b.close()
 finally:
     R.srv.kill()

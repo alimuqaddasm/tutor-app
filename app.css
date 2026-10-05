@@ -1136,3 +1136,64 @@ body[data-tlayout="flip"] .chunk.fit .fitq .fig img{width:100%;object-fit:contai
 [data-vstyle="soft"] .ctl.big.vrail .vr-mic.on .vd{background:#d12f2f;color:#fff}
 [data-vstyle="soft"] .ctl.big.vrail .vr[type][aria-pressed="true"] .vd{outline:0}
 @media (prefers-color-scheme:dark){:root[data-vstyle="soft"]:not([data-theme="light"]) .ctl.big.vrail .vr:not([aria-pressed="true"]) .vd{filter:brightness(.82) saturate(1.3)}}
+.notes-list li{display:grid;gap:3px;padding:10px 14px;border-left:4px solid var(--line-2);background:var(--surface-2,var(--bg));border-radius:0 10px 10px 0}
+.notes-list .fix{color:var(--text-2);font-size:var(--s-sm)}
+/* the A (mark scheme) button at the top of the round buttons */
+.ctl.big.vrail .vr[hidden]{display:none}
+.ctl.big.vrail .vr-flip .vd{background:#5b3fd9;font:900 22px var(--font)}
+.ctl.big.vrail .vr-flip[aria-pressed="true"] .vd{outline:3px solid #5b3fd9;outline-offset:3px;opacity:1}
+.ctl.big.vrail.has .vr-flip .vd{opacity:1}
+.ctl.big.vrail .vrsep{width:30px;height:1px;background:var(--line);margin:-2px 0}
+[data-vstyle="soft"] .ctl.big.vrail .vr-flip .vd{background:#ece8fd;color:#5b3fd9}
+[data-vstyle="soft"] .ctl.big.vrail .vr-flip[aria-pressed="true"] .vd{background:#5b3fd9;color:#fff;outline:0}
+.ctl.big.vrail .mkin{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:var(--s-sm);color:var(--text-2)}
+.ctl.big.vrail .mkin input{width:64px;min-height:40px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);padding:0 8px;font:inherit}
+/* text set as a twin of the exam paper (Ali, 5 Oct): Arial (AQA) or Times (Edexcel), the paper's indents in em.
+   On a wide card the line breaks are the paper's; on a narrow one the text keeps its size and the lines break sooner */
+.twin{container-type:inline-size;width:100%}
+.tw{font-family:Arial,Arimo,"Liberation Sans",sans-serif;font-size:clamp(19px,calc(100cqw / 40.4),34px);line-height:1.18;color:var(--text);max-width:40.4em;padding-right:3.25em;box-sizing:border-box}
+body[data-subject="maths"] .tw{font-family:"Times New Roman",Tinos,Times,serif}
+.tw p{margin:0 0 .3em}.tw p:last-child{margin-bottom:0}
+.tw b,.tw strong{font-weight:700}
+.tw-stem{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 .6em;margin-bottom:.36em}
+.tw-num{font-weight:400}.tw-num b{font-weight:700}
+.tw-pt{display:grid;grid-template-columns:2.57em minmax(0,1fr);margin-top:.36em}
+.tw-pt:first-child{margin-top:0}
+.tw-mk{text-align:right;font-weight:700;margin:.28em -2.85em 0 0}
+.tw .ln{white-space:nowrap;overflow:hidden;margin-top:.3em}
+.tw .dots{display:inline-block;width:25.8em;max-width:calc(100% - 6em);overflow:hidden;vertical-align:bottom}
+.tw .dots::after{content:"................................................................................................................................................................"}
+.tw .fig{margin:.4em 0 .2em 2.57em}
+@container (max-width:770px){.tw{padding-right:0}.tw-mk{margin-right:0}}
+/* the slider: one part at a time */
+.slider{display:flex;flex-direction:column;gap:10px;min-height:calc(100vh - 230px)}
+.sl-hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sl-hd .tl-q{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:#1f5fbf;color:#fff;font:800 13px var(--font)}
+.sl-hd b{font-size:var(--s-md)}.sl-hd .hint{font-size:13px}
+.sl-pills{display:flex;gap:6px;margin-left:auto}
+.sl-pill{all:unset;cursor:pointer;border:1.5px solid var(--line-2);border-radius:999px;padding:4px 10px;font:800 13px var(--font);color:var(--text-2);background:var(--surface)}
+.sl-pill.cur{border-color:var(--accent);background:var(--accent);color:var(--on-fill,#fff)}
+.sl-pill.v-right{border-color:var(--ok);color:var(--ok)}.sl-pill.v-wrong{border-color:var(--bad);color:var(--bad)}.sl-pill.v-partly,.sl-pill.v-wording,.sl-pill.v-terminology{border-color:var(--warn);color:var(--warn)}
+.sl-pill.cur[class*="v-"]{color:var(--on-fill,#fff)}
+.sl-tot{font:800 15px var(--mono);background:var(--bg);border-radius:10px;padding:5px 10px}
+.sl-stem .tw{font-size:clamp(15px,calc(100cqw / 52),24px);color:var(--text-2)}
+.sl-deck{flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;min-height:0}
+.sl-peek{all:unset;cursor:pointer;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:86%;margin:0 auto;padding:8px 12px;border:1px solid var(--line);border-radius:14px;opacity:.5;font-size:13px;color:var(--text-2);transition:opacity .15s}
+.sl-peek:hover{opacity:.85}
+.sl-peek .sl-pt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sl-peek .sl-pl{font-weight:800}
+.sl-badge{flex:none;border-radius:999px;padding:2px 8px;font:800 12px var(--font);color:#fff;background:var(--text-3)}
+.sl-badge.v-right{background:var(--ok)}.sl-badge.v-wrong{background:var(--bad)}.sl-badge.v-partly,.sl-badge.v-wording,.sl-badge.v-terminology{background:var(--warn)}
+.sl-gap{height:8px}
+.sl-cur{border:2px solid var(--accent);border-radius:18px;padding:16px 18px;background:var(--surface);box-shadow:0 10px 30px rgba(91,63,217,.12);animation:slup .22s ease-out}
+.sl-cur.back{border-color:var(--ok);box-shadow:0 10px 30px rgba(22,128,60,.12)}
+@keyframes slup{from{transform:translateY(14px);opacity:.4}to{transform:none;opacity:1}}
+.sl-msh{font:800 11px var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px}
+.sl-ms .fig img{width:100%;height:auto}
+.sl-mk{display:flex;align-items:center;gap:8px;margin-top:10px;font-weight:800}
+.sl-mk input{width:64px;min-height:40px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);padding:0 8px;font:inherit}
+.sl-foot{display:flex;align-items:center;justify-content:center;gap:12px}
+.sl-foot .hint{font-size:13px}
+.stu-twin{max-width:1100px;margin:0 auto;padding:24px;background:var(--surface);border-radius:18px}
+@media (prefers-reduced-motion:reduce){.sl-cur{animation:none}}
+.tstage:has(.slider),.tstage:has(.chunk.cur.fit .vrail){max-width:1240px}
