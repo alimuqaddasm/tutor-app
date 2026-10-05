@@ -220,6 +220,7 @@ function settingsView() {
     '<div class="field"><label for="s-xapi">Exam server</label><input type="text" id="s-xapi" value="' + esc(ls("tutor.examApi") || window.EXAM_API || "") + '" placeholder="https://tutor-exams….workers.dev"></div>' +
     '<div class="field"><label for="s-xpw">Exam password</label><input type="password" id="s-xpw" autocomplete="off" value="' + esc(ls("tutor.examPw") || "") + '"><span class="hint">For the Exams tab. It stays in this browser only.</span></div>' +
     '<div class="field"><label for="s-font">Text style</label><select id="s-font"><option value="figtree"' + (f === "figtree" ? " selected" : "") + '>Clean (Figtree)</option><option value="lexend"' + (f === "lexend" ? " selected" : "") + '>Extra readable (Lexend)</option><option value="serif"' + (f === "serif" ? " selected" : "") + '>Book (Source Serif)</option></select></div></div>' +
+    '<div class="field"><span class="lab">Teach flow</span><span class="laysw" role="group">' + FLOWS.map(function (f) { return '<button type="button" class="chip" data-flow="' + f[0] + '" aria-pressed="' + ((ls("tutor.flow") || "steps") === f[0]) + '">' + f[1] + '</button>'; }).join("") + '</span><span class="hint">Quick: no title screens, a section\u2019s points on one screen beside its picture, the quiz as one list you tap.</span></div>' +
     '<div class="field"><span class="lab">Teach layout for questions</span><span class="laysw" role="group">' + LAYOUTS.map(function (l) { return '<button type="button" class="chip" data-layout="' + l[0] + '" aria-pressed="' + (layoutPick() === l[0]) + '">' + l[1] + '</button>'; }).join("") + '</span><span class="hint">Side panel: question left, answer and verdicts right. Floating card: the question fills the screen; answer and verdicts in a card in the corner. Flip: the question fills the screen with the verdicts in the bottom bar; Show answer (key A) turns the screen to the answer.</span></div>' +
     '<div class="field"><span class="lab">Hints in Teach</span><label class="mkchk"><input type="checkbox" data-fold="maths"' + (foldOn("maths") ? " checked" : "") + '> Maths: fold the hints under each question (open them only when he is stuck)</label><label class="mkchk"><input type="checkbox" data-fold="chem"' + (foldOn("chem") ? " checked" : "") + '> Chemistry: the same</label></div>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="submit">Save and test</button><button class="btn" type="button" id="s-cache">Clear this device’s cache</button><button class="btn danger" type="button" id="s-clear">Remove key from this device</button><span class="hint" id="s-msg"></span></div></form>' +
@@ -252,7 +253,7 @@ function lessonsView() {
     })).then(function (items) {
       if (seq !== listSeq || route().indexOf("/lesson/") === 0 || route().indexOf("/record") === 0 || route().indexOf("/settings") === 0) return;
       HOMEALL = items; var sp = subjPick(); items = items.filter(function (it) { var sj = (it.s && it.s.subject) || (it.x && it.x.subject) || parseId(it.id).subject; return sp === "all" || sj === sp; });
-      app.innerHTML = homeHTML(items); fillHomeRevise();
+      app.innerHTML = homeHTML(items); fillHomeRevise(); warmUpNext(HOMEALL);
     });
   }
   if (!$(".home")) app.innerHTML = '<div class="empty"><h3>Loading lessons</h3></div>';
@@ -302,10 +303,13 @@ function dueOf(it) { var ms = missesOf(it.id).map(function (e) { return e.date; 
 function pendingAsks(items) { var t = todayIso();
   return items.filter(function (it) { return dateOf(it) >= mkStart() && !taughtOK(it.x) && (it.script || it.x) && dueOf(it) < t; })
     .map(function (it) { return { it: it, due: dueOf(it) }; }).sort(function (a, b) { return a.due.localeCompare(b.due); }); }
-function makeupSum(items) { var d = MK && MK.data; if (!d || !d.start) return null; var o = { start: +d.start.owed || 0, missed: 0, over: 0, made: 0 };
-  (d.entries || []).forEach(function (e) { o.missed += +e.minutes || 0; });
+function makeupSum(items) { var d = MK && MK.data; if (!d || !d.start) return null; var o = { start: +d.start.owed || 0, missed: 0, over: 0, made: 0, log: [] };
+  (d.entries || []).forEach(function (e) { var m = +e.minutes || 0; o.missed += m;
+    o.log.push({ date: e.date || (e.at || "").slice(0, 10), what: (e.lesson ? lessonName(e.lesson) + ": " : "") + (e.by === "ali" ? "you missed it" : e.by === "student" ? "he missed it" : "missed"), m: m }); });
   items.forEach(function (it) { var x = it.x; if (!x || x.status !== "finished" || dateOf(it) < d.start.date) return; var m = +(x.time && x.time.minutes) || 0;
-    if (x.makeup) o.made += m; else o.over += Math.max(0, m - LESSON_MIN); });
+    if (x.makeup) { o.made += m; if (m) o.log.push({ date: dateOf(it), what: lessonName(it.id) + ": make-up lesson, " + m + " min", m: -m }); }
+    else { o.over += Math.max(0, m - LESSON_MIN); if (m > LESSON_MIN) o.log.push({ date: dateOf(it), what: lessonName(it.id) + ": " + m + " min taught, " + (m - LESSON_MIN) + " over " + LESSON_MIN, m: -(m - LESSON_MIN) }); } });
+  o.log.sort(function (a, b) { return b.date.localeCompare(a.date); });
   o.owed = Math.round(o.start + o.missed - o.over - o.made); return o; }
 function mkSide(o) { var el = $("#mkside"); if (!el) return; el.hidden = !o; if (o) el.querySelector("b").textContent = Math.max(0, o.owed); }
 document.addEventListener("click", function (e) { var a = e.target.closest && e.target.closest("[data-mkjump]"); if (!a) return; e.preventDefault(); var c = $("#mkcard"); if (c) { c.scrollIntoView({ block: "center", behavior: "smooth" }); c.classList.add("flash"); setTimeout(function () { c.classList.remove("flash"); }, 1200); } });
@@ -313,7 +317,9 @@ function makeupCard(items) { var o = makeupSum(items); if (!o) return "";
   var ln = function (k, v) { return '<div class="statline"><span>' + k + '</span><b>' + v + '</b></div>'; };
   return '<div class="statcard mkcard" id="mkcard"><span class="k">MAKE-UP TIME OWED</span><div style="display:flex;align-items:baseline;gap:8px"><span class="big">' + Math.max(0, o.owed) + '</span><span class="hint">minutes</span></div>' +
     ln("Owed before " + esc(fmtDate(MK.data.start.date)), o.start) + ln("Missed lessons", "+" + Math.round(o.missed)) + ln("Lessons over " + LESSON_MIN + " min", "\u2212" + Math.round(o.over)) + ln("Make-up lessons", "\u2212" + Math.round(o.made)) +
+    (o.log.length ? '<details class="mklog"><summary>Every change (' + o.log.length + ')</summary><ul>' + o.log.map(function (l) { return '<li><span class="num">' + esc(fmtDate(l.date)) + '</span><span>' + esc(l.what) + '</span><b class="num">' + (l.m > 0 ? "+" : "\u2212") + Math.abs(Math.round(l.m)) + '</b></li>'; }).join("") + '</ul></details>' : "") +
     '<span class="hint">A make-up lesson: tick \u201cMake-up lesson\u201d when you finish it, or when you log it.</span></div>'; }
+function lessonName(id) { var p = parseId(id); return (SUBJ[p.subject] || p.subject || "Lesson") + " " + (p.date ? fmtDate(p.date) : id); }
 function askHTML(items) { var asks = pendingAsks(items); if (!asks.length) return "";
   return '<section class="asks" aria-label="Lessons to confirm">' + asks.map(function (a) { var it = a.it, s = it.s || {}, x = it.x, sj = subjOf(it);
     return '<div class="ask card" data-subject="' + esc(sj) + '" data-ask="' + esc(it.id) + '" data-due="' + esc(a.due) + '"><div class="ask-q"><span class="pill ' + esc(sj) + '">' + esc(SUBJ[sj] || sj) + '</span><b>Was ' + esc(fmtDate(a.due)) + '\u2019s lesson taught?</b><span class="hint">' + esc(s.title || (x && x.title) || "Lesson") + (a.due !== dateOf(it) ? " \u00b7 moved from " + esc(fmtDate(dateOf(it))) : "") + '</span></div>' +
@@ -616,6 +622,16 @@ function picsIn(v, deep, out) { out = out || []; if (!v) return out;
   var d = deep || v.level === "deep"; if (d) return out;
   ["img", "answerImg"].forEach(function (k) { var x = v[k]; (Array.isArray(x) ? x : x ? [x] : []).forEach(function (pth) { if (typeof pth === "string") out.push(pth); }); });
   Object.keys(v).forEach(function (k) { if (k !== "img" && k !== "answerImg") picsIn(v[k], d, out); }); return out; }
+/* from the home page: the next lesson in each subject gets its pictures fetched in the background,
+   so Teach opens with them already on the device */
+var warmed = {};
+function warmUpNext(items) { var t = todayIso(), bySubj = {};
+  items.filter(function (it) { return it.s && dateOf(it) >= addDays(t, -3) && !(it.x && it.x.status === "finished"); })
+    .sort(function (a, b) { return dateOf(a).localeCompare(dateOf(b)); })
+    .forEach(function (it) { var sj = subjOf(it); if (!bySubj[sj]) bySubj[sj] = it; });
+  Object.keys(bySubj).forEach(function (sj) { var it = bySubj[sj]; if (warmed[it.id]) return; warmed[it.id] = 1;
+    picsIn(it.s.phases || it.s, false).forEach(function (p) { p = /^(students|books|boards)\//.test(p) ? p : lessonBase(it.id) + p; if (pfQ.indexOf(p) < 0) pfQ.push(p); }); });
+  setTimeout(pfPump, 1500); }
 function pfPath(p) { return /^(students|books|boards)\//.test(p) ? p : lessonBase(L.id) + p; }
 function pfPump() { while (pfRun < 4 && pfQ.length) { var p = pfQ.shift(), sha = shaOf(p); if (!sha) continue; pfRun++; blobBytes(sha).catch(function () {}).then(function () { pfRun--; pfPump(); }); } }
 function prefetchLesson() { if (!L || !L.script || prefetchFor === L.id) return; prefetchFor = L.id;
@@ -749,8 +765,11 @@ document.addEventListener("click", function (ev) {
   if (t.hasAttribute("data-ans")) { var qa = t.parentNode.querySelector(".qa"); qa.hidden = !qa.hidden; t.textContent = qa.hidden ? "Show answer" : "Hide answer"; return; }
   if (t.hasAttribute("data-v") && !t.hasAttribute("data-rev") && previewing()) { toast("Preview: press Start lesson first to record verdicts"); return; }
   if (t.hasAttribute("data-v")) { var box = t.closest("[data-item]"), iid = box.getAttribute("data-item"), v = t.getAttribute("data-v"), a = target(iid);
+    if (a.v === v && a.at && Date.now() - Date.parse(a.at) < 600) return;   // a nervous double tap keeps the mark
+    if (a.v === v) { var vw = VHELP[v] || v; toast(vw.charAt(0).toUpperCase() + vw.slice(1) + ": removed"); }
     a.v = a.v === v ? null : v; a.at = now(); a.d = CFG.device; if (box.getAttribute("data-q")) a.q = box.getAttribute("data-q"); save(iid, a); railCount();
     $$(".v", box).forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-v") === a.v)); }); var row = box.closest(".item, tr[data-row]"); if (row) row.setAttribute("data-v", a.v || ""); drawTally();
+    if (MODE === "teach" && box.closest(".board")) { if (a.v === "wrong" || a.v === "partly" || a.v === "terminology" || a.v === "wording") BOARD.near = iid; else if (a.v === "right") BOARD.open = null; setTimeout(redrawBoard, a.v === "right" ? 350 : 0); }
     var oc = MODE === "teach" && $(".outline .oc.cur"); if (oc && TCH.seq[TCH.pos]) oc.className = oc.className.replace(/\b[vs]-[a-z]+\b/g, "").trim() + " " + stateOf(TCH.seq[TCH.pos]); return; }
   if (t.hasAttribute("data-exv")) { $$("[data-exv]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === t && b.getAttribute("aria-pressed") !== "true")); }); return; }
   if (t.hasAttribute("data-exdel")) { var did = t.getAttribute("data-exdel"); x.extra = x.extra.filter(function (e) { return e.id !== did; }); touch(); drawLesson(); return; }
@@ -1077,8 +1096,79 @@ function teachSeq() {
   seq.forEach(function (c) { if (c.t === "note") { pend.push(c); return; }
     if (pend.length) { if (c.t === "phase" || c.t === "end") pend.forEach(function (n) { out.push({ t: "text", b: n.b, key: null, p: n.p, mod: n.mod }); }); else c.notes = pend.map(function (n) { return n.b; }); pend = []; }
     out.push(c); });
+  return flowQuick() ? quickSeq(out) : out;
+}
+/* ---------------- quick flow (Ali, 5 Oct: "too many unnatural ums and pauses") ----------------
+   No screens for a part's or a section's title: they ride in a thin strip on the next screen. A section's steps and
+   pictures become one screen (points beside the picture). A quiz or drill becomes one board: every question in one
+   list, tap one to ask it. Exam questions keep their own screen. Chosen in Settings or from the try-out button. */
+function flowQuick() { return ls("tutor.flow") === "quick"; }
+var FLOWS = [["steps", "Step by step"], ["quick", "Quick flow"]];
+function flowPressed() { $$("button[data-flow]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-flow") === (ls("tutor.flow") || "steps"))); }); }
+document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("button[data-flow]"); if (!b) return; ls("tutor.flow", b.getAttribute("data-flow")); flowPressed();
+  if (MODE === "teach" && L) drawTeach(); toast("Teach flow: " + b.textContent); });
+function quickSeq(seq) {
+  var out = [], carry = { notes: [], mods: [] }, last = null;
+  function give(c) { if (carry.notes.length) c.notes = carry.notes.concat(c.notes || []); if (carry.mods.length) c.mods = carry.mods.concat(c.mods || []); carry = { notes: [], mods: [] }; out.push(c); last = c; return c; }
+  seq.forEach(function (c) {
+    if (c.t === "phase") { if (c.notes) carry.notes = carry.notes.concat(c.notes); last = null; return; }
+    if (c.t === "mod") { if (c.notes) carry.notes = carry.notes.concat(c.notes); carry.mods.push(c); last = null; return; }
+    if (c.t === "step" || c.t === "fig") {
+      if (last && last.t === "concept" && last.p === c.p && last.mod === c.mod) { (c.t === "step" ? last.steps : last.figs).push(c); if (c.notes) last.notes = (last.notes || []).concat(c.notes); return; }
+      give({ t: "concept", p: c.p, mod: c.mod, steps: c.t === "step" ? [c] : [], figs: c.t === "fig" ? [c] : [], notes: c.notes }); return; }
+    if (c.t === "quizpick") return;
+    if (c.t === "quiz" || c.t === "drill") {
+      var src = c.t === "quiz" ? c.b : c.title;
+      if (last && last.t === "board" && last.src === src) { if (c.t === "drill") last.items.push(c); return; }   // a quiz board already holds its whole block
+      if (c.t === "quiz") { var its = c.b.items || [];   // the board shows every question in the block, starred first
+        give({ t: "board", src: src, kind: "quiz", b: c.b, p: c.p, mod: c.mod, notes: c.notes, items: its.filter(function (i) { return i.star; }).concat(its.filter(function (i) { return !i.star; })).map(function (it) { return { t: "quiz", it: it, b: c.b, p: c.p, mod: c.mod }; }) }); return; }
+      give({ t: "board", src: src, kind: "drill", title: c.title, p: c.p, mod: c.mod, notes: c.notes, items: [c] }); return; }
+    if (c.t === "end" && (carry.notes.length || carry.mods.length)) { carry.notes.forEach(function (n) { out.push({ t: "text", b: n, key: null, p: c.p, mod: c.mod }); }); carry = { notes: [], mods: [] }; }
+    give(c);
+  });
+  out.forEach(function (c) { if (c.t === "concept") c.key = "c:" + c.steps.map(function (st) { return st.key; }).join("|"); });
   return out;
 }
+function boardKey(it) { return it.t === "quiz" ? it.it.id : it.key; }
+function boardQ(it) { return it.t === "quiz" ? it.it.q : it.d[0]; }
+function boardA(it) { return it.t === "quiz" ? it.it.a : it.d[1]; }
+var BOARD = { open: null, near: null };   // the question open on the board, and the one whose neighbours are pulled up after a miss
+function boardHTML(c) {
+  var items = c.items.slice(), asked = 0, right = 0, wrong = 0;
+  items.forEach(function (it) { var a = L.session.answers[boardKey(it)]; if (a && asked_(a.v)) { asked++; if (a.v === "right") right++; else if (a.v !== "skipped" && a.v !== "tskip") wrong++; } });
+  /* after a miss, the questions from the same book page (or topic) come up right under it */
+  if (BOARD.near) { var nb = items.filter(function (it) { return boardKey(it) === BOARD.near; })[0], pg = nb && nb.it && (nb.it.page || nb.it.topic);
+    if (pg) { var rel = items.filter(function (it) { return it !== nb && it.it && (it.it.page === pg || it.it.topic === pg) && !asked_((L.session.answers[boardKey(it)] || {}).v); });   // never asked, or skipped by you
+      items = items.filter(function (it) { return rel.indexOf(it) < 0; }); var at = items.indexOf(nb) + 1; items.splice.apply(items, [at, 0].concat(rel)); rel.forEach(function (it) { it.rel = true; }); } }
+  var h = '<div class="bhead"><b>' + esc(c.kind === "quiz" ? "Oral quiz" : (c.title || "Quick questions")) + '</b><span class="hint">' + items.length + ' questions · tap one to ask it' + (c.kind === "quiz" && items.some(function (it) { return it.it.star; }) ? ' · ★ first' : "") + '</span><span class="bscore num">' + asked + ' asked · ✓ ' + right + ' · ✗ ' + wrong + '</span></div><ol class="board">';
+  items.forEach(function (it, i) { var k = boardKey(it), a = L.session.answers[k] || {}, open = BOARD.open === k, star = it.it && it.it.star;
+    h += '<li class="brow' + (open ? " open" : "") + (it.rel ? " rel" : "") + (star ? " star" : "") + '" data-v="' + esc(a.v || "") + '">' +
+      '<button type="button" class="bq" data-bopen="' + esc(k) + '" aria-expanded="' + open + '"><span class="bn num">' + (i + 1) + '</span><span class="bt">' + (star ? '<i aria-hidden="true">★</i> ' : "") + esc(texPlain(plain(boardQ(it)))) + '</span>' +
+      (it.it && it.it.page ? '<span class="bpg">' + esc(it.it.page) + '</span>' : "") + '<span class="bv" aria-hidden="true">' + ({ right: "✓", wrong: "✗", partly: "½", wording: "W", terminology: "T", skipped: "–", tskip: "⏭" }[a.v] || "") + '</span></button>' +
+      (open ? '<div class="bbody"><div class="qtext prose">' + clean(boardQ(it)) + '</div>' + ctlBig(k, a, plain(boardQ(it))) + '<div class="bans prose">' + clean(boardA(it)) + '</div></div>' : "") + '</li>'; });
+  return h + '</ol>'; }
+function asked_(v) { return !!v && v !== "tskip"; }
+function conceptHTML(c) {
+  var pts = c.steps.map(function (st) { var kd = st.it.kind || "do"; return '<li class="cp k-' + esc(kd) + '"><span class="ck" aria-hidden="true">' + esc(KIC[kd] || "\u2192") + '</span><div><div class="prose">' + clean(st.it.html) + '</div>' + warmBtn(st) + '</div></li>'; }).join("");
+  var figs = c.figs.map(function (f) { return '<figure class="tfig">' + img(f.b.img, plain(f.b.caption) || "Picture") + (f.b.caption ? '<figcaption>' + clean(f.b.caption) + '</figcaption>' : "") + '</figure>'; }).join("");
+  return '<div class="concept' + (figs ? " withfig" : "") + '">' + (pts ? '<ul class="cpts">' + pts + '</ul>' : "") + (figs ? '<div class="cfigs">' + figs + '</div>' : "") + '</div>'; }
+/* the thin strip above a quick-flow screen: part and time, notes behind an i, the book pages as a row of numbers */
+function stripHTML(c) {
+  if (!flowQuick()) return notesHTML(c);
+  var h = "";   // the top bar already names the part and section
+  var notes = (c.notes || []).concat(c.p && c.p.show && c === firstOfPart(c) ? [{ html: '<p><b>On screen:</b></p>' + c.p.show }] : []);
+  if (notes.length) h += '<button type="button" class="qs-i" data-qnote aria-expanded="false"><span class="ic">i</span>' + (notes.length > 1 ? notes.length + " notes" : "Note") + '</button>';
+  var pages = c.t === "board" ? c.items.map(function (it) { return it.it && it.it.page; }).filter(Boolean) : c.t === "quiz" && c.it.page ? [c.it.page] : [];
+  pages = pages.filter(function (p, i) { return pages.indexOf(p) === i; }).sort();
+  if (pages.length) h += '<button type="button" class="qs-i qs-bk" data-qpages aria-expanded="false"><span class="ic">\u25a4</span>Book pages ' + pages.length + '</button><span class="qs-pages" hidden>' + pages.map(function (pg) { var im = pageImg(pg); return '<button type="button" class="qs-pg" ' + (im ? 'data-pgimg="' + esc(im) + '"' : "disabled") + ' title="' + esc(((L.script && L.script.pages) || {})[pg] || "") + '">' + esc(pg.replace(/^p\./, "")) + '</button>'; }).join("") + '</span>';
+  h = h ? '<div class="qstrip">' + h + '</div>' : "";
+  if (notes.length) h += '<div class="qs-notes" hidden>' + notes.map(function (b) { return '<div class="prose">' + clean(b.html) + '</div>'; }).join("") + '</div>';
+  return h; }
+function firstOfPart(c) { for (var i = 0; i < TCH.seq.length; i++) if (TCH.seq[i].p === c.p) return TCH.seq[i]; return null; }
+/* "p.172" -> the book spread that holds it, e.g. books/cgp-aqa-chemistry/p172-173.jpg */
+function pageImg(pg) { var n = +String(pg).replace(/\D/g, ""); if (!n || !TREE) return null;
+  var hit = TREE.filter(function (t) { var m = /^books\/[^/]+\/p(\d+)(?:-(\d+))?\.(?:jpe?g|png|webp)$/.exec(t.path); return m && n >= +m[1] && n <= +(m[2] || m[1]); })[0];
+  return hit ? hit.path : null; }
 function foldOn(subj) { var v = ls("tutor.fold." + subj); return v == null ? subj === "maths" : v === "1"; }
 function hintsHTML(c) { if (!c.hints || !c.hints.length) return "";
   return '<details class="thints"><summary><span class="ic">?</span><b>Hints for you</b><span class="hint">' + c.hints.length + ' \u00b7 only if he gets stuck</span></summary><div class="prose">' + c.hints.map(function (h) { return '<div class="th">' + clean(h) + '</div>'; }).join("") + '</div></details>'; }
@@ -1123,9 +1213,12 @@ function texPlain(t) { return String(t).replace(/\\\(|\\\)|\\\[|\\\]/g, "").repl
   .replace(/\\(,|;|!| )/g, " ").replace(/\\(left|right)/g, "").replace(/[{}]/g, "").replace(/\s+/g, " ").replace(/\b(sin|cos|tan|sec|cosec|cot|ln|log) \(/g, "$1(").trim(); }
 function shortOf(c, n) { n = n || 90; var t = c.t === "phase" ? c.p.name : c.t === "mod" ? c.b.name : c.t === "step" ? plain(c.it.html) : c.t === "text" ? plain(c.b.html) :
     c.t === "quizpick" ? "Choose the quiz questions" : c.t === "quiz" ? plain(c.it.q) : c.t === "drill" ? plain(c.d[0]) : c.t === "question" ? (c.b.label || "Exam question") :
-    c.t === "fig" ? (plain(c.b.caption) || "Picture") : c.t === "video" ? "Video: " + (c.b.title || "") : c.t === "reveal" ? (c.b.label || "Reveal") : c.t === "end" ? "End of the script" : (c.t || ""); t = texPlain(t);
+    c.t === "fig" ? (plain(c.b.caption) || "Picture") : c.t === "board" ? (c.kind === "quiz" ? "Oral quiz: " : (c.title || "Quick questions") + ": ") + c.items.length + " questions" :
+    c.t === "concept" ? (c.mod || (c.steps[0] ? plain(c.steps[0].it.html) : "Pictures")) : c.t === "video" ? "Video: " + (c.b.title || "") : c.t === "reveal" ? (c.b.label || "Reveal") : c.t === "end" ? "End of the script" : (c.t || ""); t = texPlain(t);
   return t.length > n ? t.slice(0, n - 1) + "…" : t; }
-function stateOf(c) { var k = chunkKey(c); if (!k) return ""; if (c.t === "quiz" || c.t === "drill" || c.t === "question") { var a = L.session.answers[k]; return a && a.v ? "v-" + a.v : ""; } var dd = L.session.done && L.session.done[k]; return isDone(k) ? "done" : dd && dd.off && dd.skip ? "s-skip" : ""; }
+function stateOf(c) { if (c.t === "board") { var n = c.items.filter(function (it) { return asked_((L.session.answers[boardKey(it)] || {}).v); }).length; return n ? "done" : ""; }
+  if (c.t === "concept") { var ks = c.steps.map(function (st) { return st.key; }); return ks.length && ks.every(isDone) ? "done" : ks.some(function (k) { var d = L.session.done && L.session.done[k]; return d && d.off && d.skip; }) ? "s-skip" : ""; }
+  var k = chunkKey(c); if (!k) return ""; if (c.t === "quiz" || c.t === "drill" || c.t === "question") { var a = L.session.answers[k]; return a && a.v ? "v-" + a.v : ""; } var dd = L.session.done && L.session.done[k]; return isDone(k) ? "done" : dd && dd.off && dd.skip ? "s-skip" : ""; }
 function iconOf(c) { return c.t === "step" ? (KIC[c.it.kind] || "→") : c.t === "quiz" || c.t === "drill" ? "?" : c.t === "question" ? "Q" : c.t === "fig" ? "▧" : c.t === "video" ? "▶" : c.t === "mod" ? (c.b.level === "deep" ? "D" : "C") : c.t === "quizpick" ? "★" : "¶"; }
 function chunkHTML(c) {
   var k = chunkKey(c), tk = k && { step: 1, text: 1, mod: 1 }[c.t] ? '<span class="ctick">' + tick_(k, shortOf(c)) + '</span>' : "";
@@ -1145,6 +1238,8 @@ function chunkHTML(c) {
     case "drill": var a2 = L.session.answers[c.key] || {};
       return '<div class="qhead">' + tlabel("q", "?", (c.title || "Drill") + (c.of > 1 ? " \u00b7 " + c.n + " of " + c.of : "")) + '</div><div class="qtext prose">' + clean(c.d[0]) + '</div>' + answerBox(c.d[1]) + hintsHTML(c) + ctlBig(c.key, a2, plain(c.d[0]));
     case "question": return tlabel("q", "Q", "Exam question") + questionBlock(c.b, true) + hintsHTML(c);
+    case "board": return boardHTML(c);
+    case "concept": return conceptHTML(c);
     case "end": return '<div class="tphase"><div class="label">Done</div><h2>End of the script</h2><p class="hint">Log times, notes and what to change next time.</p><button class="btn next" type="button" data-tgo="after">After the lesson →</button></div>';
     default: return block(c.b || {});
   }
@@ -1168,17 +1263,17 @@ function drawTeach() {
     '<div class="tmini"><button class="btn small" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn small" type="button" data-suggest>Suggest</button><button class="btn small trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button><a class="btn small" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a><span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
     '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>' +
     (lv ? "" : previewing() ? '<div class="preview"><b>Preview</b> · nothing is recorded until you press <b>Start lesson</b>, verdicts included. You can still tick a chunk by hand.</div>'
-      : '<div class="preview"><b>Clock stopped</b> · chunks are not ticked by themselves. Verdicts you tap still count.</div>') + '</div><div class="tstage">';
+      : '<div class="preview"><b>Clock stopped</b> · Taught, Skip and verdicts still count.</div>') + '</div><div class="tstage">';
   /* the last two chunks of the same section as short grey lines, then the current one */
   var keep = window.innerWidth < 900 ? 1 : 2, start = TCH.pos;
   while (start > 0 && TCH.pos - start < keep && TCH.seq[start - 1].p === c.p && TCH.seq[start - 1].mod === c.mod && TCH.seq[start - 1].t !== "phase") start--;
   h += '<div id="tbody">';
-  for (var i = start; i < TCH.pos; i++) h += pastLine(TCH.seq[i], i);
-  h += '<div class="chunk cur t-' + c.t + (stateOf(c) === "done" ? " done" : "") + '" data-tk="' + esc(chunkKey(c) || "") + '">' + notesHTML(c) + chunkHTML(c) + '</div>';
+  if (!flowQuick()) for (var i = start; i < TCH.pos; i++) h += pastLine(TCH.seq[i], i);
+  h += '<div class="chunk cur t-' + c.t + (stateOf(c) === "done" ? " done" : "") + '" data-tk="' + esc(chunkKey(c) || "") + '">' + stripHTML(c) + chunkHTML(c) + '</div>';
   var nx = TCH.seq[TCH.pos + 1];
   h += '</div>' + (nx ? '<button type="button" class="upnext" data-tjump="' + (TCH.pos + 1) + '"><b>UP NEXT</b><span>' + esc(shortOf(nx, 130)) + '</span></button>' : "") + '</div>' + footHTML(c, lv) + '</section></div>';
   app.innerHTML = h; fillRows(app); loadImages(app); maths(app); tick();
-  window.scrollTo(0, 0); fitBoards(); applyFit(); layW = layoutOf(); warmCount(); prefetchLesson(); prefetchAhead(TCH.seq.slice(TCH.pos + 1, TCH.pos + 5));
+  window.scrollTo(0, 0); fitBoards(); fitBoard(); applyFit(); layW = layoutOf(); warmCount(); prefetchLesson(); prefetchAhead(TCH.seq.slice(TCH.pos + 1, TCH.pos + 5));
   if (fgo) { var fb = $('.tfoot [data-tgo="' + fgo + '"]') || $(".tfoot .btn.next") || $(".tfoot .btn"); if (fb && !fb.disabled) fb.focus({ preventScroll: true }); }
   /* move only the outline's own scroll box: scrollIntoView also scrolled the page down (Ali, 2 Oct) */
   var ol = $(".outline"), oc = $(".outline .cur"); if (ol && oc && ol.clientHeight) ol.scrollTop += oc.getBoundingClientRect().top - ol.getBoundingClientRect().top - ol.clientHeight / 2 + oc.offsetHeight / 2;
@@ -1186,11 +1281,12 @@ function drawTeach() {
   ls(tposKey(), String(TCH.pos));
 }
 function footHTML(c, lv) {
-  var taughtable = { step: 1, mod: 1 }[c.t] || (c.t === "text" && c.key), mid = "";
+  var taughtable = { step: 1, mod: 1, concept: 1, board: 1 }[c.t] || (c.t === "text" && c.key), mid = "";
   if (c.t === "question" && (c.b.img || []).length) mid += '<button class="btn small" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
   if (c.t === "mod") mid += '<button class="btn small" type="button" data-tskip="mod">Skip this section</button>';
   if (c.t === "phase") mid += '<button class="btn small" type="button" data-tskip="phase">Skip this part</button>';
-  var three = lv && taughtable && c.t !== "mod", qk = { quiz: 1, drill: 1, question: 1 }[c.t] && chunkKey(c), qa = qk && L.session.answers[qk];
+  // Taught / Skip / Next once the lesson has started (clock running, paused or ended); before that only Next
+  var three = !previewing() && taughtable && c.t !== "mod", qk = { quiz: 1, drill: 1, question: 1 }[c.t] && chunkKey(c), qa = qk && L.session.answers[qk];
   var iskip = qk ? '<button class="btn iskip" type="button" data-tiskip aria-pressed="' + !!(qa && qa.v === "tskip") + '" title="You chose not to ask it: not a verdict, never a mistake">\u23ed I skipped it <kbd>0</kbd></button>' : "";
   var lab = c.t === "phase" ? "Start this part" : c.t === "mod" ? "Teach this" : "Next";
   return '<div class="tfoot' + (three ? " three" : "") + '"><button class="btn" type="button" data-tgo="-1"' + (TCH.pos === 0 ? " disabled" : "") + '>← Back</button><div class="mid">' + mid + '</div>' +
@@ -1214,7 +1310,7 @@ function runwayHTML(c) {
       if (q.t === "mod") { rows += '<button type="button" class="om' + (j === TCH.pos ? " cur" : "") + (isDone(q.key) ? " done" : "") + '" data-tjump="' + j + '">' + esc(q.b.name) + (q.b.level === "deep" ? ' <small>deep</small>' : "") + '</button>'; lastMod = q.b.name; return; }
       rows += '<button type="button" class="oc ' + stateOf(q) + (j === TCH.pos ? " cur" : "") + (q.mod ? " in" : "") + '" data-tjump="' + j + '"><span class="ic">' + iconOf(q) + '</span><span class="tx">' + esc(shortOf(q, 70)) + '</span></button>'; });
     var open = TCH.open[p.id] != null ? TCH.open[p.id] : i === ci;
-    var pj = seqIndex(function (q) { return q.t === "phase" && q.p === p; });
+    var pj = flowQuick() ? seqIndex(function (q) { return q.p === p; }) : seqIndex(function (q) { return q.t === "phase" && q.p === p; });
     return '<details class="opart' + (i < ci ? " past" : i === ci ? " now" : "") + '" data-pid="' + esc(p.id) + '"' + (open ? " open" : "") + '><summary><span class="nm">' + esc(p.name) + '</span>' + (sub ? '<span class="sub">' + esc(sub) + '</span>' : "") + '</summary>' +
       '<button type="button" class="oc go' + (TCH.pos === pj ? " cur" : "") + '" data-tjump="' + pj + '"><span class="ic">▸</span><span class="tx">Start of this part</span></button>' + rows + '</details>';
   }).join("");
@@ -1287,6 +1383,17 @@ function fitFront(cur, left) {
 function flipIt() { var cur = $(".chunk.cur.flip"); if (!cur || !$("[data-flip]") || $("[data-flip]").hidden) return; flipOn = !flipOn; cur.classList.toggle("flipped", flipOn);
   $("[data-flip]").firstChild.textContent = flipOn ? "\u2190 Question " : "Mark scheme "; fitQ(); }
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-flip]"); if (t) flipIt(); });
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-bopen],[data-qnote],[data-qpages],[data-pgimg]"); if (!t || MODE !== "teach") return;
+  if (t.hasAttribute("data-qpages")) { var pr = $(".chunk.cur .qs-pages"); if (pr) { pr.hidden = !pr.hidden; t.setAttribute("aria-expanded", String(!pr.hidden)); } return; }
+  if (t.hasAttribute("data-bopen")) { var k = t.getAttribute("data-bopen"); BOARD.open = BOARD.open === k ? null : k; redrawBoard(); return; }
+  if (t.hasAttribute("data-qnote")) { var nb = $(".chunk.cur .qs-notes"); if (nb) { nb.hidden = !nb.hidden; t.setAttribute("aria-expanded", String(!nb.hidden)); } return; }
+  fileURL(t.getAttribute("data-pgimg")).then(function (u) { if (u) { $("#zimg").src = u; $("#zoom").hidden = false; } }); });
+function fitBoard() { var bd = $(".chunk.cur .board"), foot = $(".tfoot"); if (!bd || !foot) return;
+  bd.style.maxHeight = Math.max(220, window.innerHeight - bd.getBoundingClientRect().top - foot.getBoundingClientRect().height - 34) + "px"; }
+window.addEventListener("resize", function () { if (MODE === "teach") fitBoard(); });
+function redrawBoard() { var c = TCH.seq[TCH.pos], cur = $(".chunk.cur"); if (!c || c.t !== "board" || !cur) return;
+  var y = $(".chunk.cur .board") && $(".chunk.cur .board").scrollTop; cur.innerHTML = stripHTML(c) + chunkHTML(c); maths(cur);
+  fitBoard(); var bd = $(".chunk.cur .board"); if (bd && y) bd.scrollTop = y; var o = $(".chunk.cur .brow.open"); if (o && o.scrollIntoView) o.scrollIntoView({ block: "nearest" }); }
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-vmore]"); if (!t) return; var st = t.closest(".vstrip"), on = !st.classList.contains("more"); st.classList.toggle("more", on); t.setAttribute("aria-expanded", String(on)); fitQ(); });
 function fitQ() { var cur = $(".chunk.cur.fit"), foot = $(".tfoot"); if (!cur || !foot) return;
   var fh = foot.getBoundingClientRect().height; document.documentElement.style.setProperty("--footh", fh + "px");
@@ -1330,10 +1437,14 @@ function setDone(key, label, on, skip) { var x = L.session; x.done = x.done || {
 /* how: "taught" ticks the chunk you leave (only while the clock runs); "skip" records it as skipped on purpose;
    "next" and "jump" move without recording anything */
 function tmove(d, how) {
-  var c = TCH.seq[TCH.pos], x = L.session; flipOn = false;
-  if (how === "skip" && live() && c.key && { step: 1, text: 1 }[c.t]) { setDone(c.key, shortOf(c), false, true); touch(); }
-  if (how === "taught" && live() && c.key && { step: 1, text: 1 }[c.t] && !isDone(c.key)) { setDone(c.key, shortOf(c), true); touch(); }
-  if (how === "taught" && live() && c.t === "mod" && !isDone(c.key)) { setDone(c.key, c.b.name, true); touch(); }
+  var c = TCH.seq[TCH.pos], x = L.session; flipOn = false; BOARD = { open: null, near: null };
+  if (how === "skip" && !previewing() && c.key && { step: 1, text: 1 }[c.t]) { setDone(c.key, shortOf(c), false, true); touch(); }
+  if (how === "taught" && !previewing() && c.key && { step: 1, text: 1 }[c.t] && !isDone(c.key)) { setDone(c.key, shortOf(c), true); touch(); }
+  if (how === "taught" && !previewing() && c.t === "mod" && !isDone(c.key)) { setDone(c.key, c.b.name, true); touch(); }
+  if (!previewing() && (how === "taught" || how === "skip") && (c.t === "concept" || c.t === "board" || c.mods)) {   // quick flow: one screen stands for its steps and its section
+    (c.steps || []).forEach(function (st) { if (how === "skip") setDone(st.key, shortOf(st), false, true); else if (!isDone(st.key)) setDone(st.key, shortOf(st), true); });
+    (c.mods || []).forEach(function (m) { if (how === "skip") setDone(m.key, m.b.name, false, true); else if (!isDone(m.key)) setDone(m.key, m.b.name, true); });
+    touch(); }
   var n = Math.max(0, Math.min(TCH.seq.length - 1, TCH.pos + d)); TCH.pos = n;
   var np = TCH.seq[n] && TCH.seq[n].p, r = replay(x.time.log);
   if (np && r.running && r.phase !== np.id) logEvent("phase", np.id);
@@ -1425,7 +1536,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v27", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v28", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
@@ -1503,14 +1614,14 @@ $$("[data-trytoggle]").forEach(function (b) { b.textContent = TRY ? "Leave try-o
 /* the try-out marker */
 if (TRY) { document.body.classList.add("tryout");
   var tb = document.createElement("div"); tb.className = "trybar";
-  tb.innerHTML = '<button class="trydot" type="button" id="trydot" aria-expanded="false" aria-label="Try-out mode: nothing is saved. Open to suggest a change" title="Try-out: nothing is saved"></button><div class="trypanel" hidden><b>Try-out</b><span>Nothing is saved in this tab.</span><button class="btn small" type="button" data-suggest>Suggest a change</button><span class="laysw" role="group" aria-label="Teach layout">' + LAYOUTS.map(function (l) { return '<button type="button" class="chip" data-layout="' + l[0] + '">' + l[1] + '</button>'; }).join("") + '</span><button class="btn small" type="button" id="tryleave">Leave try-out</button><button class="btn small" type="button" id="tryx" aria-label="Close">\u00d7</button></div>';
+  tb.innerHTML = '<button class="trydot" type="button" id="trydot" aria-expanded="false" aria-label="Try-out mode: nothing is saved. Open to suggest a change" title="Try-out: nothing is saved"></button><div class="trypanel" hidden><b>Try-out</b><span>Nothing is saved in this tab.</span><button class="btn small" type="button" data-suggest>Suggest a change</button><span class="laysw" role="group" aria-label="Teach layout">' + LAYOUTS.map(function (l) { return '<button type="button" class="chip" data-layout="' + l[0] + '">' + l[1] + '</button>'; }).join("") + '</span><span class="laysw" role="group" aria-label="Teach flow">' + FLOWS.map(function (f) { return '<button type="button" class="chip" data-flow="' + f[0] + '">' + f[1] + '</button>'; }).join("") + '</span><button class="btn small" type="button" id="tryleave">Leave try-out</button><button class="btn small" type="button" id="tryx" aria-label="Close">\u00d7</button></div>';
   document.body.appendChild(tb);
   var tryOpen = function (on) { tb.querySelector(".trypanel").hidden = !on; tb.classList.toggle("open", on); $("#trydot").setAttribute("aria-expanded", String(on)); };
   $("#trydot").addEventListener("click", function () { tryOpen(tb.querySelector(".trypanel").hidden); });
   $("#tryx").addEventListener("click", function () { tryOpen(false); });
   tb.querySelector("[data-suggest]").addEventListener("click", function () { tryOpen(false); });
   tb.querySelector("#tryleave").addEventListener("click", tryToggle); }
-layPressed();
+layPressed(); flowPressed();
 
 /* the Exams tab (exams.js) works through these */
 window.TD = { app: app, $: $, $$: $$, esc: esc, clean: clean, ls: ls, toast: toast, maths: maths, CFG: CFG, gh: gh, putB64: putB64, b64enc: b64enc, loadTree: loadTree, shaOf: shaOf, blobBytes: blobBytes, fileJSON: fileJSON, fileURL: fileURL, studentBase: studentBase, isTry: TRY, render: render };

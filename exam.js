@@ -311,12 +311,11 @@ function render() {
   cur = Math.min(cur, S.questions.length - 1);
   var done = S.status === "submitted";
   m.innerHTML =
-    '<header class="ex-top"><div class="ex-title">' + esc(S.title) + (S.practice ? ' <span class="ex-prac">Practice</span>' : "") + '</div><div class="ex-timer num" role="timer" aria-live="off"></div><div class="ex-save" aria-live="polite"></div></header>' +
-    '<div class="ex-bannerslot"></div>' +
+    '<header class="ex-top"><div class="ex-title">' + esc(S.title) + (S.practice ? ' <span class="ex-prac">Practice</span>' : "") + '</div><div class="ex-timer num" role="timer" aria-live="off"></div><div class="ex-save" aria-live="polite"></div>' +
+    (done ? "" : '<button class="btn small" type="button" data-handin>Hand in</button>') + '<div class="ex-bannerslot"></div></header>' +
     '<nav class="ex-dots" aria-label="Questions"></nav>' +
     '<section class="ex-q card"></section>' +
     '<div class="ex-nav"><div class="in"><button class="btn" type="button" data-prev>Previous</button><span class="grow"></span>' +
-    (done ? "" : '<button class="btn" type="button" data-handin>Hand in</button>') +
     '<button class="btn accent" type="button" data-next>Next</button></div></div>';
   dots(); question(); banner(); tick(); saveState();
   tickTimer = setInterval(tick, 250);
@@ -426,7 +425,7 @@ function handIn() {
     (empty ? '<p><b>' + empty + ' question' + (empty === 1 ? " has" : "s have") + ' no answer yet.</b></p>' : "") +
     (pending.length ? '<p><b>Some pictures are still sending. Wait a moment first.</b></p>' : "") +
     (rejected().length ? '<p><b>Question ' + rejected().map(qNum).join(", ") + ' is not saved: ' + esc(drafts[rejected()[0]].rejected) + ' Fix it first.</b></p>' : "") +
-    '<div class="row"><button class="btn" type="button" data-x>Keep working</button><button class="btn accent" type="button" data-ok' + (pending.length ? " disabled" : "") + '>Hand in</button></div></div>');
+    '<div class="row"><button class="btn" type="button" data-ok' + (pending.length ? " disabled" : "") + '>Hand in</button><button class="btn accent" type="button" data-x>Keep working</button></div></div>');
   $("[data-x]", d.el).onclick = d.close;
   $("[data-ok]", d.el).onclick = function () {
     this.disabled = true;

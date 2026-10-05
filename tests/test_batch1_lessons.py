@@ -38,6 +38,7 @@ with sync_playwright() as p:
     launch = {"executable_path": os.environ["CHROMIUM_PATH"]} if os.environ.get("CHROMIUM_PATH") else {"channel": "msedge"} if os.name == "nt" else {}
     b = p.chromium.launch(**launch)
     fake = FakeGH()
+    fake.files.pop("students/UK-1/lessons/%s/session.json" % LID, None)   # as if not taught yet, so Teach opens in preview
 
     def page(dialog=True):
         c = b.new_context(viewport={"width": 1366, "height": 800}, service_workers="block")
