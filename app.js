@@ -1229,12 +1229,38 @@ var VBIG = [["right", "\u2713", "Right"], ["wrong", "\u2717", "Wrong"], ["partly
 function ctlBig(id, a, q, marks) { a = a || {};
   return '<div class="ctl big" data-item="' + esc(id) + '" data-q="' + esc(String(q || "").slice(0, 160)) + '"><div class="vmain">' +
     VBIG.map(function (v, i) { return '<button class="v vb vb-' + v[0] + '" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '"><span class="vi">' + v[1] + '</span>' + v[2] + '<kbd>' + (i + 1) + '</kbd></button>'; }).join("") +
-    '</div><div class="vmore"><span class="hint">Right idea, wrong words:</span>' +
+    '</div>' + (SR ? '<button class="v vmic" type="button" data-mic title="Say what he said: tap, speak, it stops by itself (or hold M)" aria-label="Say what he said"><span class="vi" aria-hidden="true">\u{1F3A4}</span>Say it<kbd>M</kbd></button>' : "") + '<div class="vmore"><span class="hint">Right idea, wrong words:</span>' +
     VSMALL.map(function (v, i) { return '<button class="v vs" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '">' + v[1] + '<kbd>' + (i + 4) + '</kbd></button>'; }).join("") +
     (marks ? '<label class="mkin">Marks <input class="mk" type="number" min="0" step="0.5" inputmode="decimal" aria-label="Marks out of ' + esc(marks) + '" data-mk value="' + (a.m != null ? esc(a.m) : "") + '"><span class="hint num">/ ' + esc(marks) + '</span></label>' : "") +
     '<span class="vsep" aria-hidden="true"></span><button class="v vs" type="button" data-v="skipped" title="He did not attempt it" aria-pressed="' + (a.v === "skipped") + '">He didn’t answer<kbd>6</kbd></button></div>' +
 
     (a.note ? "" : '<button class="linkbtn addnote" type="button">+ Note what he said</button>') + '<input class="note" type="text" data-note aria-label="What he said" placeholder="What he said / got wrong" value="' + esc(a.note || "") + '"' + (a.note ? "" : " hidden") + '></div>'; }
+/* say it instead of typing (Ali, 5 Oct): tap the mic (or hold M), say "said electrophile, not nucleophile";
+   the browser's own speech-to-text (Chrome, Edge) writes it into that question's note and it is saved.
+   The words go to Google or Microsoft to be turned into text; nothing else is recorded. */
+var SR = window.SpeechRecognition || window.webkitSpeechRecognition || null, MIC = null;
+function micStart(box) { if (!SR || !box) return; if (MIC) { micStop(); return; }
+  if (previewing()) { toast("Preview: press Start lesson first to record notes"); return; }
+  var iid = box.getAttribute("data-item"), btn = $("[data-mic]", box), r = new SR(), heard = "";
+  r.lang = "en-GB"; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+  MIC = { r: r, box: box, iid: iid };
+  if (btn) { btn.classList.add("on"); btn.lastChild.previousSibling.textContent = "Listening"; }
+  r.onresult = function (e) { heard = ""; for (var i = 0; i < e.results.length; i++) heard += e.results[i][0].transcript;
+    var inp = $("input[data-note]", box); if (inp) { inp.hidden = false; inp.value = micJoin(target(iid).note, heard); } };
+  r.onerror = function (e) { toast(e.error === "not-allowed" ? "The browser blocked the microphone. Allow it in the address bar." : e.error === "no-speech" ? "Didn\u2019t hear anything" : "Speech to text didn\u2019t work: " + e.error); };
+  r.onend = function () { var m = MIC; MIC = null; if (btn) { btn.classList.remove("on"); btn.lastChild.previousSibling.textContent = "Say it"; }
+    heard = heard.trim(); if (!heard || !m) return;
+    var a = target(iid); a.note = micJoin(a.note, heard); a.at = now(); save(iid, a);
+    var inp = $("input[data-note]", box); if (inp) { inp.hidden = false; inp.value = a.note; } var add = $(".addnote", box); if (add) add.remove();
+    toast("Note: " + heard); };
+  try { r.start(); } catch (e) { MIC = null; toast("Speech to text didn\u2019t start"); } }
+function micStop() { if (MIC) try { MIC.r.stop(); } catch (e) {} }
+function micJoin(old, add) { old = (old || "").trim(); return old ? old + "; " + add.trim() : add.trim(); }
+document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-mic]"); if (b) { e.preventDefault(); micStart(b.closest("[data-item]")); } });
+document.addEventListener("keydown", function (e) { if ((e.key !== "m" && e.key !== "M") || e.repeat || MODE !== "teach" || e.ctrlKey || e.altKey || e.metaKey) return;
+  var ae = document.activeElement; if (ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) return;
+  var box = $(".brow.open .ctl.big") || $(".chunk.cur .ctl.big, .tfoot .ctl.big"); if (box && SR) { e.preventDefault(); if (!MIC) micStart(box); } });
+document.addEventListener("keyup", function (e) { if ((e.key === "m" || e.key === "M") && MIC) micStop(); });
 function tposKey() { return "tutor.tpos." + CFG.student + "." + L.id; }
 function live() { return replay(L.session.time.log).running; }
 /* Teach before the clock has ever started: rehearsing, so verdict taps are not recorded */
@@ -1573,7 +1599,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v30", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v31", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];

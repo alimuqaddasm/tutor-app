@@ -1076,3 +1076,10 @@ body[data-tlayout="flip"] .chunk.fit .fitq .fig img{width:100%;object-fit:contai
 /* student view: the question as on the paper, left aligned */
 .stu-q .paper{text-align:left}
 .zoomn{position:absolute;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);color:#e9edf5;font-weight:700;font-size:var(--s-sm);opacity:.85;white-space:pre}
+/* Say it (5 Oct) */
+.ctl.big .vmic{display:inline-flex;align-items:center;gap:6px;margin-top:8px;min-height:40px;padding:0 14px;border-radius:12px;border:1px dashed var(--line-2);background:var(--surface);color:var(--text-2);font:700 var(--s-sm) var(--font);cursor:pointer}
+.ctl.big .vmic kbd{margin-left:4px}
+.ctl.big .vmic.on{border-style:solid;border-color:var(--bad);color:var(--bad);animation:micpulse 1s ease-in-out infinite}
+@keyframes micpulse{50%{box-shadow:0 0 0 6px rgba(209,47,47,.15)}}
+.vstrip .ctl.big .vmic{margin-top:0;min-height:44px}
+.bbody .ctl.big .vmic{margin-top:8px}
