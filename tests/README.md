@@ -43,7 +43,7 @@ the tutoring repo (next to this repo as ../tutoring, or set TUTORING_CLONE) and 
     python tests/test_paper_5oct.py                 # Question text set like the papers, arrows between zoomed pages, After the lesson pre-filled (11 checks)
     python tests/test_sayit.py                      # Say it: the mic in the icons on the right (and M) writes the note; nothing in preview (7 checks)
     python tests/test_topbar_5oct.py                # Teach top bar in one slim row, the ⋯ menu, Preview label, quick flow as the default (11 checks)
-    python tests/test_vrail_5oct.py                 # marking icons down the right edge: a tick opens the next question, a cross stays; the ⋯ menu; 1024 and phone widths (21 checks)
+    python tests/test_vrail_5oct.py                 # marking icons down the right edge: a tick opens the next question, a cross stays; the ⋯ menu; 1024 and phone widths, Solid or Soft tiles (24 checks)
 
 Since 5 Oct quick flow is the app's default. tests/fakegh.py starts every test browser in step by step unless the
 test sets tutor.flow itself, because the older tests were written for it.
