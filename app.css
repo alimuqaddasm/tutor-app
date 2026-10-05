@@ -1122,3 +1122,17 @@ body[data-tlayout="flip"] .chunk.fit .fitq .fig img{width:100%;object-fit:contai
 @media (prefers-reduced-motion:reduce){.ctl.big.vrail .vr-mic.on .vd{animation:none}}
 /* phone, Flip strip: Mark scheme on its own row, the verdicts and the mic share the next one */
 @media (max-width:600px){.vstrip{flex-wrap:wrap}.vstrip .ctl.big{flex:1 1 100%;min-width:0}.vstrip .ctl.big .vmain{flex:1 1 auto;min-width:0}.vstrip .ctl.big .vb{flex:1 1 0;min-width:0;padding:0 6px}.vstrip .ctl.big .vmic{font-size:0;gap:0;padding:0 12px}.vstrip .ctl.big .vmic .vi{font-size:1.1rem}}
+/* soft tiles: pale tinted squares with a coloured mark; the chosen one fills with its colour */
+[data-vstyle="soft"] .ctl.big.vrail .vd{border-radius:16px;box-shadow:none}
+[data-vstyle="soft"] .ctl.big.vrail .vr-right .vd{background:#e3f5e9;color:#16803c}
+[data-vstyle="soft"] .ctl.big.vrail .vr-wrong .vd{background:#fde8e8;color:#c42727}
+[data-vstyle="soft"] .ctl.big.vrail .vr-partly .vd{background:#fdf0dc;color:#b25a07}
+[data-vstyle="soft"] .ctl.big.vrail .vr-mic .vd{background:#e5edfd;color:#2563eb}
+[data-vstyle="soft"] .ctl.big.vrail .vr-more .vd{background:#eef0f3;color:#5b6474}
+[data-vstyle="soft"] .ctl.big.vrail .vr-right[aria-pressed="true"] .vd{background:#16803c;color:#fff}
+[data-vstyle="soft"] .ctl.big.vrail .vr-wrong[aria-pressed="true"] .vd{background:#d12f2f;color:#fff}
+[data-vstyle="soft"] .ctl.big.vrail .vr-partly[aria-pressed="true"] .vd{background:#d97706;color:#fff}
+[data-vstyle="soft"] .ctl.big.vrail .vr-more[aria-pressed="true"] .vd{background:#6b7280;color:#fff}
+[data-vstyle="soft"] .ctl.big.vrail .vr-mic.on .vd{background:#d12f2f;color:#fff}
+[data-vstyle="soft"] .ctl.big.vrail .vr[type][aria-pressed="true"] .vd{outline:0}
+@media (prefers-color-scheme:dark){:root[data-vstyle="soft"]:not([data-theme="light"]) .ctl.big.vrail .vr:not([aria-pressed="true"]) .vd{filter:brightness(.82) saturate(1.3)}}

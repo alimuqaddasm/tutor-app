@@ -1350,7 +1350,7 @@ function drawTeach() {
     '<button class="btn small outl" type="button" id="toc" aria-label="Outline">☰ Outline</button><a class="back" style="margin:0" href="#/lesson/' + encodeURIComponent(L.id) + '">← Plan</a><span aria-hidden="true">·</span><b>' + esc((c.p && c.p.name) || "End") + '</b>' + (c.mod ? '<span aria-hidden="true">›</span><span>' + esc(c.mod) + '</span>' : "") + '</div>' +
     /* one slim row (5 Oct): Warm-up, Suggest and Try-out behind ⋯; Preview / Clock stopped as a small label by the clock */
     '<div class="tmini"><span class="tmore"><button class="btn small" type="button" data-tmore aria-expanded="false" aria-label="More: warm-up, suggest a change, try-out">\u22ef<span class="tdot" id="wudot" hidden></span></button>' +
-      '<div class="tmenu" hidden><button class="btn small" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn small" type="button" data-suggest>Suggest a change</button><button class="btn small trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button></div></span>' +
+      '<div class="tmenu" hidden><button class="btn small" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn small" type="button" data-suggest>Suggest a change</button><button class="btn small trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button><button class="btn small" type="button" data-vstylebtn>' + vstyleLabel() + '</button></div></span>' +
       '<a class="btn small" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a>' +
       (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a chunk by hand.">Preview</button>'
         : '<button type="button" class="preview stopped" data-pvhelp title="The clock is stopped. Taught, Skip and verdicts still count.">Clock stopped</button>') +
@@ -1638,7 +1638,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v33", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v34", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
@@ -1711,6 +1711,13 @@ document.addEventListener("keydown", function (e) { if (e.key === "Escape" && SU
 /* try-out on/off: the button in the sidebar and the Teach top bar (no need to type ?try) */
 function tryToggle() { if (TRY) { try { sessionStorage.removeItem("tutor.try"); } catch (e) {} location.href = location.pathname + location.hash; return; }
   var go = function () { location.href = location.pathname + "?try" + location.hash; }; if (L && L.dirty) flush().then(go, go); else go(); }
+/* the marking buttons: solid discs or soft tiles (Ali, 5 Oct); this device remembers the choice */
+function vstyleSoft() { return ls("tutor.vstyle") === "soft"; }
+function vstyleLabel() { return "Marking buttons: " + (vstyleSoft() ? "Soft tiles" : "Solid"); }
+function vstyleApply() { if (vstyleSoft()) document.documentElement.setAttribute("data-vstyle", "soft"); else document.documentElement.removeAttribute("data-vstyle"); }
+vstyleApply();
+document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-vstylebtn]"); if (!b) return;
+  ls("tutor.vstyle", vstyleSoft() ? null : "soft"); vstyleApply(); b.textContent = vstyleLabel(); });
 document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-trytoggle]"); if (b) { e.preventDefault(); tryToggle(); } });
 $$("[data-trytoggle]").forEach(function (b) { b.textContent = TRY ? "Leave try-out" : "Try-out"; });
 /* the try-out marker */
