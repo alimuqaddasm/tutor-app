@@ -41,5 +41,6 @@ the tutoring repo (next to this repo as ../tutoring, or set TUTORING_CLONE) and 
     python tests/test_flip_5oct.py                  # Flip card of 5 Oct: answer on the front when it fits, mark scheme first on the back (17 checks)
     python tests/test_quickflow.py                  # Quick flow of 5 Oct: one quiz board, merged section screens, notes behind an i, make-up log, maths video list, paper fonts (23 checks)
     python tests/test_paper_5oct.py                 # Question text set like the papers, arrows between zoomed pages, After the lesson pre-filled (11 checks)
+    python tests/test_sayit.py                      # Say it: the mic beside the verdicts (and M) writes the note; nothing in preview (7 checks)
 
 The maths and QR checks load KaTeX and the QR library from cdnjs, so they need internet.
