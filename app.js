@@ -1223,11 +1223,17 @@ function boardJump(iid) { var c = TCH.seq[TCH.pos]; if (!c || c.t !== "board") r
    before shrunk above it with its mark, the next peeking below. ✓ gives the part its marks and slides the next one up;
    ✗ and ½ stay. Each part is saved as "<question id>~<part>", and the question keeps the total. */
 var SL = { q: null, i: 0, back: false };
-function twinPart(p) { var mk = p.mk || (p.marks != null ? "(" + p.marks + ")" : "");
-  return '<div class="tw-pt"><span class="tw-lab">' + esc(p.lab || "") + '</span><div class="tw-q">' + clean(p.q || "") + '</div></div>' +
-    (p.img || []).map(function (i) { return img(i, "Diagram"); }).join("") + (mk ? '<div class="tw-mk">' + esc(mk) + '</div>' : ""); }
-function twinStem(q) { return q.stem || q.num ? '<div class="tw-stem">' + (q.num ? '<span class="tw-num">' + clean(q.num) + '</span>' : "") + '<div class="tw-q">' + clean(q.stem || "") + '</div></div>' : ""; }
+/* a part: "lab" names it in the app ("(a)(i)"); "print" is the label the paper prints beside it (default: lab, "" for none);
+   "pre" is lead-in text the paper puts above it (e.g. the stages (d)(i) to (iii) share); "mk" the marks as printed ("" for none);
+   sub-parts sit inside "q" as <div class="sub"><span class="sl">(i)</span><div>…</div></div> */
+function twinPart(p) { var mk = p.mk != null ? p.mk : p.marks != null ? "(" + p.marks + ")" : "", lab = p.print != null ? p.print : p.lab || "";
+  return '<div class="tw-pt"><span class="tw-lab">' + clean(lab) + '</span><div class="tw-q">' + (p.pre ? '<div class="tw-pre">' + clean(p.pre) + '</div>' : "") + clean(p.q || "") + '</div></div>' +
+    (p.img || []).map(function (i) { return img(i, "Diagram"); }).join("") + (mk ? '<div class="tw-mk">' + clean(mk) + '</div>' : ""); }
+function twinStem(q) { return q.stem || q.num || (q.stemImg || []).length ? '<div class="tw-stem">' + (q.num ? '<span class="tw-num">' + clean(q.num) + '</span>' : "") + '<div class="tw-q">' + clean(q.stem || "") + '</div></div>' +
+  (q.stemImg || []).map(function (i) { return img(i, "Diagram"); }).join("") : ""; }
 function twinHTML(q) { return '<div class="twin"><div class="tw">' + twinStem(q) + (q.parts || []).map(twinPart).join("") + '</div></div>'; }
+/* one line of a part for the faded rows: no sub-label, no stray spaces where tags were */
+function peekText(h) { return String(h || "").replace(/<span class="sl">[\s\S]*?<\/span>/g, "").replace(/<\/p>|<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&[a-z]+;/g, " ").replace(/\s+/g, " ").trim(); }
 function slKey(q, i) { return q.id + "~" + (q.parts[i].lab || String(i + 1)); }
 function slMax(q) { return q.parts.reduce(function (t, p) { return t + (+p.marks || 0); }, 0) || +q.marks || 0; }
 function slTotal(q) { var a = L.session.answers[q.id]; return (a && a.m != null ? a.m : 0) + " / " + slMax(q); }
@@ -1252,7 +1258,7 @@ function sliderHTML(c) { var q = c.b;
   var pills = q.parts.map(function (x, j) { var b = L.session.answers[slKey(q, j)] || {};
     return '<button type="button" class="sl-pill' + (j === i ? " cur" : "") + (asked_(b.v) ? " v-" + b.v : "") + '" data-slgo="' + j + '">' + esc(x.lab || String(j + 1)) + (asked_(b.v) ? " " + (b.m != null ? esc(b.m) : sym[b.v] || "") : "") + '</button>'; }).join("");
   function peek(j, cls) { var x = q.parts[j], b = L.session.answers[slKey(q, j)] || {};
-    return '<button type="button" class="sl-peek ' + cls + '" data-slgo="' + j + '"><span class="sl-pl">' + esc(x.lab || "") + '</span><span class="sl-pt">' + esc(plain(x.q || "")) + '</span>' + (asked_(b.v) ? '<span class="sl-badge v-' + esc(b.v) + '">' + (sym[b.v] || "") + (b.m != null ? " " + esc(b.m) + "/" + esc(x.marks) : "") + '</span>' : "") + '</button>'; }
+    return '<button type="button" class="sl-peek ' + cls + '" data-slgo="' + j + '"><span class="sl-pl">' + esc(x.lab || "") + '</span><span class="sl-pt">' + esc(peekText(x.q)) + '</span>' + (asked_(b.v) ? '<span class="sl-badge v-' + esc(b.v) + '">' + (sym[b.v] || "") + (b.m != null ? " " + esc(b.m) + "/" + esc(x.marks) : "") + '</span>' : "") + '</button>'; }
   var front = '<div class="twin"><div class="tw tw-solo">' + twinPart(p) + '</div></div>';
   var back = '<div class="sl-ms"><div class="sl-msh">Mark scheme \u00b7 ' + esc(p.lab || "") + ' only</div>' + (p.answer ? '<div class="prose">' + clean(p.answer) + '</div>' : "") + (p.ms || []).map(function (m) { return img(m, "Mark scheme"); }).join("") +
     '<label class="sl-mk">Marks <input class="mk" type="number" min="0" step="0.5" inputmode="decimal" data-mk aria-label="Marks out of ' + esc(p.marks) + '" value="' + (a.m != null ? esc(a.m) : "") + '"> / ' + esc(p.marks) + '</label></div>';
@@ -1702,7 +1708,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v35", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v36", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
