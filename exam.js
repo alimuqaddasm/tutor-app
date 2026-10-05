@@ -55,6 +55,24 @@ function shown(img, path) {
   imageUrl(path).then(function (u) { img.src = u; }, function () { img.alt = "Picture could not load"; });
 }
 
+/* question text set like the real papers (Ali, 5 Oct): parts (a), (b), (i) each on their own line with the label in a
+   hanging margin; the marks bold at the right, "(2)" for Edexcel maths and "[2 marks]" for AQA chemistry; for AQA the
+   words their papers set in bold (Give two, does not, compound X, Step 4). Same as app.js; fonts and spacing are in app.css (.paper). */
+function paperHTML(html, subj, marks) {
+  var h = clean(String(html || "")), aqa = subj === "chem";
+  var parts = h.split(/<br\s*\/?>|\n/i), out = [], stem = [];
+  parts.forEach(function (ln) { var m = /^\s*(?:<[^>]+>\s*)*\(?([a-h]|i{1,3}|iv|vi?)\)\s+/i.exec(ln);
+    var roman = m && /^(i{1,3}|iv|vi?)$/i.test(m[1]) && out.some(function (p) { return !p.sub; });   // (i) after an (a) is a sub-part
+    if (m) out.push({ lab: "(" + m[1].toLowerCase() + ")", sub: !!roman, txt: ln.slice(m[0].length) });
+    else if (out.length) out[out.length - 1].txt += "<br>" + ln; else stem.push(ln); });
+  function emph(t) { if (!aqa) return t;
+    return t.replace(/\b(Give|State|Name|Suggest|Identify|Describe|Explain|Draw|Outline|List|Write|Calculate|Deduce|Complete|Show)( the| your)? (one|two|three|four|five|six)\b/g, "$1$2 <b>$3</b>")
+      .replace(/(^|[^<\w-])(not|NOT)(?=[\s,.;:?!])/g, "$1<b>not</b>")
+      .replace(/\b(compound|Compound|isomer|Isomer|Step|step|Figure|Table|Equation|substance|Substance|reagent|Reagent|test|Test) ([A-Z]|\d{1,2})\b(?![^<]*>)/g, "$1 <b>$2</b>"); }
+  var mk = marks ? '<span class="pmk">' + (aqa ? "[" + marks + " mark" + (+marks === 1 ? "" : "s") + "]" : "(" + marks + ")") + '</span>' : "";
+  var body = (stem.length ? '<div class="pstem">' + emph(stem.join("<br>")) + '</div>' : "") +
+    out.map(function (p) { return '<div class="ppart' + (p.sub ? " sub" : "") + '"><span class="plab">' + p.lab + '</span><div class="ptxt">' + emph(p.txt) + '</div></div>'; }).join("");
+  return '<div class="paper ' + (aqa ? "aqa" : "edx") + '">' + body + mk + '</div>'; }
 /* ---------- maths (KaTeX loads only when a question has \( \) or \[ \]) ---------- */
 var KTX = null, KCDN = "vendor/katex/";
 function loadKatex() {
@@ -366,7 +384,7 @@ function question() {
     : '<textarea id="ans" spellcheck="false"' + (ro ? " disabled" : "") + '>' + esc(d.text) + '</textarea>';
   box.innerHTML =
     '<div class="ex-qhead"><h2>Question ' + (cur + 1) + ' of ' + S.questions.length + (q.label ? ' <span class="hint">(' + esc(q.label) + ')</span>' : "") + '</h2><span class="ex-marks">' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</span></div>' +
-    '<div class="ex-qtext">' + clean(q.text_html) + '</div>' +
+    '<div class="ex-qtext">' + paperHTML(q.text_html, S.subject) + '</div>' +
     (q.has_img ? '<figure class="ex-qimg"><button type="button" data-zoom><img alt="Question ' + (cur + 1) + ' picture"></button></figure>' : "") +
     '<div class="ex-answer"><label for="ans">' + (upload ? "Working or notes (optional)" : "Your answer") + '</label>' + input + '<p class="ex-count hint" hidden></p>' +
     (q.type === "upload_required" ? '<p class="ex-need">This question needs a picture of your working.</p>' : "") + '</div>' +
