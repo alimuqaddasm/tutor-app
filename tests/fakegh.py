@@ -140,3 +140,17 @@ except Exception as e:  # pragma: no cover
     print("fakegh: playwright patch skipped", e)
 
 
+
+
+# ---- since 5 Oct quick flow is the app's default; the older tests were written for step by step, so every test
+# context starts there unless the test sets tutor.flow itself (its own init script runs after this one) ----
+try:
+    from playwright.sync_api import Browser
+    _orig_ctx = Browser.new_context
+    def _new_context(self, **kw):
+        c = _orig_ctx(self, **kw)
+        c.add_init_script("try{if(!localStorage.getItem('tutor.flow'))localStorage.setItem('tutor.flow','steps')}catch(e){}")
+        return c
+    Browser.new_context = _new_context
+except Exception as e:  # pragma: no cover
+    print("fakegh: flow patch skipped", e)

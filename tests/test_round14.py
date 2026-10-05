@@ -13,10 +13,10 @@ try:
         # 1. Try-out button: in, then out again, without typing ?try
         c = ctx_(b, 1280, 800); p = page(c, "#/lesson/" + MA + "/teach")
         check("Teach top bar has a Try-out button", p.locator(".tmini [data-trytoggle]").inner_text() == "Try-out")
-        p.locator(".tmini [data-trytoggle]").click(); p.wait_for_selector(".teach3"); p.wait_for_timeout(1200)
+        p.click("[data-tmore]"); p.locator(".tmini [data-trytoggle]").click(); p.wait_for_selector(".teach3"); p.wait_for_timeout(1200)
         check("it switches this tab into try-out on the same screen", "?try" in p.url and "/teach" in p.url and p.locator(".trybar").count() == 1)
         check("the try-out marker is a plain dot again", p.locator("#trydot").inner_text().strip() == "" and p.locator("#trydot").bounding_box()["width"] <= 20)
-        p.locator(".tmini [data-trytoggle]").click(); p.wait_for_selector(".teach3"); p.wait_for_timeout(1200)
+        p.click("[data-tmore]"); p.locator(".tmini [data-trytoggle]").click(); p.wait_for_selector(".teach3"); p.wait_for_timeout(1200)
         check("'Leave try-out' goes back to the real app", "?try" not in p.url and p.locator(".trybar").count() == 0); c.close()
         # 2. make-up minutes up front
         c = ctx_(b, 1280, 800); p = page(c, "#/", ".home"); p.wait_for_timeout(2500)

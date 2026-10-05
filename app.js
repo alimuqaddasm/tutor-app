@@ -220,7 +220,7 @@ function settingsView() {
     '<div class="field"><label for="s-xapi">Exam server</label><input type="text" id="s-xapi" value="' + esc(ls("tutor.examApi") || window.EXAM_API || "") + '" placeholder="https://tutor-exams….workers.dev"></div>' +
     '<div class="field"><label for="s-xpw">Exam password</label><input type="password" id="s-xpw" autocomplete="off" value="' + esc(ls("tutor.examPw") || "") + '"><span class="hint">For the Exams tab. It stays in this browser only.</span></div>' +
     '<div class="field"><label for="s-font">Text style</label><select id="s-font"><option value="figtree"' + (f === "figtree" ? " selected" : "") + '>Clean (Figtree)</option><option value="lexend"' + (f === "lexend" ? " selected" : "") + '>Extra readable (Lexend)</option><option value="serif"' + (f === "serif" ? " selected" : "") + '>Book (Source Serif)</option></select></div></div>' +
-    '<div class="field"><span class="lab">Teach flow</span><span class="laysw" role="group">' + FLOWS.map(function (f) { return '<button type="button" class="chip" data-flow="' + f[0] + '" aria-pressed="' + ((ls("tutor.flow") || "steps") === f[0]) + '">' + f[1] + '</button>'; }).join("") + '</span><span class="hint">Quick: no title screens, a section\u2019s points on one screen beside its picture, the quiz as one list you tap.</span></div>' +
+    '<div class="field"><span class="lab">Teach flow</span><span class="laysw" role="group">' + FLOWS.map(function (f) { return '<button type="button" class="chip" data-flow="' + f[0] + '" aria-pressed="' + ((ls("tutor.flow") || "quick") === f[0]) + '">' + f[1] + '</button>'; }).join("") + '</span><span class="hint">Quick: no title screens, a section\u2019s points on one screen beside its picture, the quiz as one list you tap.</span></div>' +
     '<div class="field"><span class="lab">Teach layout for questions</span><span class="laysw" role="group">' + LAYOUTS.map(function (l) { return '<button type="button" class="chip" data-layout="' + l[0] + '" aria-pressed="' + (layoutPick() === l[0]) + '">' + l[1] + '</button>'; }).join("") + '</span><span class="hint">Side panel: question left, answer and verdicts right. Floating card: the question fills the screen; answer and verdicts in a card in the corner. Flip: the question fills the screen with the verdicts in the bottom bar; Show answer (key A) turns the screen to the answer.</span></div>' +
     '<div class="field"><span class="lab">Hints in Teach</span><label class="mkchk"><input type="checkbox" data-fold="maths"' + (foldOn("maths") ? " checked" : "") + '> Maths: fold the hints under each question (open them only when he is stuck)</label><label class="mkchk"><input type="checkbox" data-fold="chem"' + (foldOn("chem") ? " checked" : "") + '> Chemistry: the same</label></div>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="submit">Save and test</button><button class="btn" type="button" id="s-cache">Clear this device’s cache</button><button class="btn danger" type="button" id="s-clear">Remove key from this device</button><span class="hint" id="s-msg"></span></div></form>' +
@@ -1120,9 +1120,9 @@ function teachSeq() {
    pictures become one screen (points beside the picture). A quiz or drill becomes one board: every question in one
    list, tap one to ask it. Exam questions keep their own screen. Chosen in Settings or from the try-out button. */
 function subjNow() { return (L && ((L.script && L.script.subject) || L.session.subject)) || ""; }
-function flowQuick() { return ls("tutor.flow") === "quick"; }
+function flowQuick() { return (ls("tutor.flow") || "quick") === "quick"; }
 var FLOWS = [["steps", "Step by step"], ["quick", "Quick flow"]];
-function flowPressed() { $$("button[data-flow]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-flow") === (ls("tutor.flow") || "steps"))); }); }
+function flowPressed() { $$("button[data-flow]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-flow") === (ls("tutor.flow") || "quick"))); }); }
 document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("button[data-flow]"); if (!b) return; ls("tutor.flow", b.getAttribute("data-flow")); flowPressed();
   if (MODE === "teach" && L) drawTeach(); toast("Teach flow: " + b.textContent); });
 function quickSeq(seq) {
@@ -1322,10 +1322,15 @@ function drawTeach() {
   if (c.p) L.phase = c.p.id;
   var h = '<div class="teach3">' + runwayHTML(c) + '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
     '<button class="btn small outl" type="button" id="toc" aria-label="Outline">☰ Outline</button><a class="back" style="margin:0" href="#/lesson/' + encodeURIComponent(L.id) + '">← Plan</a><span aria-hidden="true">·</span><b>' + esc((c.p && c.p.name) || "End") + '</b>' + (c.mod ? '<span aria-hidden="true">›</span><span>' + esc(c.mod) + '</span>' : "") + '</div>' +
-    '<div class="tmini"><button class="btn small" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn small" type="button" data-suggest>Suggest</button><button class="btn small trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button><a class="btn small" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a><span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
+    /* one slim row (5 Oct): Warm-up, Suggest and Try-out behind ⋯; Preview / Clock stopped as a small label by the clock */
+    '<div class="tmini"><span class="tmore"><button class="btn small" type="button" data-tmore aria-expanded="false" aria-label="More: warm-up, suggest a change, try-out">\u22ef<span class="tdot" id="wudot" hidden></span></button>' +
+      '<div class="tmenu" hidden><button class="btn small" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn small" type="button" data-suggest>Suggest a change</button><button class="btn small trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button></div></span>' +
+      '<a class="btn small" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a>' +
+      (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a chunk by hand.">Preview</button>'
+        : '<button type="button" class="preview stopped" data-pvhelp title="The clock is stopped. Taught, Skip and verdicts still count.">Clock stopped</button>') +
+      '<span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
     '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>' +
-    (lv ? "" : previewing() ? '<div class="preview"><b>Preview</b> · nothing is recorded until you press <b>Start lesson</b>, verdicts included. You can still tick a chunk by hand.</div>'
-      : '<div class="preview"><b>Clock stopped</b> · Taught, Skip and verdicts still count.</div>') + '</div><div class="tstage">';
+    '</div><div class="tstage">';
   /* the last two chunks of the same section as short grey lines, then the current one */
   var keep = window.innerWidth < 900 ? 1 : 2, start = TCH.pos;
   while (start > 0 && TCH.pos - start < keep && TCH.seq[start - 1].p === c.p && TCH.seq[start - 1].mod === c.mod && TCH.seq[start - 1].t !== "phase") start--;
@@ -1482,7 +1487,13 @@ function fitBoards() { var f = $(".chunk.cur .tfig"), foot = $(".tfoot"); if (!f
   var im = f.querySelector("img"); if (im) im.style.maxHeight = Math.max(220, room) + "px"; }
 window.addEventListener("resize", function () { if (MODE === "teach") fitBoards(); });
 function warmCount() { var subj = (L.script && L.script.subject) || L.session.subject;
-  loadRevise().then(function () { var b = $("#wudue"); if (!b) return; var n = dueList(subj).length; b.textContent = n; b.hidden = !n; }).catch(function () {}); }
+  loadRevise().then(function () { var b = $("#wudue"); if (!b) return; var n = dueList(subj).length; b.textContent = n; b.hidden = !n; var d = $("#wudot"); if (d) d.hidden = !n; }).catch(function () {}); }
+/* the ⋯ menu in Teach's top bar, and the small Preview / Clock stopped label (tap it for what it means) */
+document.addEventListener("click", function (e) { var m = e.target.closest && e.target.closest("[data-tmore]"), menu = $(".tmenu");
+  if (m && menu) { menu.hidden = !menu.hidden; m.setAttribute("aria-expanded", String(!menu.hidden)); return; }
+  if (menu && !menu.hidden && !(e.target.closest && e.target.closest(".tmenu"))) { menu.hidden = true; var mb = $("[data-tmore]"); if (mb) mb.setAttribute("aria-expanded", "false"); }
+  else if (menu && e.target.closest && e.target.closest(".tmenu button")) setTimeout(function () { var mm = $(".tmenu"); if (mm) mm.hidden = true; }, 0);
+  var pv = e.target.closest && e.target.closest("[data-pvhelp]"); if (pv) toast(pv.getAttribute("title")); });
 function openWarmup() { var subj = (L.script && L.script.subject) || L.session.subject, old = $("#wuov"); if (old) old.remove();
   var el = document.createElement("div"); el.id = "wuov"; el.className = "sug"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Mistakes warm-up");
   el.innerHTML = '<div class="sug-card wu"><div class="sug-head"><h3>Mistakes warm-up \u00b7 ' + esc(SUBJ[subj] || subj) + '</h3><button class="btn small" type="button" id="wux" aria-label="Close">\u00d7</button></div><div id="wubox"></div></div>';
@@ -1599,7 +1610,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v31", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v32", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
