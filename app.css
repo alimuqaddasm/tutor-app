@@ -669,7 +669,7 @@ body.pointing,body.pointing *{cursor:crosshair!important}
 .tnote{margin:0 0 16px;border-radius:14px;background:var(--bg);border:1px solid var(--line)}
 .tnote > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 14px;font-size:var(--s-sm);color:var(--text-2)}
 .tnote > summary::-webkit-details-marker{display:none}
-.tnote > summary .ic{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--ask);color:var(--on-fill);font:800 12px var(--font);font-style:italic}
+.tnote > summary .ic{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--ask);color:#fff;font:800 12px var(--font);font-style:italic}
 .tnote > summary .hint{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tnote[open] > summary .hint{display:none}
 .tnote > .prose{padding:0 16px 14px 46px;font-size:var(--s-md);line-height:1.6}
@@ -736,7 +736,7 @@ body.pointing,body.pointing *{cursor:crosshair!important}
 .stu.clean{position:relative;height:100vh;display:block;background:var(--bg)}
 .stu-menu{position:fixed;top:10px;left:10px;z-index:5;width:40px;height:40px;border-radius:12px;border:0;background:var(--surface-2);color:var(--text);font-size:18px;opacity:.25;cursor:pointer}
 .stu-menu:hover,.stu-menu:focus-visible{opacity:1}
-.stu.clean .stu-view{height:100vh;overflow:auto;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.stu.clean .stu-view{height:100vh;overflow:auto;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:safe center;gap:12px}
 .stu-fit.one{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
 .stu-fit.one img{width:100%;height:100%;object-fit:contain;border-radius:10px;background:#fff;box-shadow:none}
 .stu-fit.many{width:min(100%,1500px);display:grid;gap:10px;margin:auto 0}
@@ -981,3 +981,61 @@ body[data-tlayout="flip"] .chunk.flipped .prose.two{display:grid;grid-template-c
 @media (max-width:1100px){.xt-3{grid-template-columns:1fr 1fr}.xt-3 .xt-col:first-child{grid-column:1 / -1}}
 @media (max-width:640px){.xt-3{grid-template-columns:1fr}.xt-btns{align-items:stretch;width:100%}.xt-btns .xt-add{justify-content:flex-start}.xt-run{align-items:stretch}}
 .xt-of{display:flex;align-items:center;gap:8px;white-space:nowrap}
+
+/* ---------- quick flow (5 Oct) ---------- */
+.qstrip{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 14px;font-size:var(--s-sm);color:var(--text-2)}
+.qstrip .qs-p{font-weight:700;color:var(--text-3);min-width:0}
+.qs-i{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:0 12px 0 6px;border-radius:999px;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);font:700 var(--s-sm) var(--font);cursor:pointer}
+.qs-i .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--ask);color:#fff;font:800 12px var(--font);font-style:italic}
+.qs-i[aria-expanded="true"]{border-color:var(--ask)}
+.qs-pages{display:flex;flex-wrap:wrap;align-items:center;gap:4px;flex-basis:100%}
+.qs-pages[hidden]{display:none}
+.qs-bk .ic{background:var(--surface-2);color:var(--text-2);font-style:normal}
+.qs-pg{min-width:38px;min-height:30px;padding:0 8px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);font:700 var(--s-xs) var(--font);cursor:pointer}
+.qs-pg:disabled{opacity:.5;cursor:default}
+/* notes open over the screen, never pushing the question down */
+.chunk.cur{position:relative}
+.qs-notes{position:absolute;left:18px;right:18px;top:62px;z-index:6;max-height:60vh;overflow:auto;padding:14px 18px;border-radius:14px;background:var(--surface);border:1px solid var(--ask);box-shadow:0 12px 32px rgba(16,24,40,.18);font-size:var(--s-md);line-height:1.55}
+.qstrip{margin:0 0 10px}
+.bhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin:0 0 10px}
+.bhead b{font-size:var(--s-lg)}
+.bhead .bscore{margin-left:auto;font-weight:700;color:var(--text-2)}
+.board{list-style:none;margin:0;padding:0 4px 0 0;display:grid;gap:6px;overflow:auto;align-content:start}
+.brow{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.brow.star .bq{font-weight:600}
+.brow:not(.star) .bt{color:var(--text-2)}
+.brow.rel{border-color:var(--warn);box-shadow:inset 3px 0 0 var(--warn)}
+.brow.open{border-color:var(--ask);box-shadow:var(--shadow)}
+.bq{display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:6px 12px;border:0;background:none;text-align:left;font:inherit;font-size:var(--s-md);color:var(--text);cursor:pointer}
+.bq .bn{flex:none;width:26px;color:var(--text-3);font-size:var(--s-sm)}
+.bq .bt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brow.open .bq .bt{white-space:normal}
+.bq .bt i{color:var(--warn);font-style:normal}
+.bq .bpg{flex:none;font-size:var(--s-xs);color:var(--text-3)}
+.bq .bv{flex:none;width:24px;text-align:center;font-weight:800}
+.brow[data-v="right"] .bv{color:var(--ok)}.brow[data-v="wrong"] .bv{color:var(--bad)}.brow[data-v="partly"] .bv,.brow[data-v="wording"] .bv,.brow[data-v="terminology"] .bv{color:var(--warn)}
+.brow[data-v="right"]:not(.open){opacity:.6}
+.bbody{padding:4px 16px 14px 48px;display:grid;gap:10px}
+.bbody > .qtext{display:none}
+.bans{padding:10px 14px;border-radius:12px;background:var(--bg);border-left:4px solid var(--ok);font-size:var(--s-md);line-height:1.55}
+.concept{display:grid;gap:18px}
+.concept.withfig{grid-template-columns:minmax(260px,2fr) minmax(0,3fr);align-items:start}
+.cpts{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.cp{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;align-items:start;font-size:var(--s-md);line-height:1.5}
+.cp .ck{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--surface-2);color:var(--text-2);font:800 12px var(--font)}
+.cp .prose > p:first-child{margin-top:0}.cp .prose > p:last-child{margin-bottom:0}
+.cfigs{display:grid;gap:12px}
+.cfigs .tfig{margin:0}
+.cfigs .tfig img{width:100%;height:auto;max-height:calc(100vh - 300px);object-fit:contain;border-radius:12px;background:#fff}
+@media (max-width:900px){.concept.withfig{grid-template-columns:minmax(0,1fr)}.bbody{padding-left:16px}}
+/* Flip front: a small question crop grows to the room it has (fitQ caps its height) */
+body[data-tlayout="flip"] .chunk.fit .fitq .fig img{width:100%;object-fit:contain}
+
+/* make-up log (5 Oct) */
+.mklog{margin:8px 0 4px;font-size:var(--s-sm)}
+.mklog summary{cursor:pointer;font-weight:700;color:var(--text-2)}
+.mklog ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
+.mklog li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:baseline}
+.mklog li .num:first-child{color:var(--text-3);white-space:nowrap}
+/* Plan's parts strip on narrow screens: a fade at the right edge says there is more */
+@media (max-width:900px){.rail{-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}}

@@ -94,14 +94,19 @@ function examFolder(path) { return path.replace(/exam\.json$/, ""); }
 function listView() {
   app.innerHTML = '<div class="section-h"><h2>Exams</h2></div><div class="empty"><h3>Loading</h3></div>';
   var base = T.studentBase() + "exams/";
-  Promise.all([
-    T.loadTree().then(function (tree) {
+  // the repo part draws as soon as it is there; the exam server's part fills in when it answers
+  var repoP = T.loadTree().then(function (tree) {
       var files = tree.filter(function (t) { return t.path.indexOf(base) === 0 && /\/exam\.json$/.test(t.path) && t.path.slice(base.length).split("/").length === 2; });
       return Promise.all(files.map(function (f) { return T.fileJSON(f.path).then(function (j) { return { path: f.path, exam: j && j.data }; }, function (e) { return { path: f.path, error: e.message }; }); }));
-    }),
-    call("GET", "/api/t/exams")
-  ]).then(function (res) {
-    var repo = res[0].sort(function (a, b) { return b.path.localeCompare(a.path); }), all = res[1];
+    });
+  var serverP = call("GET", "/api/t/exams"), done = false;
+  repoP.then(function (repo) { if (!done && (location.hash || "") === "#/exams") drawList(repo, null); }, function () {});
+  Promise.all([repoP, serverP]).then(function (res) { done = true; if ((location.hash || "") === "#/exams") drawList(res[0], res[1]); })
+    .catch(function (e) { app.innerHTML = '<div class="section-h"><h2>Exams</h2></div><div class="empty"><h3>Couldn’t load exams</h3><p>' + esc(e.message) + '</p><p>Check the exam server and password in <a href="#/settings">Settings</a>.</p></div>'; });
+}
+function drawList(repo, all) {
+    var waiting = all == null; all = all || [];
+    repo = repo.slice().sort(function (a, b) { return b.path.localeCompare(a.path); });
     var server = all.filter(function (s) { return !s.practice; }), practice = all.filter(function (s) { return s.practice; });
     var loaded = {}; server.forEach(function (s) { if (s.sourcePath) loaded[s.sourcePath] = s; });
     var h = '<div class="section-h"><h2>Exams</h2></div>';
@@ -122,20 +127,20 @@ function listView() {
       return '<div class="card xt-row" data-subject="' + esc(e.subject || "") + '"><div class="xt-grow"><div class="xt-title">' + esc(e.title || r.path) + ' ' + chip(st) + '</div>' +
         '<div class="hint">' + qs.length + ' question' + (qs.length === 1 ? "" : "s") + ' · ' + marks + ' marks' + (e.date ? " · " + esc(e.date) : "") + '</div>' +
         (e.why ? '<p class="xt-why">' + esc(e.why) + '</p>' : "") + '</div><div class="xt-acts">' +
-        (on ? '<a class="btn small" href="#/exams/' + esc(on.id) + '">Open</a>'
+        (waiting ? '<span class="hint">Checking the exam server…</span>' : on ? '<a class="btn small" href="#/exams/' + esc(on.id) + '">Open</a>'
             : st === "ready" && T.isTry ? '<span class="hint">Ready. Leave Try-out to load it.</span>'
             : st === "ready" ? '<button class="btn small accent" type="button" data-load="' + esc(r.path) + '">Load to exam server</button>'
             : '<span class="hint">Finish it with Claude first (status “ready”)</span>') +
         '</div></div>';
     }).join("") + '</div>';
     h += '<h3 class="xt-h3">On the exam server</h3>';
-    if (!server.length) h += '<p class="hint">Nothing loaded yet.</p>';
+    if (waiting) h += '<p class="hint">Loading…</p>';
+    else if (!server.length) h += '<p class="hint">Nothing loaded yet.</p>';
     else h += '<div class="xt-list">' + server.map(function (s) {
       return '<a class="card xt-row xt-link" href="#/exams/' + esc(s.id) + '" data-subject="' + esc(s.subject || "") + '"><div class="xt-grow"><div class="xt-title">' + esc(s.title) + ' ' + chip(s.status) + '</div>' +
         '<div class="hint">' + s.questions + ' questions · ' + s.totalMarks + ' marks · ' + (s.startedAt ? "taken " + esc(day(s.startedAt)) : "loaded " + esc(day(s.createdAt))) + '</div></div></a>';
     }).join("") + '</div>';
     app.innerHTML = h;
-  }).catch(function (e) { app.innerHTML = '<div class="section-h"><h2>Exams</h2></div><div class="empty"><h3>Couldn’t load exams</h3><p>' + esc(e.message) + '</p><p>Check the exam server and password in <a href="#/settings">Settings</a>.</p></div>'; });
 }
 
 /* Join a question's pictures into one (top to bottom), JPEG, small enough for the server. */

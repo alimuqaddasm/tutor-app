@@ -98,3 +98,9 @@
   .ex-answer textarea{min-height:180px}
   .ex-nav .btn{padding:0 12px}
 }
+
+/* 5 Oct: the time-up / time-added message stays in the sticky top bar; bigger picture buttons */
+.ex-top .ex-bannerslot{flex-basis:100%}
+.ex-top .ex-bannerslot:empty{display:none}
+.ex-top .ex-banner{margin:4px 0 0}
+.ex-attach .btn{min-height:48px;padding:0 18px;font-size:var(--s-md)}
