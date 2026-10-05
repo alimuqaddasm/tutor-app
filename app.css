@@ -1021,7 +1021,6 @@ body[data-tlayout="flip"] .chunk.flipped .prose.two{display:grid;grid-template-c
 .brow[data-v="right"] .bv{color:var(--ok)}.brow[data-v="wrong"] .bv{color:var(--bad)}.brow[data-v="partly"] .bv,.brow[data-v="wording"] .bv,.brow[data-v="terminology"] .bv{color:var(--warn)}
 .brow[data-v="right"]:not(.open){opacity:.6}
 .bbody{padding:4px 16px 14px 48px;display:grid;gap:10px}
-.bbody > .qtext{display:none}
 .bans{padding:10px 14px;border-radius:12px;background:var(--bg);border-left:4px solid var(--ok);font-size:var(--s-md);line-height:1.55}
 .concept{display:grid;gap:18px}
 .concept.withfig{grid-template-columns:minmax(260px,2fr) minmax(0,3fr);align-items:start}
@@ -1058,3 +1057,22 @@ body[data-tlayout="flip"] .chunk.fit .fitq .fig img{width:100%;object-fit:contai
 .bbody .ctl.big.more .vmore{display:flex;margin-top:8px}
 .bbody .ctl.big.more .addnote{display:inline-block}
 .bmore{justify-self:start;border:0;background:none;color:var(--text-2);font:700 var(--s-sm) var(--font);cursor:pointer;padding:2px 0}
+/* exam-paper setting of question text (5 Oct): the stem, then each part on its own line with its label in a hanging
+   margin, sub-parts (i), (ii) indented one step further, marks bold on the right. Edexcel labels are plain,
+   AQA's bold. Fonts come from the subject rules above. */
+.paper{line-height:1.6}
+.paper .pstem{margin:0 0 .75em}
+.paper .pstem:last-child{margin-bottom:0}
+.paper .ppart{display:grid;grid-template-columns:2.6em minmax(0,1fr);align-items:baseline;margin:.6em 0 0}
+.paper .ppart.sub{margin-left:2.6em}
+.paper .plab{font-weight:400}
+.paper.aqa .plab{font-weight:700}
+.paper .pmk{display:block;text-align:right;font-weight:700;margin-top:.5em;font-size:.9em}
+.paper b{font-weight:700}
+.paper .katex{font-size:1.08em}
+/* board: an open question shows the set text below its row instead of one long line */
+.brow.open .bq .bt{visibility:hidden;height:0}
+.bbody > .qtext{display:block;margin:0 0 4px;font-size:var(--s-lg);max-width:none}
+/* student view: the question as on the paper, left aligned */
+.stu-q .paper{text-align:left}
+.zoomn{position:absolute;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);color:#e9edf5;font-weight:700;font-size:var(--s-sm);opacity:.85;white-space:pre}
