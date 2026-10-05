@@ -816,7 +816,12 @@ body.pointing,body.pointing *{cursor:crosshair!important}
 /* v20 try-out: a small labelled button, and a soft orange glow round the window edges (never blocks a tap) */
 body.tryout::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:2147483000;box-shadow:inset 0 0 0 2px rgba(245,158,11,.55),inset 0 0 22px 2px rgba(245,158,11,.22)}
 /* maths questions set like an exam paper: Times-style text, KaTeX for the maths */
-body[data-subject="maths"] .qtext,body[data-subject="maths"] .stu-q,body[data-subject="maths"] .ans .prose,body[data-subject="maths"] .thints .prose{font-family:"Times New Roman",Tinos,Times,serif}
+/* question text in the exam boards' own fonts (Ali, 5 Oct): Edexcel maths papers are set in Times,
+   AQA chemistry papers in Arial (Arimo is its metric twin for devices without Arial) */
+body[data-subject="maths"] .qtext,body[data-subject="maths"] .stu-q,body[data-subject="maths"] .ans .prose,body[data-subject="maths"] .thints .prose,
+body[data-subject="maths"] .bans,body[data-subject="maths"] .bq .bt,body[data-subject="maths"] .ansfront .prose,body[data-subject="maths"] .ansback .prose,body[data-subject="maths"] .ex-qtext{font-family:"Times New Roman",Tinos,Times,serif}
+body[data-subject="chem"] .qtext,body[data-subject="chem"] .stu-q,body[data-subject="chem"] .ans .prose,body[data-subject="chem"] .bans,body[data-subject="chem"] .bq .bt,
+body[data-subject="chem"] .ansfront .prose,body[data-subject="chem"] .ansback .prose,body[data-subject="chem"] .ex-qtext{font-family:Arial,Arimo,"Liberation Sans",Helvetica,sans-serif}
 body[data-subject="maths"] .qtext{font-size:1.6rem;line-height:1.55}
 body[data-subject="maths"] .stu-q{font-weight:400}
 body[data-subject="maths"] .qtext .katex,body[data-subject="maths"] .stu-q .katex{font-size:1.08em}
@@ -1039,3 +1044,17 @@ body[data-tlayout="flip"] .chunk.fit .fitq .fig img{width:100%;object-fit:contai
 .mklog li .num:first-child{color:var(--text-3);white-space:nowrap}
 /* Plan's parts strip on narrow screens: a fade at the right edge says there is more */
 @media (max-width:900px){.rail{-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}}
+/* board rows: one line, maths typeset inline */
+.bq .bt .katex{font-size:1em}
+.bq .bt p{display:inline;margin:0}
+/* board, 5 Oct: closed rows stay one line; an open row shows the three big verdicts in one compact row,
+   the rest (wording, terminology, note) behind "More"; keys 4 to 6 still work */
+.brow:not(.open) .bt{max-height:1.7em;overflow:hidden}
+.brow:not(.open) .bt .katex-display{display:inline;margin:0}
+.bbody .ctl.big{padding:8px 10px}
+.bbody .ctl.big .vmain{display:flex;gap:8px}
+.bbody .ctl.big .vb{min-height:44px;flex:1}
+.bbody .ctl.big .vmore,.bbody .ctl.big .addnote,.bbody .ctl.big input.note[hidden]{display:none}
+.bbody .ctl.big.more .vmore{display:flex;margin-top:8px}
+.bbody .ctl.big.more .addnote{display:inline-block}
+.bmore{justify-self:start;border:0;background:none;color:var(--text-2);font:700 var(--s-sm) var(--font);cursor:pointer;padding:2px 0}

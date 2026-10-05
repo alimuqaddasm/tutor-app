@@ -1118,11 +1118,11 @@ function quickSeq(seq) {
       give({ t: "concept", p: c.p, mod: c.mod, steps: c.t === "step" ? [c] : [], figs: c.t === "fig" ? [c] : [], notes: c.notes }); return; }
     if (c.t === "quizpick") return;
     if (c.t === "quiz" || c.t === "drill") {
-      var src = c.t === "quiz" ? c.b : c.title;
+      var src = c.t === "quiz" ? c.b : "drill:" + (c.p && c.p.id) + ":" + (c.mod || c.title);
       if (last && last.t === "board" && last.src === src) { if (c.t === "drill") last.items.push(c); return; }   // a quiz board already holds its whole block
       if (c.t === "quiz") { var its = c.b.items || [];   // the board shows every question in the block, starred first
         give({ t: "board", src: src, kind: "quiz", b: c.b, p: c.p, mod: c.mod, notes: c.notes, items: its.filter(function (i) { return i.star; }).concat(its.filter(function (i) { return !i.star; })).map(function (it) { return { t: "quiz", it: it, b: c.b, p: c.p, mod: c.mod }; }) }); return; }
-      give({ t: "board", src: src, kind: "drill", title: c.title, p: c.p, mod: c.mod, notes: c.notes, items: [c] }); return; }
+      give({ t: "board", src: src, kind: "drill", title: c.mod || c.title, p: c.p, mod: c.mod, notes: c.notes, items: [c] }); return; }
     if (c.t === "end" && (carry.notes.length || carry.mods.length)) { carry.notes.forEach(function (n) { out.push({ t: "text", b: n, key: null, p: c.p, mod: c.mod }); }); carry = { notes: [], mods: [] }; }
     give(c);
   });
@@ -1143,9 +1143,9 @@ function boardHTML(c) {
   var h = '<div class="bhead"><b>' + esc(c.kind === "quiz" ? "Oral quiz" : (c.title || "Quick questions")) + '</b><span class="hint">' + items.length + ' questions · tap one to ask it' + (c.kind === "quiz" && items.some(function (it) { return it.it.star; }) ? ' · ★ first' : "") + '</span><span class="bscore num">' + asked + ' asked · ✓ ' + right + ' · ✗ ' + wrong + '</span></div><ol class="board">';
   items.forEach(function (it, i) { var k = boardKey(it), a = L.session.answers[k] || {}, open = BOARD.open === k, star = it.it && it.it.star;
     h += '<li class="brow' + (open ? " open" : "") + (it.rel ? " rel" : "") + (star ? " star" : "") + '" data-v="' + esc(a.v || "") + '">' +
-      '<button type="button" class="bq" data-bopen="' + esc(k) + '" aria-expanded="' + open + '"><span class="bn num">' + (i + 1) + '</span><span class="bt">' + (star ? '<i aria-hidden="true">★</i> ' : "") + esc(texPlain(plain(boardQ(it)))) + '</span>' +
-      (it.it && it.it.page ? '<span class="bpg">' + esc(it.it.page) + '</span>' : "") + '<span class="bv" aria-hidden="true">' + ({ right: "✓", wrong: "✗", partly: "½", wording: "W", terminology: "T", skipped: "–", tskip: "⏭" }[a.v] || "") + '</span></button>' +
-      (open ? '<div class="bbody"><div class="qtext prose">' + clean(boardQ(it)) + '</div>' + ctlBig(k, a, plain(boardQ(it))) + '<div class="bans prose">' + clean(boardA(it)) + '</div></div>' : "") + '</li>'; });
+      '<button type="button" class="bq" data-bopen="' + esc(k) + '" aria-expanded="' + open + '"><span class="bn num">' + (i + 1) + '</span><span class="bt">' + (star ? '<i aria-hidden="true">★</i> ' : "") + clean(String(boardQ(it)).replace(/<br\s*\/?>/gi, " \u00b7 ")) + '</span>' +
+      (it.it && it.it.page ? '<span class="bpg">' + esc(it.it.page) + '</span>' : it.title && /\(([^)]+)\)/.test(it.title) ? '<span class="bpg">' + esc(/\(([^)]+)\)/.exec(it.title)[1]) + '</span>' : "") + '<span class="bv" aria-hidden="true">' + ({ right: "✓", wrong: "✗", partly: "½", wording: "W", terminology: "T", skipped: "–", tskip: "⏭" }[a.v] || "") + '</span></button>' +
+      (open ? '<div class="bbody"><div class="qtext prose">' + clean(boardQ(it)) + '</div>' + ctlBig(k, a, plain(boardQ(it))) + '<button type="button" class="bmore" data-bmore>More: wording, terminology, note \u25be</button><div class="bans prose">' + clean(boardA(it)) + '</div></div>' : "") + '</li>'; });
   return h + '</ol>'; }
 function asked_(v) { return !!v && v !== "tskip"; }
 function conceptHTML(c) {
@@ -1383,7 +1383,8 @@ function fitFront(cur, left) {
 function flipIt() { var cur = $(".chunk.cur.flip"); if (!cur || !$("[data-flip]") || $("[data-flip]").hidden) return; flipOn = !flipOn; cur.classList.toggle("flipped", flipOn);
   $("[data-flip]").firstChild.textContent = flipOn ? "\u2190 Question " : "Mark scheme "; fitQ(); }
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-flip]"); if (t) flipIt(); });
-document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-bopen],[data-qnote],[data-qpages],[data-pgimg]"); if (!t || MODE !== "teach") return;
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-bopen],[data-bmore],[data-qnote],[data-qpages],[data-pgimg]"); if (!t || MODE !== "teach") return;
+  if (t.hasAttribute("data-bmore")) { var cb = t.parentNode.querySelector(".ctl.big"); if (cb) cb.classList.toggle("more"); t.remove(); return; }
   if (t.hasAttribute("data-qpages")) { var pr = $(".chunk.cur .qs-pages"); if (pr) { pr.hidden = !pr.hidden; t.setAttribute("aria-expanded", String(!pr.hidden)); } return; }
   if (t.hasAttribute("data-bopen")) { var k = t.getAttribute("data-bopen"); BOARD.open = BOARD.open === k ? null : k; redrawBoard(); return; }
   if (t.hasAttribute("data-qnote")) { var nb = $(".chunk.cur .qs-notes"); if (nb) { nb.hidden = !nb.hidden; t.setAttribute("aria-expanded", String(!nb.hidden)); } return; }
@@ -1392,7 +1393,7 @@ function fitBoard() { var bd = $(".chunk.cur .board"), foot = $(".tfoot"); if (!
   bd.style.maxHeight = Math.max(220, window.innerHeight - bd.getBoundingClientRect().top - foot.getBoundingClientRect().height - 34) + "px"; }
 window.addEventListener("resize", function () { if (MODE === "teach") fitBoard(); });
 function redrawBoard() { var c = TCH.seq[TCH.pos], cur = $(".chunk.cur"); if (!c || c.t !== "board" || !cur) return;
-  var y = $(".chunk.cur .board") && $(".chunk.cur .board").scrollTop; cur.innerHTML = stripHTML(c) + chunkHTML(c); maths(cur);
+  var y = $(".chunk.cur .board") && $(".chunk.cur .board").scrollTop; cur.innerHTML = stripHTML(c) + chunkHTML(c); maths(cur); loadImages(cur);
   fitBoard(); var bd = $(".chunk.cur .board"); if (bd && y) bd.scrollTop = y; var o = $(".chunk.cur .brow.open"); if (o && o.scrollIntoView) o.scrollIntoView({ block: "nearest" }); }
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-vmore]"); if (!t) return; var st = t.closest(".vstrip"), on = !st.classList.contains("more"); st.classList.toggle("more", on); t.setAttribute("aria-expanded", String(on)); fitQ(); });
 function fitQ() { var cur = $(".chunk.cur.fit"), foot = $(".tfoot"); if (!cur || !foot) return;
@@ -1536,7 +1537,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v28", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v29", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
