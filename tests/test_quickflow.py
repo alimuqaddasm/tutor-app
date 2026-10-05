@@ -74,16 +74,19 @@ with sync_playwright() as p:
     pg.click(".chunk.cur [data-qpages]")
     check("    which opens the page numbers", pg.locator(".chunk.cur .qs-pages:not([hidden]) .qs-pg").count() >= 5)
     pg.click(".chunk.cur .brow:nth-child(3) .bq")
-    check("  tapping a question opens it with the verdicts above the answer", pg.evaluate("(()=>{const o=document.querySelector('.brow.open');if(!o)return false;const v=o.querySelector('.ctl.big'),a=o.querySelector('.bans');return v&&a&&v.getBoundingClientRect().top<a.getBoundingClientRect().top})()"))
+    check("  tapping a question opens just the question and the answer", pg.evaluate("(()=>{const o=document.querySelector('.brow.open');return !!o&&!!o.querySelector('.qtext')&&!!o.querySelector('.bans')&&!o.querySelector('.ctl.big, .bmore')})()"))
+    check("  the round icons on the right mark the open question", pg.evaluate("(()=>{const r=document.querySelector('.chunk.cur .vrail'),o=document.querySelector('.brow.open .bq');return !!r&&getComputedStyle(r).position==='fixed'&&r.dataset.item===o.dataset.bopen&&r.getBoundingClientRect().right>innerWidth-40})()"))
+    check("  the icons don't cover the list", pg.evaluate("(()=>{const r=document.querySelector('.vrail').getBoundingClientRect(),c=document.querySelector('.chunk.cur').getBoundingClientRect();return c.right<=r.left+1})()"))
+    check("  a line says which question opens after a tick", pg.locator(".brow.open .bnext").count() == 1)
     path = "students/UK-1/lessons/%s/session.json" % LID
     pg.keyboard.press("2")   # Wrong (the lesson is finished, so verdicts count)
     check("  a miss pulls up questions from the same page", wait(pg, lambda: pg.locator(".chunk.cur .brow.rel").count() >= 1, 3) is not None or pg.evaluate("(()=>{const o=document.querySelector('.brow.open .bpg');return !o})()"))
     check("  the verdict is saved", wait(pg, lambda: path in fake.puts, 8) is not None)
     pg.click(".chunk.cur .brow:not(.open):not([data-v=right]):not([data-v=wrong]) .bq")   # another question, marked with a nervous double tap
-    k = pg.evaluate("document.querySelector('.brow.open .ctl.big').dataset.item")
-    pg.evaluate("(()=>{const b=document.querySelector('.brow.open .vb-right');b.click();b.click()})()")
+    k = pg.evaluate("document.querySelector('.vrail').dataset.item")
+    pg.evaluate("(()=>{const b=document.querySelector('.vrail .vr-right');b.click();b.click()})()")
     pg.wait_for_timeout(600)
-    check("a quick double tap keeps the mark", pg.evaluate("(k)=>{const c=document.querySelector('.ctl.big[data-item=\"'+k+'\"]');return c?c.querySelector('.vb-right').getAttribute('aria-pressed'):document.querySelector('.brow[data-v=right]')!==null}", k) in ("true", True))
+    check("a quick double tap keeps the mark", pg.evaluate("(k)=>{const b=document.querySelector('.brow .bq[data-bopen=\"'+k+'\"]');return b&&b.closest('.brow').dataset.v}", k) == "right")
 
     # notes behind an i, opening over the screen
     go(pg, "Propene, 2-bromopropane")
@@ -120,7 +123,7 @@ with sync_playwright() as p:
     check("  rows are one line", pg.evaluate("Math.max(...[...document.querySelectorAll('.chunk.cur .brow')].map(r=>r.getBoundingClientRect().height))") < 70)
     check("  question text in Times (Edexcel papers)", "Times New Roman" in pg.evaluate("getComputedStyle(document.querySelector('.brow .bt')).fontFamily"))
     pg.click(".chunk.cur .brow:nth-child(3) .bq"); pg.wait_for_timeout(1500)
-    check("  opening one shows the verdicts and the board picture", pg.locator(".brow.open .vb-right").count() == 1 and pg.locator(".brow.open .bans img").count() >= 1)
+    check("  opening one shows the board picture, the icons mark it", pg.locator(".chunk.cur .vrail[data-item] .vr-right").count() == 1 and pg.locator(".brow.open .bans img").count() >= 1)
     pg.goto(APP + "#/lesson/" + LID + "/teach"); pg.wait_for_selector(".chunk.cur", timeout=30000); pg.wait_for_timeout(800)
     go(pg, "Oral quiz")
     check("chemistry: question text in Arial (AQA papers)", pg.evaluate("getComputedStyle(document.querySelector('.brow .bt')).fontFamily").startswith("Arial"))

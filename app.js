@@ -771,10 +771,11 @@ document.addEventListener("click", function (ev) {
   if (t.hasAttribute("data-v") && !t.hasAttribute("data-rev") && previewing()) { toast("Preview: press Start lesson first to record verdicts"); return; }
   if (t.hasAttribute("data-v")) { var box = t.closest("[data-item]"), iid = box.getAttribute("data-item"), v = t.getAttribute("data-v"), a = target(iid);
     if (a.v === v && a.at && Date.now() - Date.parse(a.at) < 600) return;   // a nervous double tap keeps the mark
+    if (v === "right" && box.classList.contains("vrail") && BOARD.jumped && Date.now() - BOARD.jumped < 450) return;   // a double tap on ✓ must not mark the question that just opened
     if (a.v === v) { var vw = VHELP[v] || v; toast(vw.charAt(0).toUpperCase() + vw.slice(1) + ": removed"); }
     a.v = a.v === v ? null : v; a.at = now(); a.d = CFG.device; if (box.getAttribute("data-q")) a.q = box.getAttribute("data-q"); save(iid, a); railCount();
     $$(".v", box).forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-v") === a.v)); }); var row = box.closest(".item, tr[data-row]"); if (row) row.setAttribute("data-v", a.v || ""); drawTally();
-    if (MODE === "teach" && box.closest(".board")) { if (a.v === "wrong" || a.v === "partly" || a.v === "terminology" || a.v === "wording") BOARD.near = iid; else if (a.v === "right") BOARD.open = null; setTimeout(redrawBoard, a.v === "right" ? 350 : 0); }
+    if (MODE === "teach" && (box.closest(".board") || box.classList.contains("vrail"))) { if (a.v === "wrong" || a.v === "partly" || a.v === "terminology" || a.v === "wording") BOARD.near = iid; else if (a.v === "right") BOARD.open = BOARD.open === iid ? boardJump(iid) : BOARD.open; setTimeout(redrawBoard, a.v === "right" ? 350 : 0); if (a.v === "right") BOARD.jumped = Date.now() + 350; }
     var oc = MODE === "teach" && $(".outline .oc.cur"); if (oc && TCH.seq[TCH.pos]) oc.className = oc.className.replace(/\b[vs]-[a-z]+\b/g, "").trim() + " " + stateOf(TCH.seq[TCH.pos]); return; }
   if (t.hasAttribute("data-exv")) { $$("[data-exv]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === t && b.getAttribute("aria-pressed") !== "true")); }); return; }
   if (t.hasAttribute("data-exdel")) { var did = t.getAttribute("data-exdel"); x.extra = x.extra.filter(function (e) { return e.id !== did; }); touch(); drawLesson(); return; }
@@ -1168,7 +1169,7 @@ function paperHTML(html, subj, marks) {
 function boardKey(it) { return it.t === "quiz" ? it.it.id : it.key; }
 function boardQ(it) { return it.t === "quiz" ? it.it.q : it.d[0]; }
 function boardA(it) { return it.t === "quiz" ? it.it.a : it.d[1]; }
-var BOARD = { open: null, near: null };   // the question open on the board, and the one whose neighbours are pulled up after a miss
+var BOARD = { open: null, near: null, jumped: 0 };   // the question open on the board, and the one whose neighbours are pulled up after a miss
 function boardHTML(c) {
   var items = c.items.slice(), asked = 0, right = 0, wrong = 0;
   items.forEach(function (it) { var a = L.session.answers[boardKey(it)]; if (a && asked_(a.v)) { asked++; if (a.v === "right") right++; else if (a.v !== "skipped" && a.v !== "tskip") wrong++; } });
@@ -1181,8 +1182,33 @@ function boardHTML(c) {
     h += '<li class="brow' + (open ? " open" : "") + (it.rel ? " rel" : "") + (star ? " star" : "") + '" data-v="' + esc(a.v || "") + '">' +
       '<button type="button" class="bq" data-bopen="' + esc(k) + '" aria-expanded="' + open + '"><span class="bn num">' + (i + 1) + '</span><span class="bt">' + (star ? '<i aria-hidden="true">★</i> ' : "") + clean(String(boardQ(it)).replace(/<br\s*\/?>/gi, " \u00b7 ")) + '</span>' +
       (it.it && it.it.page ? '<span class="bpg">' + esc(it.it.page) + '</span>' : it.title && /\(([^)]+)\)/.test(it.title) ? '<span class="bpg">' + esc(/\(([^)]+)\)/.exec(it.title)[1]) + '</span>' : "") + '<span class="bv" aria-hidden="true">' + ({ right: "✓", wrong: "✗", partly: "½", wording: "W", terminology: "T", skipped: "–", tskip: "⏭" }[a.v] || "") + '</span></button>' +
-      (open ? '<div class="bbody"><div class="qtext prose">' + paperHTML(boardQ(it), subjNow()) + '</div>' + ctlBig(k, a, plain(boardQ(it))) + '<button type="button" class="bmore" data-bmore>More: wording, terminology, note \u25be</button><div class="bans prose">' + clean(boardA(it)) + '</div></div>' : "") + '</li>'; });
-  return h + '</ol>'; }
+      (open ? '<div class="bbody"><div class="qtext prose">' + paperHTML(boardQ(it), subjNow()) + '</div><div class="bans prose">' + clean(boardA(it)) + '</div>' + (a.note ? '<div class="bnote"><b>Note:</b> ' + esc(a.note) + '</div>' : "") + boardNext(items, it) + '</div>' : "") + '</li>'; });
+  var oi = items.filter(function (it) { return boardKey(it) === BOARD.open; })[0];
+  return h + '</ol>' + vrail(oi ? boardKey(oi) : null, oi ? L.session.answers[boardKey(oi)] : null, oi ? plain(boardQ(oi)) : ""); }
+/* the question that opens after a ✓: the next one not yet asked, in the order on screen (wrapping round) */
+function boardNextIt(items, it) { var i = items.indexOf(it);
+  for (var j = 1; j < items.length; j++) { var n = items[(i + j) % items.length]; if (!asked_((L.session.answers[boardKey(n)] || {}).v)) return n; } return null; }
+function boardNext(items, it) { var n = boardNextIt(items, it);
+  return '<div class="bnext">' + (n ? '<span class="hint">After \u2713 next:</span> <b class="num">' + (items.indexOf(n) + 1) + '.</b> ' + esc(plain(boardQ(n)).slice(0, 90)) : '<span class="hint">After \u2713: that\u2019s every question on this list</span>') + '</div>'; }
+/* the marking buttons as round icons down the right edge (Ali, 5 Oct, "Solid"): they stay put and mark whichever question is open */
+var VIC = { right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  wrong: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>',
+  partly: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>',
+  mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18.5" cy="12" r="2"/></svg>' };
+function vrail(id, a, q) { a = a || {}; var off = id ? "" : " disabled", lab = { right: "Right", wrong: "Wrong", partly: "Partly" }, other = a.v === "wording" || a.v === "terminology" || a.v === "skipped";
+  return '<div class="ctl big vrail' + (id ? "" : " idle") + (asked_(a.v) ? " has" : "") + '"' + (id ? ' data-item="' + esc(id) + '" data-q="' + esc(String(q || "").slice(0, 160)) + '"' : "") + ' role="toolbar" aria-label="Mark the open question">' +
+    VBIG.map(function (v, i) { return '<button class="v vr vr-' + v[0] + '" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '" title="' + lab[v[0]] + ' (' + (i + 1) + ')" aria-label="' + lab[v[0]] + '"' + off + '><span class="vd">' + VIC[v[0]] + '</span><kbd>' + (i + 1) + '</kbd></button>'; }).join("") +
+    (SR ? '<button class="vr vr-mic" type="button" data-mic title="Say what he said: tap, speak, it stops by itself (or hold M)" aria-label="Say what he said"' + off + '><span class="vd">' + VIC.mic + '</span><span class="vt">Say it</span><kbd>M</kbd></button>' : "") +
+    '<button class="vr vr-more" type="button" data-vrmore aria-expanded="false" aria-pressed="' + other + '" title="Wording, terminology, didn\u2019t answer, note" aria-label="More"' + off + '><span class="vd">' + VIC.more + '</span><kbd>4-6</kbd></button>' +
+    (id ? '<div class="vrmenu" hidden><span class="hint">Right idea, wrong words:</span>' + VSMALL.map(function (v, i) { return '<button class="v vs" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '">' + v[1] + '<kbd>' + (i + 4) + '</kbd></button>'; }).join("") +
+      '<button class="v vs" type="button" data-v="skipped" title="He did not attempt it" aria-pressed="' + (a.v === "skipped") + '">He didn\u2019t answer<kbd>6</kbd></button>' +
+      '<input class="note" type="text" data-note aria-label="What he said" placeholder="What he said / got wrong" value="' + esc(a.note || "") + '"></div>' : "") + '</div>'; }
+function boardJump(iid) { var c = TCH.seq[TCH.pos]; if (!c || c.t !== "board") return null;
+  var keys = $$(".chunk.cur .brow .bq").map(function (b) { return b.getAttribute("data-bopen"); }), byk = {};
+  c.items.forEach(function (it) { byk[boardKey(it)] = it; });
+  var items = keys.map(function (k) { return byk[k]; }).filter(Boolean), it = byk[iid], n = it && items.indexOf(it) >= 0 ? boardNextIt(items, it) : null;
+  return n ? boardKey(n) : null; }
 function asked_(v) { return !!v && v !== "tskip"; }
 function conceptHTML(c) {
   var pts = c.steps.map(function (st) { var kd = st.it.kind || "do"; return '<li class="cp k-' + esc(kd) + '"><span class="ck" aria-hidden="true">' + esc(KIC[kd] || "\u2192") + '</span><div><div class="prose">' + clean(st.it.html) + '</div>' + warmBtn(st) + '</div></li>'; }).join("");
@@ -1259,7 +1285,7 @@ function micJoin(old, add) { old = (old || "").trim(); return old ? old + "; " +
 document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-mic]"); if (b) { e.preventDefault(); micStart(b.closest("[data-item]")); } });
 document.addEventListener("keydown", function (e) { if ((e.key !== "m" && e.key !== "M") || e.repeat || MODE !== "teach" || e.ctrlKey || e.altKey || e.metaKey) return;
   var ae = document.activeElement; if (ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) return;
-  var box = $(".brow.open .ctl.big") || $(".chunk.cur .ctl.big, .tfoot .ctl.big"); if (box && SR) { e.preventDefault(); if (!MIC) micStart(box); } });
+  var box = $(".chunk.cur .vrail[data-item]") || $(".chunk.cur .ctl.big:not(.vrail), .tfoot .ctl.big"); if (box && SR) { e.preventDefault(); if (!MIC) micStart(box); } });
 document.addEventListener("keyup", function (e) { if ((e.key === "m" || e.key === "M") && MIC) micStop(); });
 function tposKey() { return "tutor.tpos." + CFG.student + "." + L.id; }
 function live() { return replay(L.session.time.log).running; }
@@ -1450,12 +1476,14 @@ function fitFront(cur, left) {
 function flipIt() { var cur = $(".chunk.cur.flip"); if (!cur || !$("[data-flip]") || $("[data-flip]").hidden) return; flipOn = !flipOn; cur.classList.toggle("flipped", flipOn);
   $("[data-flip]").firstChild.textContent = flipOn ? "\u2190 Question " : "Mark scheme "; fitQ(); }
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-flip]"); if (t) flipIt(); });
-document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-bopen],[data-bmore],[data-qnote],[data-qpages],[data-pgimg]"); if (!t || MODE !== "teach") return;
-  if (t.hasAttribute("data-bmore")) { var cb = t.parentNode.querySelector(".ctl.big"); if (cb) cb.classList.toggle("more"); t.remove(); return; }
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-bopen],[data-qnote],[data-qpages],[data-pgimg]"); if (!t || MODE !== "teach") return;
   if (t.hasAttribute("data-qpages")) { var pr = $(".chunk.cur .qs-pages"); if (pr) { pr.hidden = !pr.hidden; t.setAttribute("aria-expanded", String(!pr.hidden)); } return; }
   if (t.hasAttribute("data-bopen")) { var k = t.getAttribute("data-bopen"); BOARD.open = BOARD.open === k ? null : k; redrawBoard(); return; }
   if (t.hasAttribute("data-qnote")) { var nb = $(".chunk.cur .qs-notes"); if (nb) { nb.hidden = !nb.hidden; t.setAttribute("aria-expanded", String(!nb.hidden)); } return; }
   var pgs = $$(".chunk.cur [data-pgimg]"); openZoom(pgs.map(function (b) { return function () { return fileURL(b.getAttribute("data-pgimg")); }; }), Math.max(0, pgs.indexOf(t))); });
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-vrmore]"), m = $(".vrail .vrmenu");
+  if (!t) { if (m && !m.hidden && !e.target.closest(".vrmenu")) { m.hidden = true; var b = $("[data-vrmore]"); if (b) b.setAttribute("aria-expanded", "false"); } return; }
+  if (!m) return; m.hidden = !m.hidden; t.setAttribute("aria-expanded", String(!m.hidden)); if (!m.hidden && !$(".vrmenu input[data-note]").value) $(".vrmenu input[data-note]").focus(); });
 function fitBoard() { var bd = $(".chunk.cur .board"), foot = $(".tfoot"); if (!bd || !foot) return;
   bd.style.maxHeight = Math.max(220, window.innerHeight - bd.getBoundingClientRect().top - foot.getBoundingClientRect().height - 34) + "px"; }
 window.addEventListener("resize", function () { if (MODE === "teach") fitBoard(); });
@@ -1549,7 +1577,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "teach" || SH |
   if ($("#wuov") || $("#sug") || !$("#zoom").hidden || e.ctrlKey || e.altKey || e.metaKey) return;
   if (e.key === "0") { iskipIt(); return; }
   if ((e.key === "a" || e.key === "A") && $(".chunk.cur.flip")) { flipIt(); return; }
-  if (/^[1-6]$/.test(e.key)) { var bs = $$(".chunk.cur .ctl.big .v"); if (bs[+e.key - 1]) bs[+e.key - 1].click(); return; }
+  if (/^[1-6]$/.test(e.key)) { var bs = $$(".chunk.cur .vrail [data-v]"); if (!bs.length) bs = $$(".chunk.cur .ctl.big [data-v]"); if (bs[+e.key - 1]) bs[+e.key - 1].click(); return; }
   var three = !!$(".tfoot.three");
   if (e.key === "ArrowRight") tmove(1, three ? "next" : "taught"); else if (e.key === "ArrowLeft") tmove(-1, "jump");
   else if (three && (e.key === "t" || e.key === "T")) tmove(1, "taught"); else if (three && (e.key === "s" || e.key === "S")) tmove(1, "skip"); });
@@ -1610,7 +1638,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v32", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v33", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
