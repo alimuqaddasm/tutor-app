@@ -111,6 +111,21 @@ with sync_playwright() as p:
     check("home: pictures of the next lessons are fetched in the background", n1 - n0 >= 10, n1 - n0)
     pg.context.close()
 
+    # maths: the video questions are one list, in the Edexcel paper font; chemistry rows in the AQA paper font
+    pg = page()
+    pg.goto(APP + "#/lesson/2026-10-04-maths/teach"); pg.wait_for_selector(".chunk.cur", timeout=30000); pg.wait_for_timeout(800)
+    go(pg, "Maths Genie 7.1")
+    check("maths: the 9 video questions are one list", pg.locator(".chunk.cur.t-board .brow").count() == 9, pg.locator(".chunk.cur .brow").count())
+    check("  each row shows the video time", "0:56" in pg.inner_text(".chunk.cur .brow:first-child .bpg"))
+    check("  rows are one line", pg.evaluate("Math.max(...[...document.querySelectorAll('.chunk.cur .brow')].map(r=>r.getBoundingClientRect().height))") < 70)
+    check("  question text in Times (Edexcel papers)", "Times New Roman" in pg.evaluate("getComputedStyle(document.querySelector('.brow .bt')).fontFamily"))
+    pg.click(".chunk.cur .brow:nth-child(3) .bq"); pg.wait_for_timeout(1500)
+    check("  opening one shows the verdicts and the board picture", pg.locator(".brow.open .vb-right").count() == 1 and pg.locator(".brow.open .bans img").count() >= 1)
+    pg.goto(APP + "#/lesson/" + LID + "/teach"); pg.wait_for_selector(".chunk.cur", timeout=30000); pg.wait_for_timeout(800)
+    go(pg, "Oral quiz")
+    check("chemistry: question text in Arial (AQA papers)", pg.evaluate("getComputedStyle(document.querySelector('.brow .bt')).fontFamily").startswith("Arial"))
+    pg.context.close()
+
     check("no script errors", not errs, errs)
     b.close()
 
