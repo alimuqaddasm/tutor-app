@@ -69,15 +69,15 @@ with sync_playwright() as p:
 
     # 2. preview: a verdict tap is not recorded
     check("preview label says verdicts are not recorded", "verdicts included" in pg.get_attribute(".preview", "title"))
-    pg.click(".vstrip .vb-right")
+    pg.click(".vrail .vr-right")
     pg.wait_for_timeout(4500)
     path = "students/UK-1/lessons/%s/session.json" % LID
     check("a verdict tap in preview saves nothing", path not in fake.puts)
-    check("  and the button doesn't light up", pg.get_attribute(".vstrip .vb-right", "aria-pressed") == "false")
+    check("  and the button doesn't light up", pg.get_attribute(".vrail .vr-right", "aria-pressed") == "false")
     check("  and a message says to press Start lesson", "Start lesson" in pg.inner_text("#toast"))
     pg.click("#clkgo")   # Start lesson
     pg.wait_for_timeout(300)
-    pg.click(".vstrip .vb-right")
+    pg.click(".vrail .vr-right")
     check("after Start lesson the verdict is recorded", wait(pg, lambda: path in fake.puts and any(a.get("v") == "right" for a in json.loads(fake.puts[path])["answers"].values()), 10) is not None)
     pg.context.close()
 

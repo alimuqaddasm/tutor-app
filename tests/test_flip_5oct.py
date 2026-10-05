@@ -1,5 +1,5 @@
 """Flip card of 5 Oct: the answer text sits under the question when it fits; when it doesn't, the front says it is
-   on the back. The back (button "Mark scheme", key A) shows the mark scheme pictures first, at full width, then the
+   on the back. The back (the round A button, key A) shows the mark scheme pictures first, at full width, then the
    answer text and the hints. Notes stay on the front. Pretend GitHub as in tests/test_batch1_lessons.py.
 
     python tests/test_flip_5oct.py
@@ -54,7 +54,7 @@ with sync_playwright() as p:
         check(tag + " long answer: on the back with a note, or whole on the front", (pg.locator(".chunk.cur .fitq .ansmore:not([hidden])").count() == 1 and pg.locator(".chunk.cur .fitq .ansfront[hidden]").count() == 1)
               or (pg.locator(".chunk.cur .fitq .ansfront:not([hidden])").count() == 1 and scroll(".chunk.cur .fitq") <= 2))
         check(tag + "   and the front doesn't scroll", scroll(".chunk.cur .fitq") <= 2, scroll(".chunk.cur .fitq"))
-        check(tag + "   the button says Mark scheme", pg.inner_text("[data-flip]").startswith("Mark scheme"))
+        check(tag + "   the A (mark scheme) button is on the round buttons", pg.locator(".vrail .vr-flip[data-flip]").count() == 1 and "A" in pg.inner_text(".vrail .vr-flip .vd"))
         pg.keyboard.press("a")
         pg.wait_for_timeout(1200)
         order = pg.evaluate("[...document.querySelector('.chunk.cur .flipa').children].map(e=>e.className)")

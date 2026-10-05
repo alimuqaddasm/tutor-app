@@ -82,7 +82,7 @@ with sync_playwright() as p:
     pg = page("steps")
     pg.goto(APP + "#/lesson/" + LID + "/teach"); pg.wait_for_selector(".chunk.cur", timeout=30000); pg.wait_for_timeout(800)
     go(pg, "Propene, 2-bromopropane")
-    check("Flip: the mic is in the verdict strip", pg.locator(".tfoot .vstrip [data-mic]").count() == 1)
+    check("Flip: the mic is in the round buttons", pg.locator(".chunk.cur .vrail [data-mic]").count() == 1)
     pg.context.close()
 
     # preview: nothing is recorded before Start lesson
