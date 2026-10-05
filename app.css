@@ -1197,3 +1197,15 @@ body[data-subject="maths"] .tw{font-family:"Times New Roman",Tinos,Times,serif}
 .stu-twin{max-width:1100px;margin:0 auto;padding:24px;background:var(--surface);border-radius:18px}
 @media (prefers-reduced-motion:reduce){.sl-cur{animation:none}}
 .tstage:has(.slider),.tstage:has(.chunk.cur.fit .vrail){max-width:1240px}
+/* the paper's sub-parts, lead-in text, solid answer lines and the scheme above the parts */
+.tw .sub{display:grid;grid-template-columns:2.57em minmax(0,1fr);margin-top:.3em}
+.tw .sub:first-child{margin-top:0}
+.tw-pre{margin-bottom:.3em}
+.tw-pre p{margin:0 0 .2em}
+.tw .uline{display:inline-block;width:22em;max-width:calc(100% - 7em);border-bottom:.06em solid currentColor;vertical-align:baseline;height:.9em;margin-left:.4em}
+.tw .ln:has(.uline){display:flex;align-items:baseline}
+.tw .ln .uline{flex:1;width:auto;max-width:none}
+.tw .tw-stage{display:grid;grid-template-columns:5.2em minmax(0,1fr)}
+.tw-stem + .fig,.tw-stem ~ .fig{margin:.3em 0 .2em}
+.sl-stem .fig img{max-height:22vh;width:auto;max-width:100%;cursor:zoom-in;background:#fff;border-radius:8px}
+@media (max-height:820px){.sl-stem .fig img{max-height:17vh}}
