@@ -38,6 +38,7 @@ the tutoring repo (next to this repo as ../tutoring, or set TUTORING_CLONE) and 
 
     python tests/runtest.py tests/test_teach.py     # any older test, with GitHub replaced (CHROMIUM_PATH picks a Chromium)
     python tests/test_batch1_lessons.py             # 5 Oct fixes: notes in Flip, preview, mistyped address, taken date, minutes (16 checks)
+    python tests/test_video_v37.py                  # 6 Oct (v37): lesson videos in Plan, Teach and the Student view; parts question full width (8 checks)
     python tests/test_flip_5oct.py                  # Flip card of 5 Oct: answer on the front when it fits, mark scheme first on the back (17 checks)
     python tests/test_quickflow.py                  # Quick flow of 5 Oct: one quiz board, merged section screens, notes behind an i, make-up log, maths video list, paper fonts (23 checks)
     python tests/test_paper_5oct.py                 # Question text set like the papers, arrows between zoomed pages, After the lesson pre-filled (11 checks)
