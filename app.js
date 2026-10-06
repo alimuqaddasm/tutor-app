@@ -87,7 +87,7 @@ function fileJSON(path) { var sha = shaOf(path); if (!sha) return Promise.resolv
 function fileText(path) { var sha = shaOf(path); if (!sha) return Promise.resolve(null); return blobBytes(sha).then(function (b) { return { text: new TextDecoder().decode(b), sha: sha }; }); }
 var urlCache = {};
 function fileURL(path) { var sha = shaOf(path); if (!sha) return Promise.resolve(null); if (urlCache[sha]) return Promise.resolve(urlCache[sha]);
-  return blobBytes(sha).then(function (b) { var t = /\.png$/i.test(path) ? "image/png" : /\.pdf$/i.test(path) ? "application/pdf" : /\.svg$/i.test(path) ? "image/svg+xml" : "image/jpeg"; var u = URL.createObjectURL(new Blob([b], { type: t })); urlCache[sha] = u; return u; }); }
+  return blobBytes(sha).then(function (b) { var t = /\.png$/i.test(path) ? "image/png" : /\.mp4$/i.test(path) ? "video/mp4" : /\.webm$/i.test(path) ? "video/webm" : /\.pdf$/i.test(path) ? "application/pdf" : /\.svg$/i.test(path) ? "image/svg+xml" : "image/jpeg"; var u = URL.createObjectURL(new Blob([b], { type: t })); urlCache[sha] = u; return u; }); }
 function studentBase() { return "students/" + CFG.student + "/"; }
 function lessonBase(id) { return studentBase() + "lessons/" + id + "/"; }
 
@@ -562,7 +562,20 @@ function block(b) {
 /* YouTube, embedded; "moments" jump the player to a point ("4:32 KCN mechanism") */
 function secsOf(t) { if (typeof t === "number") return t; var p = String(t || "0").split(":").map(Number); return p.reduce(function (a, b) { return a * 60 + b; }, 0); }
 function vsrc(id, start, auto) { return "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(id) + "?rel=0&modestbranding=1&start=" + secsOf(start) + (auto ? "&autoplay=1" : ""); }
+/* a video made for the lesson (Manim explainers): {type:"video", src:"videos/manim/x.mp4" or "assets/x.mp4", title, moments}.
+   Read from the data repo like a picture; plays here and, as its own item, in the Student view. */
+function vidKey(b) { return "v:" + b.src; }
+function vidPath(p) { return /^(students|books|boards|videos)\//.test(p) ? p : lessonBase(L.id) + p; }
+function localVideo(b, big) {
+  return '<video class="lvid' + (big ? " big" : "") + '" controls playsinline preload="metadata" data-vsrc="' + esc(b.src) + '" data-vk="' + esc(vidKey(b)) + '"></video><span class="ph vph">Loading the video\u2026</span>'; }
+function loadVideos(root) { $$("video[data-vsrc]:not([data-on])", root).forEach(function (v) { v.setAttribute("data-on", "1"); var ph = v.nextElementSibling;
+  fileURL(vidPath(v.getAttribute("data-vsrc"))).then(function (u) { if (u) { v.src = u; if (ph && ph.classList.contains("vph")) ph.remove(); } else if (ph) ph.textContent = "Video not found: " + v.getAttribute("data-vsrc"); })
+    .catch(function () { v.removeAttribute("data-on"); if (ph) ph.textContent = "Couldn\u2019t load the video. Reopen the lesson to retry."; }); }); }
 function videoBlock(b) {
+  if (b.src) return '<div class="vid"><div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap"><div><div class="label" style="margin-bottom:8px">' + esc(b.channel || "Video") + '</div><h3 style="font-size:var(--s-lg);margin-bottom:10px">' + esc(b.title || "") + '</h3></div><button class="btn small" type="button" data-show="' + esc(vidKey(b)) + '">Show him</button></div>' +
+    '<div class="vframe local">' + localVideo(b) + '</div>' +
+    ((b.moments || []).length ? '<div class="qbar" style="margin-top:10px">' + b.moments.map(function (m) { return '<button class="chip" type="button" data-lseek="' + esc(vidKey(b)) + '" data-t="' + esc(m.t) + '">' + esc(m.t) + ' · ' + esc(m.label || "") + '</button>'; }).join("") + '</div>' : "") +
+    (b.note ? '<div class="prose hint" style="margin-top:8px">' + clean(b.note) + '</div>' : "") + '</div>';
   var id = String(b.id || "").replace(/[^A-Za-z0-9_-]/g, "");
   return '<div class="vid"><div class="label" style="margin-bottom:8px">' + esc(b.channel || "Video") + '</div><h3 style="font-size:var(--s-lg);margin-bottom:10px">' + esc(b.title || "") + '</h3>' +
     '<div class="vframe"><iframe loading="lazy" data-vid="' + id + '" src="' + vsrc(id, b.start || 0) + '" title="' + esc(b.title || "Video") + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>' +
@@ -606,7 +619,7 @@ function showImg(im) { var p = im.getAttribute("data-src"); if (!p || im.getAttr
   fileURL(full).then(function (u) { var ph = im.nextElementSibling; if (u) { im.decoding = "async"; im.src = u; im.hidden = false; if (ph && ph.classList.contains("ph")) ph.remove(); } else if (ph) ph.textContent = "Image not found: " + p; })
     .catch(function () { im.removeAttribute("data-on"); var ph = im.nextElementSibling; if (ph) ph.textContent = "Couldn’t load image. Tap to retry."; }); }
 var io = "IntersectionObserver" in window ? new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { io.unobserve(e.target); showImg(e.target.__img || e.target); } }); }, { rootMargin: "900px 0px" }) : null;
-function loadImages(root) { $$("img[data-src]:not([data-on])", root).forEach(function (im) { var ph = im.nextElementSibling; var tgt = ph && ph.classList.contains("ph") ? ph : im; if (io) { tgt.__img = im; io.observe(tgt); } else showImg(im); }); }
+function loadImages(root) { loadVideos(root); $$("img[data-src]:not([data-on])", root).forEach(function (im) { var ph = im.nextElementSibling; var tgt = ph && ph.classList.contains("ph") ? ph : im; if (io) { tgt.__img = im; io.observe(tgt); } else showImg(im); }); }
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("button"); if (!t) return;
   if (t.hasAttribute("data-warmup")) { openWarmup(); return; }
   if (t.id === "wux") { var o = $("#wuov"); if (o) o.remove(); if (MODE === "teach") warmCount(); } });
@@ -845,6 +858,7 @@ document.addEventListener("keydown", function (e) { if ($("#zoom").hidden || !ZM
   z.addEventListener("touchend", function (e) { if (x0 == null) return; var dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 60) zoomStep(dx < 0 ? 1 : -1); x0 = null; }); })();
 $("#zoom").addEventListener("click", function (e) { if (e.target.id === "zoom") closeZoom(); });
 document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeZoom(); });
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-lseek]"); if (!t) return; var v = $('video[data-vk="' + t.getAttribute("data-lseek") + '"]'); if (v) { v.currentTime = secsOf(t.getAttribute("data-t")); v.play().catch(function () {}); v.scrollIntoView({ block: "center", behavior: "smooth" }); } });
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-seek]"); if (!t) return; var fr = $('iframe[data-vid="' + t.getAttribute("data-seek") + '"]'); if (fr) { fr.src = vsrc(t.getAttribute("data-seek"), t.getAttribute("data-t"), true); fr.scrollIntoView({ block: "center", behavior: "smooth" }); } });
 function wake() { try { if (navigator.wakeLock) navigator.wakeLock.request("screen").catch(function () {}); } catch (e) {} }
 
@@ -1662,13 +1676,14 @@ if (BC) BC.onmessage = function (ev) { var m = ev.data || {};
   if (m.type === "show" && MODE === "student" && L && m.lesson === L.id && STU) { var k = STU.items.findIndex(function (q) { return q.id === m.id; }); if (k >= 0) { STU.tab = STU.items[k].kind; STU.i = k; drawStudent(); } BC.postMessage({ type: "alive", lesson: L.id }); } };
 setInterval(function () { if (BC && MODE === "student" && L) BC.postMessage({ type: "alive", lesson: L.id }); }, 4000);
 /* Show him: to the student tab if one is open for this lesson, otherwise full screen here */
-function showHim(id) { if (BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 10000 && id !== "*") { BC.postMessage({ type: "show", lesson: L.id, id: id }); toast("Sent to the student view"); return; } openShow(id); }
+function showHim(id) { if (/^v:/.test(id) && !(BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 10000)) { toast("Open the Student view first, then press Show him"); return; } if (BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 10000 && id !== "*") { BC.postMessage({ type: "show", lesson: L.id, id: id }); toast("Sent to the student view"); return; } openShow(id); }
 function studentItems() { var out = [];
   phases().filter(function (p) { return !p.sys; }).forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) {
     if (b.type === "question" && (b.parts || []).length) out.push({ kind: "exam", id: b.id, img: [], twin: b, p: p });
     else if (b.type === "question" && (b.img || []).length) out.push({ kind: "exam", id: b.id, img: b.img, p: p });
     else if (b.type === "quiz") (b.items || []).forEach(function (it) { out.push({ kind: "quick", id: it.id, text: it.q, p: p }); });
     else if (b.type === "drill") (b.items || []).forEach(function (d) { out.push({ kind: "quick", id: drillKey(d[0]), text: d[0], p: p }); });
+    else if (b.type === "video" && b.src) out.push({ kind: "video", id: vidKey(b), v: b, text: b.title || "Video", p: p });
     if (b.blocks) walk(b.blocks); }); })(p.blocks); });
   return out; }
 function drawStudent() {
@@ -1676,13 +1691,13 @@ function drawStudent() {
   if (!STU || STU.id !== L.id) STU = { id: L.id, items: studentItems(), tab: "exam", i: -1, drawer: false };
   var list = STU.items.map(function (q, i) { q.i = i; return q; }).filter(function (q) { return q.kind === STU.tab; });
   if (STU.i < 0 || !STU.items[STU.i] || STU.items[STU.i].kind !== STU.tab) STU.i = list.length ? list[0].i : -1;
-  var ne = STU.items.filter(function (q) { return q.kind === "exam"; }).length, nq = STU.items.length - ne, cur = STU.items[STU.i], pos = list.indexOf(cur);
-  var view = !cur ? '<div class="empty"><h3>No questions here</h3></div>' : cur.kind === "exam"
+  var cnt = function (k) { return STU.items.filter(function (q) { return q.kind === k; }).length; }, ne = cnt("exam"), nq = cnt("quick"), nv = cnt("video"), cur = STU.items[STU.i], pos = list.indexOf(cur);
+  var view = !cur ? '<div class="empty"><h3>No questions here</h3></div>' : cur.kind === "video" ? '<div class="stu-vid">' + localVideo(cur.v, true) + '<div class="stu-vt">' + esc(cur.v.title || "") + '</div></div>' : cur.kind === "exam"
     ? cur.twin ? '<div class="stu-twin">' + twinHTML(cur.twin) + '</div>' : '<div class="stu-fit ' + (cur.img.length > 1 ? "many" : "one") + '">' + cur.img.map(function (i) { return '<img data-src="' + esc(i) + '" alt="Question" hidden>'; }).join("") + '</div>'
     : '<div class="stu-q">' + paperHTML(cur.text, subjNow()) + '</div>';
-  var drawer = '<aside class="stu-drawer"' + (STU.drawer ? "" : " hidden") + ' aria-label="Questions"><div class="stu-dh"><div class="modes"><button type="button" data-stab="exam" aria-pressed="' + (STU.tab === "exam") + '">Exam ' + ne + '</button><button type="button" data-stab="quick" aria-pressed="' + (STU.tab === "quick") + '">Quick ' + nq + '</button></div><button class="btn small" type="button" id="stufs">Full screen</button><button class="btn small" type="button" id="stux">Close</button></div>' +
-    '<p class="hint">Only the question shows on his screen. Move with the arrow keys, a swipe, or the faint \u2039 \u203a at the edges; \u201cShow him\u201d in Teach sends a question here.</p><nav class="stu-list">' +
-    list.map(function (q, k) { return '<button type="button" class="stu-item' + (q === cur ? " cur" : "") + '" data-si="' + q.i + '"><span class="n num">' + (k + 1) + '</span>' + (q.kind === "exam" ? '<img data-src="' + esc(q.img[0]) + '" alt="" hidden><span class="ph"></span>' : '<span class="tx">' + esc(plain(q.text).slice(0, 80)) + '</span>') + '</button>'; }).join("") + '</nav></aside>';
+  var drawer = '<aside class="stu-drawer"' + (STU.drawer ? "" : " hidden") + ' aria-label="Questions"><div class="stu-dh"><div class="modes"><button type="button" data-stab="exam" aria-pressed="' + (STU.tab === "exam") + '">Exam ' + ne + '</button><button type="button" data-stab="quick" aria-pressed="' + (STU.tab === "quick") + '">Quick ' + nq + '</button>' + (nv ? '<button type="button" data-stab="video" aria-pressed="' + (STU.tab === "video") + '">Video ' + nv + '</button>' : "") + '</div><button class="btn small" type="button" id="stufs">Full screen</button><button class="btn small" type="button" id="stux">Close</button></div>' +
+    '<p class="hint">Only the question or video shows on his screen. Move with the arrow keys, a swipe, or the faint \u2039 \u203a at the edges; \u201cShow him\u201d in Teach sends a question here.</p><nav class="stu-list">' +
+    list.map(function (q, k) { return '<button type="button" class="stu-item' + (q === cur ? " cur" : "") + '" data-si="' + q.i + '"><span class="n num">' + (k + 1) + '</span>' + (q.kind === "exam" && q.img.length ? '<img data-src="' + esc(q.img[0]) + '" alt="" hidden><span class="ph"></span>' : '<span class="tx">' + (q.kind === "video" ? "\u25b6 " : "") + esc(plain(q.text).slice(0, 80)) + '</span>') + '</button>'; }).join("") + '</nav></aside>';
   var at = STU.items.indexOf(cur);
   app.innerHTML = '<div class="stu clean"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question">\u2630</button><main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
     '<button class="stu-edge prev" type="button" data-sgo="-1" aria-label="Previous question"' + (at <= 0 ? " disabled" : "") + '>\u2039</button><button class="stu-edge next" type="button" data-sgo="1" aria-label="Next question"' + (at < 0 || at >= STU.items.length - 1 ? " disabled" : "") + '>\u203a</button>' + drawer + '</div>';
@@ -1708,7 +1723,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v36", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v37", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];

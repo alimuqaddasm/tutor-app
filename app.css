@@ -1194,7 +1194,7 @@ body[data-subject="maths"] .tw{font-family:"Times New Roman",Tinos,Times,serif}
 .sl-mk input{width:64px;min-height:40px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);padding:0 8px;font:inherit}
 .sl-foot{display:flex;align-items:center;justify-content:center;gap:12px}
 .sl-foot .hint{font-size:13px}
-.stu-twin{max-width:1100px;margin:0 auto;padding:24px;background:var(--surface);border-radius:18px}
+.stu-twin{width:min(100%,1100px);box-sizing:border-box;margin:0 auto;padding:24px;background:var(--surface);border-radius:18px}
 @media (prefers-reduced-motion:reduce){.sl-cur{animation:none}}
 .tstage:has(.slider),.tstage:has(.chunk.cur.fit .vrail){max-width:1240px}
 /* the paper's sub-parts, lead-in text, solid answer lines and the scheme above the parts */
@@ -1209,3 +1209,12 @@ body[data-subject="maths"] .tw{font-family:"Times New Roman",Tinos,Times,serif}
 .tw-stem + .fig,.tw-stem ~ .fig{margin:.3em 0 .2em}
 .sl-stem .fig img{max-height:22vh;width:auto;max-width:100%;cursor:zoom-in;background:#fff;border-radius:8px}
 @media (max-height:820px){.sl-stem .fig img{max-height:17vh}}
+
+/* v37: lesson videos from the data repo (Manim explainers), in Plan/Teach and as their own items in the Student view */
+.vframe.local{aspect-ratio:auto;background:#000;display:flex;align-items:center;justify-content:center;min-height:120px}
+.vframe.local video{width:100%;display:block;max-height:70vh}
+.vph{color:#bbb;padding:24px;font-size:14px}
+.stu-vid{width:min(100%,1500px);margin:auto 0;display:flex;flex-direction:column;align-items:center;gap:10px}
+.stu-vid video{width:100%;max-height:calc(100vh - 90px);background:#000;border-radius:12px}
+.stu-vt{font-size:15px;color:var(--text-2)}
+.stu-item .tx{white-space:normal}
