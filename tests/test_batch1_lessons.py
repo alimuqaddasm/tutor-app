@@ -115,6 +115,8 @@ with sync_playwright() as p:
     check("After the lesson asks for the minutes", wait(pg, lambda: pg.locator("#fb-min").count() == 1, 5) is not None)
     pg.fill("#fb-min", "40")
     pg.click("#fbform button[type=submit]")
+    check("  40 min is short of 45: it asks whose doing it was (6 Oct)", wait(pg, lambda: pg.locator("[data-short='student']").count() == 1, 5) is not None)
+    pg.click("[data-short='student']")
     p2 = "students/UK-1/lessons/%s-2/session.json" % LID
     ok = wait(pg, lambda: p2 in fake.puts and json.loads(fake.puts[p2])["status"] == "finished", 10)
     s = json.loads(fake.puts[p2]) if p2 in fake.puts else {}

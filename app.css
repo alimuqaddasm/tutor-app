@@ -1218,3 +1218,11 @@ body[data-subject="maths"] .tw{font-family:"Times New Roman",Tinos,Times,serif}
 .stu-vid video{width:100%;max-height:calc(100vh - 90px);background:#000;border-radius:12px}
 .stu-vt{font-size:15px;color:var(--text-2)}
 .stu-item .tx{white-space:normal}
+/* the mic's "Heard" box: fix what it heard (6 Oct) */
+.micfix{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:flex;align-items:center;gap:8px;width:min(720px,calc(100vw - 32px));background:var(--surface,var(--bg));color:var(--text);border:2px solid var(--text);padding:8px 10px;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.18);z-index:51}
+.micfix .lab{font-weight:700;white-space:nowrap}
+.micfix input{flex:1;min-width:0;font:inherit;padding:8px 10px}
+.notes-list textarea.fixnote{width:100%;font:inherit;font-size:var(--s-sm);color:var(--text);background:transparent;border:1px solid var(--line-2);border-radius:8px;padding:6px 8px;resize:vertical;field-sizing:content;min-height:2.2em}
+.notes-list textarea.fixnote:focus{border-color:var(--text);background:var(--bg)}
+.shortask{display:grid;gap:8px;padding:12px 14px;border:2px solid var(--warn,#c80);border-radius:12px}
+.shortask .row{display:flex;gap:8px;flex-wrap:wrap}

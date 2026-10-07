@@ -189,7 +189,7 @@ setInterval(function () { if (L && L.dirty) flush(); }, 25000);
 /* ---------------- routing ---------------- */
 var app = $("#app");
 function route() { return (location.hash || "#/").slice(1) || "/"; }
-window.addEventListener("hashchange", function () { if (L && L.dirty) flush(); render(); window.scrollTo(0, 0); });
+window.addEventListener("hashchange", function () { micFixClose(); if (L && L.dirty) flush(); render(); window.scrollTo(0, 0); });
 function nav(r) { var k = r.indexOf("/record") === 0 ? "record" : r.indexOf("/settings") === 0 ? "settings" : r.indexOf("/revise") === 0 ? "revise" : r.indexOf("/videos") === 0 ? "videos" : r.indexOf("/exams") === 0 ? "exams" : "lessons";
   $$("[data-nav]").forEach(function (a) { if (a.getAttribute("data-nav") === k) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   $("#who").textContent = CFG.token ? CFG.student + " · " + CFG.device : ""; if (typeof subjSync === "function") subjSync(); }
@@ -303,20 +303,21 @@ function dueOf(it) { var ms = missesOf(it.id).map(function (e) { return e.date; 
 function pendingAsks(items) { var t = todayIso();
   return items.filter(function (it) { return dateOf(it) >= mkStart() && !taughtOK(it.x) && (it.script || it.x) && dueOf(it) < t; })
     .map(function (it) { return { it: it, due: dueOf(it) }; }).sort(function (a, b) { return a.due.localeCompare(b.due); }); }
-function makeupSum(items) { var d = MK && MK.data; if (!d || !d.start) return null; var o = { start: +d.start.owed || 0, missed: 0, over: 0, made: 0, log: [] };
+function makeupSum(items) { var d = MK && MK.data; if (!d || !d.start) return null; var o = { start: +d.start.owed || 0, missed: 0, short: 0, over: 0, made: 0, log: [] };
   (d.entries || []).forEach(function (e) { var m = +e.minutes || 0; o.missed += m;
     o.log.push({ date: e.date || (e.at || "").slice(0, 10), what: (e.lesson ? lessonName(e.lesson) + ": " : "") + (e.by === "ali" ? "you missed it" : e.by === "student" ? "he missed it" : "missed"), m: m }); });
   items.forEach(function (it) { var x = it.x; if (!x || x.status !== "finished" || dateOf(it) < d.start.date) return; var m = +(x.time && x.time.minutes) || 0;
     if (x.makeup) { o.made += m; if (m) o.log.push({ date: dateOf(it), what: lessonName(it.id) + ": make-up lesson, " + m + " min", m: -m }); }
+    else if (shortBy(x) === "ali") { var sm = shortMin(x); o.short += sm; o.log.push({ date: dateOf(it), what: lessonName(it.id) + ": " + Math.round(m) + " min taught, you cut it short", m: sm }); }
     else { o.over += Math.max(0, m - LESSON_MIN); if (m > LESSON_MIN) o.log.push({ date: dateOf(it), what: lessonName(it.id) + ": " + m + " min taught, " + (m - LESSON_MIN) + " over " + LESSON_MIN, m: -(m - LESSON_MIN) }); } });
   o.log.sort(function (a, b) { return b.date.localeCompare(a.date); });
-  o.owed = Math.round(o.start + o.missed - o.over - o.made); return o; }
+  o.owed = Math.round(o.start + o.missed + o.short - o.over - o.made); return o; }
 function mkSide(o) { var el = $("#mkside"); if (!el) return; el.hidden = !o; if (o) el.querySelector("b").textContent = Math.max(0, o.owed); }
 document.addEventListener("click", function (e) { var a = e.target.closest && e.target.closest("[data-mkjump]"); if (!a) return; e.preventDefault(); var c = $("#mkcard"); if (c) { c.scrollIntoView({ block: "center", behavior: "smooth" }); c.classList.add("flash"); setTimeout(function () { c.classList.remove("flash"); }, 1200); } });
 function makeupCard(items) { var o = makeupSum(items); if (!o) return "";
   var ln = function (k, v) { return '<div class="statline"><span>' + k + '</span><b>' + v + '</b></div>'; };
   return '<div class="statcard mkcard" id="mkcard"><span class="k">MAKE-UP TIME OWED</span><div style="display:flex;align-items:baseline;gap:8px"><span class="big">' + Math.max(0, o.owed) + '</span><span class="hint">minutes</span></div>' +
-    ln("Owed before " + esc(fmtDate(MK.data.start.date)), o.start) + ln("Missed lessons", "+" + Math.round(o.missed)) + ln("Lessons over " + LESSON_MIN + " min", "\u2212" + Math.round(o.over)) + ln("Make-up lessons", "\u2212" + Math.round(o.made)) +
+    ln("Owed before " + esc(fmtDate(MK.data.start.date)), o.start) + ln("Missed lessons", "+" + Math.round(o.missed)) + (o.short ? ln("Lessons you cut short", "+" + o.short) : "") + ln("Lessons over " + LESSON_MIN + " min", "\u2212" + Math.round(o.over)) + ln("Make-up lessons", "\u2212" + Math.round(o.made)) +
     (o.log.length ? '<details class="mklog"><summary>Every change (' + o.log.length + ')</summary><ul>' + o.log.map(function (l) { return '<li><span class="num">' + esc(fmtDate(l.date)) + '</span><span>' + esc(l.what) + '</span><b class="num">' + (l.m > 0 ? "+" : "\u2212") + Math.abs(Math.round(l.m)) + '</b></li>'; }).join("") + '</ul></details>' : "") +
     '<span class="hint">A make-up lesson: tick \u201cMake-up lesson\u201d when you finish it, or when you log it.</span></div>'; }
 function lessonName(id) { var p = parseId(id); return (SUBJ[p.subject] || p.subject || "Lesson") + " " + (p.date ? fmtDate(p.date) : id); }
@@ -703,7 +704,19 @@ function timeView() {
 }
 function timeEdited() { L.session.time.editAt = now(); touch(); var el = $("#tm-now"); if (el) el.textContent = L.session.time.minutes != null ? L.session.time.minutes : "—"; tick(); }
 
+/* a normal lesson under 45 min (Ali, 6 Oct): on Finish the app asks whose doing it was.
+   Ali's: the minutes short go on the make-up time (makeupSum reads session.short). The student's: nothing is added. */
+function shortMin(x) { var m = Math.round(+(x.time && x.time.minutes) || 0); return !x.makeup && m > 0 && m < LESSON_MIN ? LESSON_MIN - m : 0; }
+function shortBy(x) { return !shortMin(x) ? null : x.short && x.short.by ? x.short.by : undefined; }
+function shortAsk(f, x) { var n = shortMin(x), old = $(".shortask", f); if (old) old.remove();
+  var box = document.createElement("div"); box.className = "shortask";
+  box.innerHTML = '<b>This lesson ran ' + (LESSON_MIN - n) + ' min, ' + n + ' short of ' + LESSON_MIN + '. Why?</b><div class="row"><button class="btn" type="button" data-short="ali">I cut it short: add ' + n + ' min to make-up</button><button class="btn" type="button" data-short="student">He cut it short: add nothing</button></div>';
+  var btn = $("button[type=submit]", f); btn.parentNode.parentNode.insertBefore(box, btn.parentNode); box.scrollIntoView({ block: "center" }); }
+document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-short]"); if (!b || !L) return; var f = b.closest("form");
+  L.session.short = { by: b.getAttribute("data-short"), at: now() }; b.closest(".shortask").remove(); if (f) f.requestSubmit(); });
+document.addEventListener("click", function (e) { if (!(e.target.closest && e.target.closest("[data-shortredo]")) || !L) return; L.session.short = null; touch(); drawLesson(); });
 /* after the lesson */
+function noteBox(v) { return '<textarea class="note fixnote" data-note rows="1" aria-label="Your note">' + esc(v) + '</textarea>'; }
 function afterView() {
   var x = L.session, fb = x.feedback || {}, s = L.script || {}, sc = score(x);
   var h = '<div class="phase-top"><h2>After the lesson</h2><span class="hint">Claude reads this before the next script</span></div>';
@@ -724,9 +737,10 @@ function afterView() {
   if (wrong.length) h += '<div><div class="label" style="margin-bottom:8px">Going into his mistakes log</div><ul class="list-plain">' + wrong.join("") + '</ul></div>';
   /* every note you typed or said in the lesson, right answers included, so nothing said with the mic is lost (Ali, 5 Oct) */
   var notes = Object.keys(x.answers).filter(function (k) { return x.answers[k].note; }).map(function (k) { var a = x.answers[k];
-    return '<li><b>' + esc(labelOf(k)) + '</b>' + (a.v ? ' <span class="pill">' + esc(VHELP[a.v] || a.v) + '</span>' : "") + '<div class="fix">' + esc(a.note) + '</div></li>'; })
-    .concat(x.extra.filter(function (e) { return e.note; }).map(function (e) { return '<li><b>' + esc(e.q) + '</b><div class="fix">' + esc(e.note) + '</div></li>'; }));
-  if (notes.length) h += '<div id="lessonnotes"><div class="label" style="margin-bottom:8px">Your notes from the lesson (' + notes.length + ')</div><ul class="list-plain notes-list">' + notes.join("") + '</ul><p class="hint" style="margin:6px 0 0">Saved with the lesson in GitHub (session.json), where the tutoring chat can read them.</p></div>';
+    return '<li data-item="' + esc(k) + '"><b>' + esc(labelOf(k)) + '</b>' + (a.v ? ' <span class="pill">' + esc(VHELP[a.v] || a.v) + '</span>' : "") + noteBox(a.note) + '</li>'; })
+    .concat(x.extra.filter(function (e) { return e.note; }).map(function (e) { return '<li data-item="x:' + esc(e.id) + '"><b>' + esc(e.q) + '</b>' + noteBox(e.note) + '</li>'; }));
+  /* the mic mishears: each note is a box you can correct here (Ali, 6 Oct) */
+  if (notes.length) h += '<div id="lessonnotes"><div class="label" style="margin-bottom:8px">Your notes from the lesson (' + notes.length + ')</div><ul class="list-plain notes-list">' + notes.join("") + '</ul><p class="hint" style="margin:6px 0 0">Tap a note to correct it; it saves as you type. Saved with the lesson in GitHub (session.json), where the tutoring chat can read them.</p></div>';
   function fld(id, label, key, ph, area, def) { var v = fb[key] != null ? fb[key] : (def || ""); return '<div class="field"><label for="' + id + '">' + esc(label) + '</label>' + (area ? '<textarea id="' + id + '" data-fb="' + key + '" placeholder="' + esc(ph || "") + '">' + esc(v) + '</textarea>' : '<input type="text" id="' + id + '" data-fb="' + key + '" value="' + esc(v) + '" placeholder="' + esc(ph || "") + '">') + '</div>'; }
   h += '<form class="form" id="fbform"><div class="field"><span class="lab">How did it go?</span><div style="display:flex;gap:6px;flex-wrap:wrap">' + [1, 2, 3, 4, 5].map(function (n) { return '<button class="chip" type="button" data-rate="' + n + '" aria-pressed="' + (fb.rating === n) + '">' + n + '</button>'; }).join("") + '</div><span class="hint">1 rough · 5 went really well</span></div>' +
     (fb.at ? "" : '<p class="hint prefill">Filled in from your ticks and the notes you made during the lesson. Check it, add anything missing, then Finish.</p>') +
@@ -734,6 +748,7 @@ function afterView() {
     fld("fb-change", "What to change next time (for Claude)", "change", "This shapes the next script", true) + fld("fb-hw", "Homework set", "hw", "", false, s.homeworkSummary) + fld("fb-pages", "Book pages set to memorise", "pages", "e.g. CGP 172–173 (Claude adds these to the next quiz)", false, s.pagesSet) +
     (!(+x.time.minutes > 0) && !(x.time.log || []).length ? '<div class="field"><label for="fb-min">Minutes taught</label><input type="number" id="fb-min" min="1" step="1" inputmode="numeric" required><span class="hint">The clock didn\u2019t run for this lesson. Without minutes it doesn\u2019t count as taught.</span></div>' : "") +
     '<label class="mkchk"><input type="checkbox" id="fb-makeup"' + (x.makeup ? " checked" : "") + '> Make-up lesson <span class="hint">(all ' + (x.time && x.time.minutes ? esc(x.time.minutes) + " " : "its ") + 'minutes come off the make-up time; otherwise only minutes over ' + LESSON_MIN + ')</span></label>' +
+    (shortBy(x) ? '<p class="hint" style="margin:0">' + shortMin(x) + ' min short of ' + LESSON_MIN + ': ' + (shortBy(x) === "ali" ? "you cut it short, so " + shortMin(x) + " min went on the make-up time." : "he cut it short, so nothing was added.") + ' <button class="linkbtn" type="button" data-shortredo>Change</button></p>' : "") +
     '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="submit">' + (x.status === "finished" ? "Save changes" : "Finish and save the lesson") + '</button>' + (x.status === "finished" ? '<button class="btn" type="button" id="reopen">Reopen the lesson</button>' : "") + (fb.at ? '<span class="pill ok">Saved ' + esc(hhmm(fb.at)) + '</span>' : "") + '</div></form>';
   return h;
 }
@@ -839,7 +854,9 @@ document.addEventListener("submit", function (ev) {
     x.extra.push({ id: "x" + Date.now().toString(36), q: q, v: sel ? sel.getAttribute("data-exv") : null, note: $("#ex-note").value.trim(), at: now(), d: CFG.device }); touch(); drawLesson(); toast("Added"); return; }
   if (f.id === "fbform") { $$("[data-fb]", f).forEach(function (i) { x.feedback[i.getAttribute("data-fb")] = i.value; }); x.feedback.at = now();
     var fm = $("#fb-min", f); if (fm && +fm.value > 0) { x.time.edit = x.time.edit || {}; x.time.edit.minutes = +fm.value; finalizeTime(x); }
-    if (replay(x.time.log).running) logEvent("end"); x.status = "finished"; x.statusAt = now(); touch(); var mine = L;
+    if (replay(x.time.log).running) logEvent("end");
+    if (shortBy(x) === undefined) { shortAsk(f, x); return; }
+    x.status = "finished"; x.statusAt = now(); touch(); var mine = L;
     flush().then(function () { toast(TRY ? "Try-out: nothing was saved" : !mine.dirty ? "Lesson saved to GitHub" : navigator.onLine ? "Not saved yet: kept on this device, it retries by itself" : "Offline: kept on this device, it saves when you are back online"); if (L === mine) drawLesson(); }); return; }
   if (f.id === "wkform") uploadWork();
 });
@@ -1358,9 +1375,20 @@ function micStart(box) { if (!SR || !box) return; if (MIC) { micStop(); return; 
     heard = heard.trim(); if (!heard || !m) return;
     var a = target(iid); a.note = micJoin(a.note, heard); a.at = now(); save(iid, a);
     var inp = $("input[data-note]", box); if (inp) { inp.hidden = false; inp.value = a.note; } var add = $(".addnote", box); if (add) add.remove();
-    toast("Note: " + heard); };
+    micFix(iid, box); };
   try { r.start(); } catch (e) { MIC = null; toast("Speech to text didn\u2019t start"); } }
 function micStop() { if (MIC) try { MIC.r.stop(); } catch (e) {} }
+/* the mic mishears (Ali, 6 Oct): what it heard shows in a box at the bottom for a few seconds, so he can fix it there and then.
+   Typing in it changes the note straight away (the input handler finds data-item on the bar); it stays open while he types. */
+function micFix(iid, box) { micFixClose(); var a = target(iid), bar = document.createElement("div");
+  bar.id = "micfix"; bar.className = "micfix"; bar.setAttribute("data-item", iid); bar.setAttribute("role", "status");
+  bar.innerHTML = '<span class="lab">Heard</span><input class="note" type="text" data-note aria-label="Correct the note" value="' + esc(a.note || "") + '"><button class="btn small" type="button" data-micok>OK</button>';
+  document.body.appendChild(bar); bar._box = box; micFixTimer(); }
+function micFixTimer() { clearTimeout(timers.micfix); timers.micfix = setTimeout(function () { var b = $("#micfix"); if (b && !b.contains(document.activeElement)) micFixClose(); else micFixTimer(); }, 8000); }
+function micFixClose() { var b = $("#micfix"); if (!b) return; clearTimeout(timers.micfix);
+  var inp = b._box && $("input[data-note]", b._box); if (inp && L) inp.value = target(b.getAttribute("data-item")).note || ""; b.remove(); }
+document.addEventListener("click", function (e) { if (e.target.closest && e.target.closest("[data-micok]")) micFixClose(); });
+document.addEventListener("keydown", function (e) { var b = $("#micfix"); if (b && b.contains(e.target) && (e.key === "Enter" || e.key === "Escape")) { e.preventDefault(); e.target.blur(); micFixClose(); } });
 function micJoin(old, add) { old = (old || "").trim(); return old ? old + "; " + add.trim() : add.trim(); }
 document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-mic]"); if (b) { e.preventDefault(); micStart(b.closest("[data-item]")); } });
 document.addEventListener("keydown", function (e) { if ((e.key !== "m" && e.key !== "M") || e.repeat || MODE !== "teach" || e.ctrlKey || e.altKey || e.metaKey) return;
@@ -1723,7 +1751,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v37", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v38", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
