@@ -4,6 +4,7 @@
    #/exams/<id>/mark  question | answer + pictures + times | mark scheme, marks and comments, Save to repo;
                       Compare puts one question's answer beside its mark scheme, full screen (Ali, 7 Oct)
    Compare also lists the question's marks (M1, A1, B1... from "scheme" in exam.json) to tick (Ali, 7 Oct).
+   Claude's marks (claude-marks.json next to exam.json) show on each question with Accept, and Accept all (Ali, 7 Oct).
    Student view opens exam.html#v=<id>: the student's page, read-only, with his answers as they are now (Ali, 7 Oct).
    The exam server holds the clock and the answers. The tutoring repo holds the questions and mark schemes. */
 (function () {
@@ -337,16 +338,16 @@ function useSuggestion() {
 }
 
 /* ===================== marking ===================== */
-var repoExam = null;
+var repoExam = null, claudeMarks = null;
 
 function markView(id) {
   app.innerHTML = '<div class="empty"><h3>Loading</h3></div>';
   call("GET", "/api/t/exams/" + encodeURIComponent(id) + "/review").then(function (r) {
-    R = r; repoExam = null;
+    R = r; repoExam = null; claudeMarks = null;
     if (r.practice) { repoExam = SAMPLE; return drawMark(); }
-    // The mark scheme lives in the repo, next to the exam file Claude wrote.
-    return T.loadTree().then(function () { return r.sourcePath ? T.fileJSON(r.sourcePath) : null; })
-      .then(function (j) { repoExam = j && j.data; }, function () {}).then(drawMark);
+    // The mark scheme lives in the repo, next to the exam file Claude wrote; so do Claude's marks, once he has marked it.
+    return T.loadTree().then(function () { return r.sourcePath ? Promise.all([T.fileJSON(r.sourcePath), T.fileJSON(examFolder(r.sourcePath) + "claude-marks.json").catch(function () { return null; })]) : [null, null]; })
+      .then(function (j) { repoExam = j[0] && j[0].data; claudeMarks = j[1] && j[1].data; }, function () {}).then(drawMark);
   }).catch(function (e) { app.innerHTML = '<div class="empty"><h3>Couldn’t open the marking</h3><p>' + esc(e.message) + '</p><p><a href="#/exams">Back to exams</a></p></div>'; });
 }
 
@@ -367,6 +368,8 @@ function drawMark() {
     (R.submittedAt ? "<br>Handed in " + esc(t12(R.submittedAt)) : "") + (R.lockedAt ? "<br>Locked " + esc(t12(R.lockedAt)) : "") + '</div>' +
     '<div class="xt-acts">' + (R.practice ? '<span class="hint">Practice exam: marks stay on the exam server only.</span>' : '<button class="btn accent" type="button" data-torepo' + (T.isTry ? " disabled title=\"Try-out mode: nothing is saved\"" : "") + '>Save to tutoring repo</button>') + '<span class="hint" id="xt-repomsg"></span></div></div>';
   if (readOnly(R)) h += RO_NOTE;
+  if (claudeMarks) h += '<div class="card xt-card xt-claude"><div class="xt-grow"><b>Claude has marked this exam: ' + esc(r2(claudeTotal())) + ' / ' + R.max + '</b>' + (claudeMarks.summary ? '<p class="hint">' + esc(claudeMarks.summary) + '</p>' : "") + '<p class="hint">Check each question, then Accept it, or change the mark yourself.</p></div>' +
+    '<button class="btn accent" type="button" data-acceptall' + (readOnly(R) ? " disabled" : "") + '>Accept all Claude’s marks</button></div>';
   if (R.status === "running" || R.status === "timeup" || R.status === "waiting") h += '<div class="xt-up">The exam is still open. You can mark now, but answers may still change.</div>';
   h += R.questions.map(function (q, i) {
     var r = rq[q.id] || {}, ms = (r.msImg || []).map(function (p) { return /^(students|books)\//.test(p) ? p : folder + p; });
@@ -382,13 +385,43 @@ function drawMark() {
         '<div class="xt-col"><div class="xt-lab">Mark scheme</div>' + (ms.length ? ms.map(function (p) { return '<img class="xt-zoomable" alt="Mark scheme" data-rsrc="' + esc(p) + '">'; }).join("") : '<p class="hint">' + (repoExam ? "No mark scheme picture for this question." : "The exam file isn’t in the repo, so no mark scheme.") + '</p>') +
           (r.answer ? '<div class="xt-qtext">' + T.clean(r.answer) + '</div>' : "") + '</div>' +
       '</div>' +
-      '<div data-tsumline>' + tickSummary(q) + '</div>' +
+      '<div data-tsumline>' + tickSummary(q) + '</div>' + '<div data-cline="' + esc(q.id) + '">' + claudeLine(q) + '</div>' +
       '<div class="xt-markrow"><label>Mark <span class="xt-of"><input type="number" class="xt-score" data-score="' + esc(q.id) + '" min="0" max="' + q.marks + '" step="0.5" value="' + (q.score == null ? "" : q.score) + '"' + (readOnly(R) ? " disabled" : "") + '> / ' + q.marks + '</span></label>' +
         '<label class="xt-grow">Comment <textarea data-comment="' + esc(q.id) + '" rows="2"' + (readOnly(R) ? " disabled" : "") + '>' + esc(q.comment || "") + '</textarea></label><span class="hint" data-mstate="' + esc(q.id) + '"></span></div>' +
     '</section>';
   }).join("");
   app.innerHTML = h;
   showPics(app); showRepoPics(app); $$(".xt-qtext", app).forEach(T.maths);
+}
+
+/* ---- Claude's marks: claude-marks.json {markedAt, summary, questions: {qid: {score, ticks, comment, unsure}}} ---- */
+function claudeOf(qid) { return claudeMarks && claudeMarks.questions && claudeMarks.questions[qid] || null; }
+function claudeTotal() { return R.questions.reduce(function (a, q) { var c = claudeOf(q.id); return a + (c && c.score != null ? Number(c.score) : 0); }, 0); }
+function sameAsClaude(q) { var c = claudeOf(q.id); return c && q.score != null && Number(c.score) === q.score && (q.comment || "") === (c.comment || ""); }
+function claudeLine(q) {
+  var c = claudeOf(q.id); if (!c) return "";
+  var sc = schemeOf(q), t = c.ticks && c.ticks.length === sc.list.length ? sc.list.map(function (it, k) { return c.ticks[k] ? (it.code || it.text) + (it.val > 1 && c.ticks[k] < it.val ? " (" + c.ticks[k] + " of " + it.val + ")" : "") : ""; }).filter(Boolean).join(", ") : "";
+  var done = sameAsClaude(q);
+  return '<div class="xt-cmark' + (done ? " ok" : "") + '"><div class="xt-grow"><b>Claude: ' + esc(c.score) + ' / ' + q.marks + '</b>' + (t ? ' <span class="hint">' + esc(t) + '</span>' : "") +
+    (c.comment ? '<div>' + esc(c.comment) + '</div>' : "") + (c.unsure ? '<div class="xt-unsure">Not sure: ' + esc(c.unsure) + '</div>' : "") + '</div>' +
+    (done ? '<span class="xt-now">Accepted</span>' : '<button class="btn small accent" type="button" data-accept="' + esc(q.id) + '"' + (readOnly(R) ? " disabled" : "") + '>Accept</button>') + '</div>';
+}
+/* put Claude's mark, ticks and comment into the page's fields and save them as Ali's */
+function acceptClaude(qid) {
+  var q = R.questions.filter(function (x) { return x.id === qid; })[0], c = claudeOf(qid); if (!q || !c || readOnly(R)) return Promise.resolve();
+  var se = $('[data-score="' + qid + '"]'), ce = $('[data-comment="' + qid + '"]'); if (!se) return Promise.resolve();
+  se.value = c.score == null ? "" : c.score; ce.value = c.comment || "";
+  var ticks = c.ticks && c.ticks.length === schemeOf(q).list.length ? c.ticks.map(Number) : null;
+  return saveMark(qid, ticks).then(function () { refreshClaude(qid); if (cmp && R.questions[Number(cmp.getAttribute("data-i"))].id === qid) compare(Number(cmp.getAttribute("data-i"))); });
+}
+function refreshClaude(qid) { var q = R.questions.filter(function (x) { return x.id === qid; })[0]; $$('[data-cline="' + qid + '"]').forEach(function (el) { el.innerHTML = claudeLine(q); }); }
+function acceptAll(btn) {
+  var differ = R.questions.filter(function (q) { var c = claudeOf(q.id); return c && q.score != null && Number(c.score) !== q.score; }).length;
+  if (differ && !confirm(differ + " question" + (differ === 1 ? " has" : "s have") + " your own mark already. Replace with Claude’s?")) return;
+  btn.disabled = true;
+  var chain = Promise.resolve();
+  R.questions.forEach(function (q) { if (claudeOf(q.id)) chain = chain.then(function () { return acceptClaude(q.id); }); });
+  chain.then(function () { btn.disabled = false; T.toast("Claude’s marks accepted. Press Save to tutoring repo when you are happy."); });
 }
 
 /* "Time on it: 6 min 20 s over 2 visits" with each visit behind a fold */
@@ -447,7 +480,7 @@ function compare(i) {
         (!q.final && !q.uploads.length ? '<p class="hint">No answer and no picture.</p>' : "") + '</div>' +
       '<div class="xt-col"><div class="xt-lab">Mark scheme</div>' + (ms.length ? ms.map(function (p) { return '<img class="xt-zoomable" alt="Mark scheme" data-rsrc="' + esc(p) + '">'; }).join("") : '<p class="hint">No mark scheme picture.</p>') +
         (r.answer ? '<div class="xt-qtext">' + T.clean(r.answer) + '</div>' : "") + '</div>' +
-      '<div class="xt-col xt-ticks"><div class="xt-lab">Marks to tick <span class="hint" data-tsum></span></div>' + (sc.generic ? '<p class="hint">No mark list in the exam file: one box per mark.</p>' : "") + '<div data-tlist>' + tickRows(sc, cmpTicks, ro) + '</div></div></div>' +
+      '<div class="xt-col xt-ticks">' + (claudeOf(q.id) ? '<div data-cline="' + esc(q.id) + '">' + claudeLine(q) + '</div>' : "") + '<div class="xt-lab">Marks to tick <span class="hint" data-tsum></span></div>' + (sc.generic ? '<p class="hint">No mark list in the exam file: one box per mark.</p>' : "") + '<div data-tlist>' + tickRows(sc, cmpTicks, ro) + '</div></div></div>' +
     '<div class="xt-markrow"><label>Mark <span class="xt-of"><input type="number" class="xt-score" data-cscore="' + esc(q.id) + '" min="0" max="' + q.marks + '" step="0.5" value="' + (q.score == null ? "" : q.score) + '"' + (ro ? " disabled" : "") + '> / ' + q.marks + '</span></label>' +
       '<label class="xt-grow">Comment <textarea data-ccomment="' + esc(q.id) + '" rows="2"' + (ro ? " disabled" : "") + '>' + esc(q.comment || "") + '</textarea></label><span class="hint" data-cstate></span></div>';
   showPics(cmp); showRepoPics(cmp); $$(".xt-qtext", cmp).forEach(T.maths);
@@ -491,20 +524,21 @@ document.addEventListener("keydown", function (e) {
 var markTimers = {};
 function saveMark(qid, ticks) {
   var se = $('[data-score="' + qid + '"]'), ce = $('[data-comment="' + qid + '"]'), st = $('[data-mstate="' + qid + '"]');
-  if (!se || !ce || !st) return;   // the marking page was left; an earlier save already kept the comment
+  if (!se || !ce || !st) return Promise.resolve();   // the marking page was left; an earlier save already kept the comment
   var s = se.value, c = ce.value;
-  if (readOnly(R)) return;
+  if (readOnly(R)) return Promise.resolve();
   var q = R.questions.filter(function (x) { return x.id === qid; })[0];
   var score = s === "" ? null : Number(s);
-  if (score != null && (score < 0 || score > q.marks)) { st.textContent = "0 to " + q.marks; return; }
+  if (score != null && (score < 0 || score > q.marks)) { st.textContent = "0 to " + q.marks; return Promise.resolve(); }
   st.textContent = "Saving…";
   var body = { score: score, comment: c }; if (ticks) body.ticks = ticks;
-  call("PUT", "/api/t/exams/" + R.id + "/marks/" + encodeURIComponent(qid), body).then(function () {
+  return call("PUT", "/api/t/exams/" + R.id + "/marks/" + encodeURIComponent(qid), body).then(function () {
     q.score = score; q.comment = c; st.textContent = "Saved";
     if (ticks) { q.ticks = ticks; var ts = $('[data-mq="' + qid + '"] [data-tsumline]'); if (ts) ts.innerHTML = tickSummary(q); }
     R.total = R.questions.reduce(function (a, x) { return a + (x.score || 0); }, 0); R.marked = R.questions.filter(function (x) { return x.score != null; }).length;
     var tot = $("#xt-total"), mk = $("#xt-marked");   // gone if the marking page was left before the save came back
     if (tot) tot.textContent = r2(R.total) + " / " + R.max; if (mk) mk.textContent = R.marked + " of " + R.questions.length + " marked";
+    if (claudeOf(qid)) refreshClaude(qid);
   }, function (e) { st.textContent = e.message; });
 }
 
@@ -520,7 +554,7 @@ function saveToRepo(btn) {
     examId: R.id, title: R.title, subject: R.subject, source: R.sourcePath || null, savedAt: new Date().toISOString(),
     startedAt: iso(R.startedAt), originalEndAt: iso(R.originalEndAt), endAt: iso(R.endAt), submittedAt: iso(R.submittedAt), lockedAt: iso(R.lockedAt), status: R.status,
     extensions: (R.extensions || []).map(function (e) { return { minutes: e.minutes, at: iso(e.at) }; }),
-    total: r2(R.total), max: R.max, marked: R.marked,
+    total: r2(R.total), max: R.max, marked: R.marked, claudeMarks: claudeMarks ? { total: r2(claudeTotal()), markedAt: claudeMarks.markedAt || null } : null,
     questions: R.questions.map(function (q) {
       return { id: q.id, label: q.label, marks: q.marks, type: q.type, score: q.score, comment: q.comment, final: q.final, finalAt: iso(q.finalAt), atOriginalEnd: q.atOriginalEnd, writtenLate: q.writtenLate,
         revisions: q.revisions.map(function (v) { return { at: iso(v.at), late: v.late, text: v.text }; }),
@@ -560,6 +594,8 @@ document.addEventListener("click", function (e) {
   if (b.hasAttribute("data-compare")) return compare(Number(b.getAttribute("data-compare")));
   if (b.hasAttribute("data-cmpgo")) return compare(Number(b.getAttribute("data-cmpgo")));
   if (b.hasAttribute("data-cmpx")) return closeCompare();
+  if (b.hasAttribute("data-accept")) return acceptClaude(b.getAttribute("data-accept"));
+  if (b.hasAttribute("data-acceptall")) return acceptAll(b);
   if (b.hasAttribute("data-tickv")) { var kv = b.getAttribute("data-tickv").split(":"); return setTick(Number(kv[0]), Number(kv[1])); }
   if (b.hasAttribute("data-practice")) return makePractice(b);
   if (b.hasAttribute("data-delprac")) return deletePractice(b.getAttribute("data-delprac"), b.getAttribute("data-st"));

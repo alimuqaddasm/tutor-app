@@ -1016,6 +1016,12 @@ html.xt-noscroll,html.xt-noscroll body{overflow:hidden}
 .xt-tvals{display:flex;gap:4px;flex:none;flex-wrap:wrap}
 .xt-tvals .chip{min-width:34px;min-height:30px;padding:0 8px}
 .xt-tsum{margin:6px 0 0}
+/* Claude's marks (7 Oct) */
+.xt-claude{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:14px;border-left:4px solid var(--accent)}
+.xt-cmark{display:flex;gap:10px;align-items:flex-start;margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--accent-wash);font-size:var(--s-sm)}
+.xt-cmark.ok{background:var(--ok-wash)}
+.xt-unsure{color:var(--warn);font-weight:700;margin-top:4px}
+.xt-ticks .xt-cmark{margin:0 0 8px}
 .xt-trow.multi{flex-wrap:wrap;padding-left:38px}
 .xt-trow.multi .xt-tvals{order:3;flex-basis:100%}
 @media (max-width:1100px){.xt-cmp2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.xt-cmp2 .xt-ticks{grid-column:1 / -1}}

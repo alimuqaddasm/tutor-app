@@ -35,6 +35,7 @@ Exam section (needs a local exam server, nothing touches GitHub or the real serv
     python tests/test_batch1_exam.py  # 5 Oct fixes: refused save kept and shown, hung request recovers, two tabs, lock with unsent work, no cdnjs (11 checks)
     python tests/test_round18.py      # 7 Oct: Compare (answer beside mark scheme), Student view (read-only, follows him), time on each question (26 checks)
     python tests/test_round19.py      # 7 Oct: tick the mark-scheme marks (M1, A2...) in Compare; mark follows the ticks; saved and in result.json (13 checks)
+    python tests/test_round20.py      # 7 Oct: Claude's marks (claude-marks.json) on the Mark page and in Compare, Accept and Accept all (12 checks)
 
 Running without a GitHub token (Linux, Mac, cloud sessions): tests/fakegh.py is a pretend GitHub that serves a clone of
 the tutoring repo (next to this repo as ../tutoring, or set TUTORING_CLONE) and keeps every write in memory.
