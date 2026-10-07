@@ -11,6 +11,7 @@ const TYPES = ["short", "long", "upload_required", "upload_optional"];
 const MAX_TEXT = 50000;
 const MAX_UPLOADS_PER_Q = 20;
 const MAX_EXTEND = 600;
+const VIEW_GAP = 20000;   // a report later than this after the last one starts a new visit (page closed, offline, asleep)
 const DEFAULT_ORIGINS = "https://alimuqaddasm.github.io,http://localhost:8765,http://127.0.0.1:8765";
 
 export default {
@@ -163,6 +164,42 @@ async function questionRows(env, examId) {
   return r.results.map((q) => ({ ...q, has_img: !!q.has_img }));
 }
 
+/* ---------- time on each question ---------- */
+
+/* The student page says which question is on screen with every poll. Only while the exam runs, never in a teacher preview. */
+async function noteView(env, exam, questionId, now) {
+  if (!canWrite(exam) || !questionId) return;
+  const q = await env.DB.prepare("SELECT id FROM questions WHERE exam_id = ? AND id = ?").bind(exam.id, questionId).first();
+  if (!q) return;
+  const last = await env.DB.prepare("SELECT id, question_id, end_at FROM question_views WHERE exam_id = ? ORDER BY id DESC LIMIT 1").bind(exam.id).first();
+  const fresh = last && now - last.end_at <= VIEW_GAP && now >= last.end_at;
+  if (fresh && last.question_id === questionId) {
+    await env.DB.prepare("UPDATE question_views SET end_at = ? WHERE id = ?").bind(now, last.id).run();
+    return;
+  }
+  const stmts = [];
+  if (fresh) stmts.push(env.DB.prepare("UPDATE question_views SET end_at = ? WHERE id = ?").bind(now, last.id));   // he moved on just now
+  stmts.push(env.DB.prepare("INSERT INTO question_views (exam_id, question_id, start_at, end_at) VALUES (?, ?, ?, ?)").bind(exam.id, questionId, now, now));
+  await env.DB.batch(stmts);
+}
+
+async function viewsOf(env, examId) {
+  return (await env.DB.prepare("SELECT question_id, start_at, end_at FROM question_views WHERE exam_id = ? ORDER BY id").bind(examId).all()).results;
+}
+
+/* Per question: total seconds, number of visits and each visit. `on` is the question on his screen right now, if any. */
+function timeOn(views, now) {
+  const per = {};
+  for (const v of views) {
+    const p = per[v.question_id] || (per[v.question_id] = { seconds: 0, visits: [] });
+    p.seconds += (v.end_at - v.start_at) / 1000;
+    p.visits.push({ from: v.start_at, to: v.end_at });
+  }
+  for (const k of Object.keys(per)) per[k].seconds = Math.round(per[k].seconds);
+  const last = views[views.length - 1];
+  return { per, on: last && now - last.end_at <= VIEW_GAP ? last.question_id : null };
+}
+
 /* ---------- answers and uploads (shared by the student, phone and teacher views) ---------- */
 
 async function latestAnswers(env, examId) {
@@ -221,6 +258,7 @@ async function route(request, env, now) {
 
     if (p === "/api/s/state" && m === "GET") {
       await env.DB.prepare("UPDATE exams SET last_seen_at = ? WHERE id = ?").bind(now, exam.id).run();
+      await noteView(env, exam, url.searchParams.get("q"), now);
       const out = { title: exam.title, subject: exam.subject, practice: !!exam.practice, ...clock(exam, now, await extensionsOf(env, exam.id)) };
       // Questions only from Start on, and not once the exam is locked.
       if (started(exam) && exam.status !== "locked") {
@@ -400,7 +438,7 @@ async function route(request, env, now) {
       }
       if (sub === "" && m === "DELETE") {
         if (exam.status === "running") fail(409, "Lock the exam before deleting it.");
-        await env.DB.batch(["exams:id", "questions:exam_id", "extensions:exam_id", "answer_revisions:exam_id", "uploads:exam_id", "phone_tokens:exam_id", "marks:exam_id", "events:exam_id"]
+        await env.DB.batch(["exams:id", "questions:exam_id", "extensions:exam_id", "answer_revisions:exam_id", "uploads:exam_id", "phone_tokens:exam_id", "marks:exam_id", "events:exam_id", "question_views:exam_id"]
           .map((t) => { const [table, col] = t.split(":"); return env.DB.prepare("DELETE FROM " + table + " WHERE " + col + " = ?").bind(exam.id); }));
         return json({ ok: true });
       }
@@ -461,18 +499,29 @@ async function route(request, env, now) {
         await event(env, exam.id, now, "reopen", "");
         return json({ ok: true, status: to });
       }
+      /* What the student page shows, for the teacher's "Student view": questions at any time, his answers and pictures
+         as they are now. It never counts as him being there and never records time on a question. */
+      if (sub === "/student" && m === "GET") {
+        const views = timeOn(await viewsOf(env, exam.id), now);
+        return json({ title: exam.title, subject: exam.subject, practice: !!exam.practice, ...clock(exam, now, await extensionsOf(env, exam.id)),
+          questions: (await questionRows(env, exam.id)).map((q) => ({ id: q.id, pos: q.pos, label: q.label, text_html: q.text_html, marks: q.marks, type: q.type, suggested_min: q.suggested_min, has_img: q.has_img })),
+          answers: await latestAnswers(env, exam.id), uploads: await uploadList(env, exam.id), lastSeenAt: exam.last_seen_at, on: views.on });
+      }
       if (sub === "/live" && m === "GET") {
         const saves = (await env.DB.prepare("SELECT question_id, MAX(server_at) AS at, COUNT(*) AS n, MAX(late) AS late FROM answer_revisions WHERE exam_id = ? GROUP BY question_id").bind(exam.id).all()).results;
         const ups = (await env.DB.prepare("SELECT question_id, COUNT(*) AS n, MAX(server_at) AS at FROM uploads WHERE exam_id = ? AND deleted_at IS NULL GROUP BY question_id").bind(exam.id).all()).results;
         const perQ = {};
         for (const s of saves) perQ[s.question_id] = { lastSave: s.at, saves: s.n, late: !!s.late, pictures: 0 };
         for (const u of ups) { perQ[u.question_id] = perQ[u.question_id] || { lastSave: null, saves: 0, late: false }; perQ[u.question_id].pictures = u.n; perQ[u.question_id].lastPicture = u.at; }
-        return json({ ...clock(exam, now, await extensionsOf(env, exam.id)), lastSeenAt: exam.last_seen_at, perQuestion: perQ });
+        const views = timeOn(await viewsOf(env, exam.id), now);
+        for (const [q, v] of Object.entries(views.per)) { perQ[q] = perQ[q] || { lastSave: null, saves: 0, late: false, pictures: 0 }; perQ[q].seconds = v.seconds; perQ[q].visits = v.visits.length; }
+        return json({ ...clock(exam, now, await extensionsOf(env, exam.id)), lastSeenAt: exam.last_seen_at, perQuestion: perQ, on: views.on });
       }
       if ((sub === "/review" || sub === "/export") && m === "GET") {
         const revs = (await env.DB.prepare("SELECT question_id, text, seq, client_at, server_at, late FROM answer_revisions WHERE exam_id = ? ORDER BY id").bind(exam.id).all()).results;
         const marks = (await env.DB.prepare("SELECT question_id, score, comment, updated_at FROM marks WHERE exam_id = ?").bind(exam.id).all()).results;
         const uploads = await uploadList(env, exam.id);
+        const views = timeOn(await viewsOf(env, exam.id), now);
         const questions = (await questionRows(env, exam.id)).map((q) => {
           const mine = revs.filter((r) => r.question_id === q.id);
           const inTime = mine.filter((r) => !r.late);
@@ -486,7 +535,9 @@ async function route(request, env, now) {
             revisions: mine.map((r) => ({ text: r.text, at: r.server_at, clientAt: r.client_at, late: !!r.late })),
             uploads: uploads.filter((u) => u.question === q.id),
             score: mk ? mk.score : null,
-            comment: mk ? mk.comment : ""
+            comment: mk ? mk.comment : "",
+            seconds: views.per[q.id] ? views.per[q.id].seconds : 0,
+            visits: views.per[q.id] ? views.per[q.id].visits : []
           };
         });
         const total = questions.reduce((s, q) => s + (q.score || 0), 0);

@@ -1,7 +1,9 @@
 /* Exams tab: load an exam Claude built in the repo onto the exam server, run it live, then mark it.
    #/exams            exams Claude wrote (students/<s>/exams/<id>/exam.json) and exams on the server
    #/exams/<id>       time suggestion, student link, Start, + minutes, Lock, live saves, log
-   #/exams/<id>/mark  question | answer + pictures + times | mark scheme, marks and comments, Save to repo
+   #/exams/<id>/mark  question | answer + pictures + times | mark scheme, marks and comments, Save to repo;
+                      Compare puts one question's answer beside its mark scheme, full screen (Ali, 7 Oct)
+   Student view opens exam.html#v=<id>: the student's page, read-only, with his answers as they are now (Ali, 7 Oct).
    The exam server holds the clock and the answers. The tutoring repo holds the questions and mark schemes. */
 (function () {
 "use strict";
@@ -43,6 +45,10 @@ function t12(ms) { if (ms == null) return ""; var d = new Date(ms), h = d.getHou
 function day(ms) { return ms == null ? "" : new Date(ms).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }); }
 function mins(n) { n = Math.round(n * 10) / 10; var h = Math.floor(n / 60), m = Math.round((n % 60) * 10) / 10; return h ? h + " h" + (m ? " " + m + " min" : "") : m + " min"; }
 function r2(x) { return Math.round(x * 100) / 100; }
+/* "6 min 20 s" from seconds */
+function dur(sec) { sec = Math.round(sec || 0); var m = Math.floor(sec / 60), s = sec % 60; return m ? m + " min" + (s ? " " + s + " s" : "") : s + " s"; }
+function studentView(id) { return "exam.html#v=" + encodeURIComponent(id) + (xapi() !== (window.EXAM_API || "").replace(/\/+$/, "") ? "&api=" + encodeURIComponent(xapi()) : ""); }
+function svBtn(id) { return '<a class="btn small" href="' + esc(studentView(id)) + '" target="_blank" rel="noopener" title="Opens his exam page as he sees it, with his answers as they are now. Read-only.">Student view</a>'; }
 var LABEL = { draft: "Not opened", waiting: "Waiting", running: "Running", timeup: "Time up", submitted: "Handed in", locked: "Locked", proposed: "Proposed", ready: "Ready" };
 function chip(st) { return '<span class="xt-chip xt-' + esc(st) + '">' + esc(LABEL[st] || st) + '</span>'; }
 var TYPES = [["short", "Short answer"], ["long", "Long answer"], ["upload_required", "Picture needed"], ["upload_optional", "Picture optional"]];
@@ -201,7 +207,7 @@ function drawExam() {
   var st = X.status, started = X.startedAt != null || readOnly(X), total = totalMarks();
   var mode = T.ls("tutor.examRatioMode") || "papers", ratio = ratioNow() || 1.2, sugg = Math.ceil(total * ratio / 5) * 5;
   app.setAttribute("data-subject", X.subject || "");
-  var h = '<div class="section-h xt-head"><h2>' + esc(X.title) + '</h2><span id="xt-st">' + chip(st) + '</span><span class="xt-grow"></span><a class="btn small" href="#/exams">All exams</a><a class="btn small" href="#/exams/' + esc(X.id) + '/mark">Mark</a>' + (X.practice ? '<button class="btn small" type="button" data-delprac="' + esc(X.id) + '" data-st="' + esc(st) + '">Delete</button>' : "") + '</div>';
+  var h = '<div class="section-h xt-head"><h2>' + esc(X.title) + '</h2><span id="xt-st">' + chip(st) + '</span><span class="xt-grow"></span><a class="btn small" href="#/exams">All exams</a>' + svBtn(X.id) + '<a class="btn small" href="#/exams/' + esc(X.id) + '/mark">Mark</a>' + (X.practice ? '<button class="btn small" type="button" data-delprac="' + esc(X.id) + '" data-st="' + esc(st) + '">Delete</button>' : "") + '</div>';
   if (readOnly(X)) h += RO_NOTE;
   else if (X.practice) h += '<p class="hint">Practice exam: nothing here goes to the tutoring repo.</p>';
 
@@ -225,7 +231,7 @@ function drawExam() {
     '<div class="field xt-narrow"><label for="xt-dur">Exam time (minutes)</label><input type="number" id="xt-dur" min="1" step="1" value="' + esc(X.baseMinutes || sugg) + '"></div></div>') + '</section>';
 
   /* questions */
-  h += '<section class="card xt-card"><h3>Questions <span class="hint">(' + X.questions.length + ', ' + total + ' marks)</span></h3><div class="xt-scroll"><table class="xt-table xt-qs"><thead><tr><th>#</th><th>Question</th><th>Marks</th><th>Type</th><th>Minutes</th><th>Saved</th></tr></thead><tbody>' +
+  h += '<section class="card xt-card"><h3>Questions <span class="hint">(' + X.questions.length + ', ' + total + ' marks)</span></h3><div class="xt-scroll"><table class="xt-table xt-qs"><thead><tr><th>#</th><th>Question</th><th>Marks</th><th>Type</th><th>Minutes</th><th>Saved · time on it</th></tr></thead><tbody>' +
     X.questions.map(function (q, i) {
       var ro = started ? " disabled" : "";
       return '<tr data-q="' + esc(q.id) + '"><td>' + (i + 1) + '</td><td><b>' + esc(q.label) + '</b>' + (q.has_img ? '<div><img class="xt-thumb" alt="Question picture" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>' : "") + '</td>' +
@@ -258,7 +264,8 @@ function drawRun() {
   var tm = $("#xt-times");
   if (tm) tm.textContent = X.startedAt ? "Started " + t12(X.startedAt) + " · original end " + t12(X.originalEndAt) + (X.endAt !== X.originalEndAt ? " · now ends " + t12(X.endAt) : "") : "";
   var seen = $("#xt-seen");
-  if (seen) { var ago = X.lastSeenAt ? Math.round((Date.now() + offset - X.lastSeenAt) / 1000) : null; seen.innerHTML = ago == null ? "Not opened by him yet" : ago < 10 ? '<span class="xt-on"></span>He is connected' : "Last seen " + (ago < 120 ? ago + " s" : Math.round(ago / 60) + " min") + " ago"; }
+  if (seen) { var ago = X.lastSeenAt ? Math.round((Date.now() + offset - X.lastSeenAt) / 1000) : null; var onq = X.on ? X.questions.map(function (q) { return q.id; }).indexOf(X.on) : -1;
+    seen.innerHTML = ago == null ? "Not opened by him yet" : ago < 10 ? '<span class="xt-on"></span>He is connected' + (onq >= 0 ? " · on question " + (onq + 1) : "") : "Last seen " + (ago < 120 ? ago + " s" : Math.round(ago / 60) + " min") + " ago"; }
   tickClock();
 }
 
@@ -289,9 +296,14 @@ function poll() {
     offset = d.serverNow - Date.now();
     var changed = d.status !== X.status || d.endAt !== X.endAt;
     ["status", "startedAt", "originalEndAt", "endAt", "submittedAt", "lockedAt", "lastSeenAt", "extensions"].forEach(function (k) { X[k] = d[k]; });
-    drawRun();
-    $$("tr[data-q]").forEach(function (tr) { var p = d.perQuestion[tr.getAttribute("data-q")], c = $("[data-saved]", tr); if (!c) return;
-      c.innerHTML = p ? (p.lastSave ? "Text " + esc(t12(p.lastSave)) + (p.late ? ' <span class="xt-late">late</span>' : "") : "") + (p.pictures ? (p.lastSave ? "<br>" : "") + p.pictures + " picture" + (p.pictures > 1 ? "s" : "") : "") : "–"; });
+    X.on = d.on; drawRun();
+    $$("tr[data-q]").forEach(function (tr) { var qid = tr.getAttribute("data-q"), p = d.perQuestion[qid], c = $("[data-saved]", tr); if (!c) return;
+      var bits = [];
+      if (p && p.lastSave) bits.push("Text " + esc(t12(p.lastSave)) + (p.late ? ' <span class="xt-late">late</span>' : ""));
+      if (p && p.pictures) bits.push(p.pictures + " picture" + (p.pictures > 1 ? "s" : ""));
+      if (p && p.seconds) bits.push('<span class="xt-time">' + esc(dur(p.seconds)) + (p.visits > 1 ? " · " + p.visits + " visits" : "") + '</span>');
+      if (d.on === qid) bits.push('<span class="xt-now">He is on it now</span>');
+      c.innerHTML = bits.join("<br>") || "–"; tr.classList.toggle("xt-here", d.on === qid); });
     if (changed) call("GET", "/api/t/exams/" + X.id).then(function (full) { X.events = full.events; drawLog(); });
   }).catch(function () { var s = $("#xt-seen"); if (s) s.textContent = "Can’t reach the exam server. Retrying."; }).then(function () {
     if (X && (location.hash || "").indexOf("#/exams/" + X.id) === 0 && !/\/mark$/.test(location.hash)) live = setTimeout(poll, X.status === "running" || X.status === "timeup" || X.status === "waiting" ? 2500 : 10000);
@@ -346,7 +358,7 @@ function drawMark() {
   var folder = R.sourcePath ? examFolder(R.sourcePath) : "";
   var rq = {}; ((repoExam && repoExam.questions) || []).forEach(function (q) { rq[q.id] = q; });
   app.setAttribute("data-subject", R.subject || "");
-  var h = '<div class="section-h xt-head"><h2>Mark: ' + esc(R.title) + '</h2>' + chip(R.status) + '<span class="xt-grow"></span><a class="btn small" href="#/exams/' + esc(R.id) + '">Exam page</a></div>';
+  var h = '<div class="section-h xt-head"><h2>Mark: ' + esc(R.title) + '</h2>' + chip(R.status) + '<span class="xt-grow"></span>' + svBtn(R.id) + '<a class="btn small" href="#/exams/' + esc(R.id) + '">Exam page</a></div>';
   h += '<div class="card xt-card xt-summary"><div><div class="xt-big num" id="xt-total">' + r2(R.total) + ' / ' + R.max + '</div><div class="hint" id="xt-marked">' + R.marked + ' of ' + R.questions.length + ' marked</div></div>' +
     '<div class="hint">' + (R.startedAt ? "Started " + esc(t12(R.startedAt)) + " · original end " + esc(t12(R.originalEndAt)) : "Not started") +
     ((R.extensions || []).length ? "<br>Time added: " + R.extensions.map(function (e) { return "+" + e.minutes + " min at " + t12(e.at); }).map(esc).join(", ") : "") +
@@ -356,10 +368,10 @@ function drawMark() {
   if (R.status === "running" || R.status === "timeup" || R.status === "waiting") h += '<div class="xt-up">The exam is still open. You can mark now, but answers may still change.</div>';
   h += R.questions.map(function (q, i) {
     var r = rq[q.id] || {}, ms = (r.msImg || []).map(function (p) { return /^(students|books)\//.test(p) ? p : folder + p; });
-    return '<section class="card xt-mq" data-mq="' + esc(q.id) + '"><div class="xt-mhead"><h3>Question ' + (i + 1) + (q.label ? ' <span class="hint">(' + esc(q.label) + ')</span>' : "") + '</h3><span class="hint">' + q.marks + ' mark' + (q.marks === 1 ? "" : "s") + (r.source ? " · " + esc(r.source) : "") + '</span></div>' +
+    return '<section class="card xt-mq" data-mq="' + esc(q.id) + '"><div class="xt-mhead"><h3>Question ' + (i + 1) + (q.label ? ' <span class="hint">(' + esc(q.label) + ')</span>' : "") + '</h3><span class="hint">' + q.marks + ' mark' + (q.marks === 1 ? "" : "s") + (r.source ? " · " + esc(r.source) : "") + '</span><button class="btn small accent" type="button" data-compare="' + i + '" title="His answer beside the mark scheme, full screen">Compare</button></div>' +
       '<div class="xt-3">' +
         '<div class="xt-col"><div class="xt-lab">Question</div><div class="xt-qtext">' + T.clean(q.text_html) + '</div>' + (q.has_img ? '<img class="xt-zoomable" alt="Question picture" data-xsrc="/api/t/exams/' + esc(R.id) + '/questions/' + esc(q.id) + '/image">' : "") + '</div>' +
-        '<div class="xt-col"><div class="xt-lab">His answer' + (q.finalAt ? ' <span class="hint">last saved ' + esc(t12(q.finalAt)) + '</span>' : "") + (q.writtenLate ? ' <span class="xt-late">part written late</span>' : "") + '</div>' +
+        '<div class="xt-col"><div class="xt-lab">His answer' + (q.finalAt ? ' <span class="hint">last saved ' + esc(t12(q.finalAt)) + '</span>' : "") + (q.writtenLate ? ' <span class="xt-late">part written late</span>' : "") + '</div>' + timeLine(q) +
           (q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : '<p class="hint">No typed answer.</p>') +
           (q.writtenLate ? '<details class="xt-det"><summary>What he had at the original end time (' + esc(t12(R.originalEndAt)) + ')</summary><div class="xt-ans">' + (q.atOriginalEnd ? esc(q.atOriginalEnd) : '<span class="hint">Nothing yet</span>') + '</div></details>' : "") +
           (q.revisions.length > 1 ? '<details class="xt-det"><summary>' + q.revisions.length + ' saves</summary><ul class="xt-log">' + q.revisions.map(function (v) { return '<li><span class="num">' + esc(t12(v.at)) + '</span> ' + (v.late ? '<span class="xt-late">late</span> ' : "") + esc(v.text.length > 90 ? v.text.slice(0, 90) + "…" : v.text) + '</li>'; }).join("") + '</ul></details>' : "") +
@@ -375,6 +387,61 @@ function drawMark() {
   app.innerHTML = h;
   showPics(app); showRepoPics(app); $$(".xt-qtext", app).forEach(T.maths);
 }
+
+/* "Time on it: 6 min 20 s over 2 visits" with each visit behind a fold */
+function timeLine(q) {
+  var v = q.visits || [];
+  if (!v.length) return R.startedAt ? '<p class="hint xt-tline">Time on it: not recorded</p>' : "";
+  return '<details class="xt-det xt-tline"><summary>Time on it: ' + esc(dur(q.seconds)) + (v.length > 1 ? " over " + v.length + " visits" : "") + '</summary><ul class="xt-log">' +
+    v.map(function (x) { return '<li><span class="num">' + esc(t12(x.from)) + '</span> ' + esc(dur((x.to - x.from) / 1000)) + '</li>'; }).join("") + '</ul></details>';
+}
+
+/* Compare: one question's answer beside its mark scheme, full screen. Left and right arrows move between questions, Esc closes.
+   The mark and comment here are the same as on the page (saved the same way). */
+var cmp = null;
+function compare(i) {
+  var q = R.questions[i]; if (!q) return;
+  var folder = R.sourcePath ? examFolder(R.sourcePath) : "", rq = {};
+  ((repoExam && repoExam.questions) || []).forEach(function (x) { rq[x.id] = x; });
+  var r = rq[q.id] || {}, ms = (r.msImg || []).map(function (p) { return /^(students|books)\//.test(p) ? p : folder + p; }), ro = readOnly(R);
+  if (!cmp) { cmp = document.createElement("div"); cmp.className = "xt-cmp"; cmp.setAttribute("role", "dialog"); cmp.setAttribute("aria-modal", "true"); cmp.setAttribute("aria-label", "Compare answer and mark scheme"); document.body.appendChild(cmp); }
+  cmp.setAttribute("data-i", i);
+  cmp.innerHTML = '<div class="xt-cmphead"><b>Question ' + (i + 1) + ' of ' + R.questions.length + '</b><span class="hint">' + (q.label ? esc(q.label) + " · " : "") + q.marks + ' mark' + (q.marks === 1 ? "" : "s") + (q.seconds ? " · " + esc(dur(q.seconds)) + " on it" : "") + '</span><span class="xt-grow"></span>' +
+      '<button class="btn small" type="button" data-cmpgo="' + (i - 1) + '"' + (i ? "" : " disabled") + '>Previous</button><button class="btn small" type="button" data-cmpgo="' + (i + 1) + '"' + (i < R.questions.length - 1 ? "" : " disabled") + '>Next</button><button class="btn small" type="button" data-cmpx>Close</button></div>' +
+    '<details class="xt-cmpq"><summary>The question</summary><div class="xt-qtext">' + T.clean(q.text_html) + '</div>' + (q.has_img ? '<img class="xt-zoomable" alt="Question picture" data-xsrc="/api/t/exams/' + esc(R.id) + '/questions/' + esc(q.id) + '/image">' : "") + '</details>' +
+    '<div class="xt-cmp2"><div class="xt-col"><div class="xt-lab">His answer</div>' +
+        (q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : "") +
+        q.uploads.map(function (u) { return '<figure class="xt-cmppic"><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '"><figcaption class="hint">' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">late</span>' : "") + '</figcaption></figure>'; }).join("") +
+        (!q.final && !q.uploads.length ? '<p class="hint">No answer and no picture.</p>' : "") + '</div>' +
+      '<div class="xt-col"><div class="xt-lab">Mark scheme</div>' + (ms.length ? ms.map(function (p) { return '<img class="xt-zoomable" alt="Mark scheme" data-rsrc="' + esc(p) + '">'; }).join("") : '<p class="hint">No mark scheme picture.</p>') +
+        (r.answer ? '<div class="xt-qtext">' + T.clean(r.answer) + '</div>' : "") + '</div></div>' +
+    '<div class="xt-markrow"><label>Mark <span class="xt-of"><input type="number" class="xt-score" data-cscore="' + esc(q.id) + '" min="0" max="' + q.marks + '" step="0.5" value="' + (q.score == null ? "" : q.score) + '"' + (ro ? " disabled" : "") + '> / ' + q.marks + '</span></label>' +
+      '<label class="xt-grow">Comment <textarea data-ccomment="' + esc(q.id) + '" rows="2"' + (ro ? " disabled" : "") + '>' + esc(q.comment || "") + '</textarea></label><span class="hint" data-cstate></span></div>';
+  showPics(cmp); showRepoPics(cmp); $$(".xt-qtext", cmp).forEach(T.maths);
+  document.documentElement.classList.add("xt-noscroll");
+  var f = $("[data-cscore]", cmp); if (f && !ro) f.focus({ preventScroll: true });
+}
+function closeCompare() {
+  if (!cmp) return;
+  var i = Number(cmp.getAttribute("data-i")); cmp.remove(); cmp = null; document.documentElement.classList.remove("xt-noscroll");
+  var sec = $$("[data-mq]")[i]; if (sec) sec.scrollIntoView({ block: "start" });
+}
+/* copy the Compare box into the page's own fields, then save as usual */
+function compareSave(qid) {
+  var s = $('[data-cscore="' + qid + '"]', cmp), c = $('[data-ccomment="' + qid + '"]', cmp), ps = $('[data-score="' + qid + '"]'), pc = $('[data-comment="' + qid + '"]'), st = $("[data-cstate]", cmp);
+  if (!s || !ps) return;
+  ps.value = s.value; pc.value = c.value; saveMark(qid);
+  var mine = $('[data-mstate="' + qid + '"]'); if (st && mine) { st.textContent = "Saving…"; setTimeout(function () { if (cmp && st) st.textContent = mine.textContent; }, 900); }
+}
+window.addEventListener("hashchange", function () { closeCompare(); });
+document.addEventListener("keydown", function (e) {
+  if (!cmp || !$("#zoom").hidden) return;
+  if (e.key === "Escape") { closeCompare(); return; }
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  var i = Number(cmp.getAttribute("data-i"));
+  if (e.key === "ArrowRight" && i < R.questions.length - 1) compare(i + 1);
+  if (e.key === "ArrowLeft" && i > 0) compare(i - 1);
+});
 
 var markTimers = {};
 function saveMark(qid) {
@@ -410,7 +477,8 @@ function saveToRepo(btn) {
     questions: R.questions.map(function (q) {
       return { id: q.id, label: q.label, marks: q.marks, type: q.type, score: q.score, comment: q.comment, final: q.final, finalAt: iso(q.finalAt), atOriginalEnd: q.atOriginalEnd, writtenLate: q.writtenLate,
         revisions: q.revisions.map(function (v) { return { at: iso(v.at), late: v.late, text: v.text }; }),
-        pictures: files.filter(function (f) { return f.u.question === q.id; }).map(function (f) { return { file: f.path.slice(folder.length), source: f.u.source, at: iso(f.u.at), late: f.u.late }; }) };
+        pictures: files.filter(function (f) { return f.u.question === q.id; }).map(function (f) { return { file: f.path.slice(folder.length), source: f.u.source, at: iso(f.u.at), late: f.u.late }; }),
+        seconds: q.seconds || 0, visits: (q.visits || []).map(function (v) { return { from: iso(v.from), to: iso(v.to), seconds: Math.round((v.to - v.from) / 1000) }; }) };
     }),
     events: (R.events || []).map(function (e) { return { at: iso(e.at), kind: e.kind, detail: e.detail }; })
   };
@@ -441,6 +509,9 @@ document.addEventListener("click", function (e) {
   if ((location.hash || "").indexOf("#/exams") !== 0) return;
   var b = e.target.closest && e.target.closest("button, img.xt-zoomable"); if (!b) return;
   if (b.tagName === "IMG") { if (b.src) { $("#zimg").src = b.src; $("#zoom").hidden = false; } return; }
+  if (b.hasAttribute("data-compare")) return compare(Number(b.getAttribute("data-compare")));
+  if (b.hasAttribute("data-cmpgo")) return compare(Number(b.getAttribute("data-cmpgo")));
+  if (b.hasAttribute("data-cmpx")) return closeCompare();
   if (b.hasAttribute("data-practice")) return makePractice(b);
   if (b.hasAttribute("data-delprac")) return deletePractice(b.getAttribute("data-delprac"), b.getAttribute("data-st"));
   if (T.isTry && b.hasAttribute("data-load")) return;
@@ -472,9 +543,13 @@ document.addEventListener("change", function (e) {
   if (t.id === "xt-ratio") { myRatio = Number(t.value) || null; drawExam(); return; }
   if (t.hasAttribute("data-score")) { saveMark(t.getAttribute("data-score")); return; }
   if (t.hasAttribute("data-comment")) { saveMark(t.getAttribute("data-comment")); return; }
+  if (t.hasAttribute("data-cscore")) { compareSave(t.getAttribute("data-cscore")); return; }
+  if (t.hasAttribute("data-ccomment")) { compareSave(t.getAttribute("data-ccomment")); return; }
 });
 document.addEventListener("input", function (e) {
-  var t = e.target; if (!t.hasAttribute || !t.hasAttribute("data-comment")) return;
+  var t = e.target; if (!t.hasAttribute) return;
+  if (t.hasAttribute("data-ccomment")) { var cid = t.getAttribute("data-ccomment"); clearTimeout(markTimers["c" + cid]); markTimers["c" + cid] = setTimeout(function () { compareSave(cid); }, 1200); return; }
+  if (!t.hasAttribute("data-comment")) return;
   var id = t.getAttribute("data-comment"); clearTimeout(markTimers[id]); markTimers[id] = setTimeout(function () { saveMark(id); }, 1200);
 });
 

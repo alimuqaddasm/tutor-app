@@ -104,3 +104,8 @@
 .ex-top .ex-bannerslot:empty{display:none}
 .ex-top .ex-banner{margin:4px 0 0}
 .ex-attach .btn{min-height:48px;padding:0 18px;font-size:var(--s-md)}
+/* Student view for the teacher (7 Oct) */
+.ex-preview{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0 0;padding:10px 14px;border-radius:12px;background:var(--warn-wash);color:var(--text);font-size:var(--s-sm)}
+.ex-preview .ex-pvwhat{flex:1 1 260px}
+.ex-follow{display:flex;gap:6px;align-items:center;font-weight:700;white-space:nowrap}
+.ex-pvattach .btn{opacity:.55;pointer-events:none}

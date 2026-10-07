@@ -1,4 +1,7 @@
-/* Exam page for the student (exam.html#t=<token>) and the phone upload page (exam.html#p=<token>).
+/* Exam page for the student (exam.html#t=<token>), the phone upload page (exam.html#p=<token>) and the teacher's
+   Student view (exam.html#v=<exam id>: the same page, read-only, with his answers as they are now; needs the exam
+   password this browser keeps for the Exams tab, never counts as him and never records time).
+   Every poll tells the server which question is on his screen, so it can add up the time on each question.
    The server owns the clock; this page only shows it. Answers are kept on this device first and sent
    to the server every few seconds and on every change, so a dropped connection loses nothing.
    Nothing here ever shows a score, a mark scheme or a correct answer. */
@@ -6,9 +9,11 @@
 "use strict";
 
 var H = parseHash();
-var API = (H.api || window.EXAM_API || "").replace(/\/+$/, "");
+var PREVIEW = H.v || "";
+var API = (H.api || (PREVIEW && ls("tutor.examApi")) || window.EXAM_API || "").replace(/\/+$/, "");
 var TOKEN = H.t || "", PHONE = H.p || "";
-var KEY = "exam." + (TOKEN || PHONE).slice(0, 12);
+var KEY = "exam." + (TOKEN || PHONE || "preview").slice(0, 12);
+var follow = true;         // Student view: keep his current question on screen
 var MAXSIDE = 2000, MAXBYTES = 1800000, MAXTEXT = 50000;
 
 function parseHash() {
@@ -27,9 +32,19 @@ function headers(extra) {
   var h = extra || {};
   if (TOKEN) h["X-Exam-Token"] = TOKEN;
   if (PHONE) h["X-Phone-Token"] = PHONE;
+  if (PREVIEW) h["X-Exam-Password"] = ls("tutor.examPw") || "";
   return h;
 }
+/* Student view reads the same things through the teacher's side of the server. */
+function previewPath(path) {
+  var e = "/api/t/exams/" + encodeURIComponent(PREVIEW), m;
+  if (/^\/api\/s\/state/.test(path)) return e + "/student";
+  if ((m = path.match(/^\/api\/s\/questions\/(.+)$/))) return e + "/questions/" + m[1];
+  if ((m = path.match(/^\/api\/s\/files\/(.+)$/))) return "/api/t/files/" + m[1];
+  return null;
+}
 function api(method, path, body, extra) {
+  if (PREVIEW) { path = method === "GET" && previewPath(path); if (!path) return Promise.reject(Object.assign(new Error("Student view is read-only"), { status: 403 })); }
   var opts = { method: method, headers: headers(extra), cache: "no-store" };
   if (body instanceof Blob) opts.body = body;
   else if (body !== undefined) { opts.body = JSON.stringify(body); opts.headers["Content-Type"] = "application/json"; }
@@ -141,8 +156,8 @@ var pending = [];          // pictures waiting to be sent: {id, q, blob, source,
 var net = "ok";            // ok | off
 var pollTimer = null, flushTimer = null, tickTimer = null, backoff = 0, lastSaveAt = null;
 
-function loadDrafts() { try { drafts = JSON.parse(ls(KEY) || "{}") || {}; } catch (e) { drafts = {}; } }
-function keepDrafts() { ls(KEY, JSON.stringify(drafts)); }
+function loadDrafts() { if (PREVIEW) return; try { drafts = JSON.parse(ls(KEY) || "{}") || {}; } catch (e) { drafts = {}; } }
+function keepDrafts() { if (!PREVIEW) ls(KEY, JSON.stringify(drafts)); }
 
 function startStudent() {
   if (!TOKEN || TOKEN.length < 32) return fatal("This exam link is not complete", "Ask your teacher to send the link again.");
@@ -157,23 +172,30 @@ function startStudent() {
   setInterval(function () { if (anyDirty()) flush(); }, 5000);
 }
 
+/* the question on his screen, sent with every poll (not while the page is hidden) */
+function onScreen() { return !PREVIEW && S && S.questions && S.questions[cur] && writable() && !document.hidden ? S.questions[cur].id : ""; }
+
 function poll() {
   clearTimeout(pollTimer);
-  var t0 = Date.now();
-  api("GET", "/api/s/state").then(function (d) {
+  var t0 = Date.now(), q = onScreen();
+  api("GET", "/api/s/state" + (q ? "?q=" + encodeURIComponent(q) : "")).then(function (d) {
     var t1 = Date.now();
     offset = d.serverNow - Math.round((t0 + t1) / 2);
     setNet("ok");
     var first = !S, was = S && S.status;
     S = d;
+    if (PREVIEW && follow && d.on && d.questions) { var at = d.questions.map(function (x) { return x.id; }).indexOf(d.on); if (at >= 0 && at !== cur) { cur = at; if (!first) { question(); dots(); } } }
     if (d.answers) mergeAnswers(d.answers);
     // Running and "time up" share one screen, so the answer box keeps its cursor when the time runs out.
     if (first || group(was) !== group(d.status) || !$(".ex-q")) render(); else refresh();
     if (was === "waiting" && (d.status === "running" || d.status === "timeup")) toast("The exam has started");
     if (anyDirty()) flush();
     sendPending();
-    pollTimer = setTimeout(poll, d.status === "waiting" ? 2000 : d.status === "running" || d.status === "timeup" ? 3000 : 10000);
+    // the first look at the questions went out before they were on screen: report the question straight away
+    pollTimer = setTimeout(poll, PREVIEW ? 3000 : first && onScreen() ? 200 : d.status === "waiting" ? 2000 : d.status === "running" || d.status === "timeup" ? 3000 : 10000);
   }, function (e) {
+    if (PREVIEW && e.status === 401) return fatal("Student view needs the exam password", "Open it from the Exams tab on a device where the exam password is set in Settings.");
+    if (PREVIEW && e.status === 404) return fatal("No such exam", "It may have been deleted. Go back to the Exams tab.");
     if (e.status === 404) return fatal("This exam link is not valid", "Ask your teacher for the link again.");
     setNet("off");
     if (!S) $("#ex").innerHTML = '<div class="ex-center"><div><div class="ex-pulse"></div><h1>Connecting</h1><p>Trying to reach the exam. Check the internet connection; this page keeps trying.</p></div></div>';
@@ -200,7 +222,7 @@ function mergeAnswers(server) {
 function group(st) { return st === "running" || st === "timeup" ? "open" : st; }
 function anyDirty() { return Object.keys(drafts).some(function (q) { return drafts[q].dirty; }); }
 function rejected() { return Object.keys(drafts).filter(function (q) { return drafts[q].rejected; }); }
-function writable() { return S && (S.status === "running" || S.status === "timeup"); }
+function writable() { return !PREVIEW && S && (S.status === "running" || S.status === "timeup"); }
 
 function fatal(title, msg) {
   clearTimeout(pollTimer);
@@ -313,12 +335,12 @@ function render() {
   clearInterval(tickTimer);
   document.title = S.title ? S.title + " · Exam" : "Exam";
   if (S.subject) document.body.setAttribute("data-subject", S.subject === "chem" ? "chem" : S.subject === "maths" ? "maths" : "");
-  if (S.status === "waiting" || S.status === "draft") {
+  if (!PREVIEW && (S.status === "waiting" || S.status === "draft")) {
     m.innerHTML = '<div class="ex-center"><div><div class="ex-pulse"></div><h1>' + esc(S.title) + '</h1><p>Your teacher will start the exam. It will open here on its own; no need to refresh.</p>' +
       (S.baseMinutes ? '<p class="hint" style="margin-top:12px">Time: ' + esc(minutesText(S.baseMinutes)) + '</p>' : "") + '</div></div>';
     return;
   }
-  if (S.status === "locked") {
+  if (!PREVIEW && S.status === "locked") {
     var lost = anyDirty() || pending.length || rejected().length;
     m.innerHTML = '<div class="ex-center"><div><h1>The exam has ended</h1>' + (lost
       ? '<p><b>Some of your last work did not reach your teacher before the exam ended.</b> Tell your teacher now; it is still kept on this device.</p>'
@@ -330,16 +352,26 @@ function render() {
   var done = S.status === "submitted";
   m.innerHTML =
     '<header class="ex-top"><div class="ex-title">' + esc(S.title) + (S.practice ? ' <span class="ex-prac">Practice</span>' : "") + '</div><div class="ex-timer num" role="timer" aria-live="off"></div><div class="ex-save" aria-live="polite"></div>' +
-    (done ? "" : '<button class="btn small" type="button" data-handin>Hand in</button>') + '<div class="ex-bannerslot"></div></header>' +
+    (done || PREVIEW ? "" : '<button class="btn small" type="button" data-handin>Hand in</button>') + '<div class="ex-bannerslot"></div></header>' +
+    (PREVIEW ? '<div class="ex-preview" role="status"><b>Student view</b> <span class="ex-pvwhat"></span><label class="ex-follow"><input type="checkbox" data-follow' + (follow ? " checked" : "") + '> Follow his question</label></div>' : "") +
     '<nav class="ex-dots" aria-label="Questions"></nav>' +
     '<section class="ex-q card"></section>' +
     '<div class="ex-nav"><div class="in"><button class="btn" type="button" data-prev>Previous</button><span class="grow"></span>' +
     '<button class="btn accent" type="button" data-next>Next</button></div></div>';
-  dots(); question(); banner(); tick(); saveState();
+  dots(); question(); banner(); tick(); saveState(); previewLine();
   tickTimer = setInterval(tick, 250);
 }
 
-function refresh() { banner(); pics(); dots(); tick(); lockInputs(); }
+function refresh() { banner(); pics(); dots(); tick(); lockInputs(); previewLine(); }
+
+/* Student view: what he sees right now, and where he is. */
+var SEES = { draft: "the waiting screen (no link made yet)", waiting: "the waiting screen", running: "the questions", timeup: "the questions, with Time is up", submitted: "his answers, handed in", locked: "The exam has ended" };
+function previewLine() {
+  var el = $(".ex-pvwhat"); if (!el || !S) return;
+  var ago = S.lastSeenAt ? Math.round((Date.now() + offset - S.lastSeenAt) / 1000) : null, on = S.on ? qNum(S.on) : null;
+  el.textContent = "Read-only, nothing here is saved. He sees " + (SEES[S.status] || S.status) + ". " +
+    (ago == null ? "He hasn’t opened his link." : ago < 10 ? "He is connected" + (on ? ", on question " + on + "." : ".") : "Last seen " + (ago < 120 ? ago + " s" : Math.round(ago / 60) + " min") + " ago.");
+}
 
 function minutesText(min) { var h = Math.floor(min / 60), mm = Math.round(min % 60); return (h ? h + " h " : "") + (mm || !h ? mm + " min" : ""); }
 
@@ -347,6 +379,8 @@ function tick() {
   var el = $(".ex-timer"); if (!el || !S) return;
   var now = Date.now() + offset;
   if (S.status === "submitted") { el.className = "ex-timer num"; el.textContent = "Handed in"; return; }
+  if (S.status === "locked") { el.className = "ex-timer num"; el.textContent = "Locked"; return; }
+  if (!S.startedAt) { el.className = "ex-timer num"; el.textContent = minutesText(S.baseMinutes || 0) + ", not started"; return; }
   var left = S.endAt - now;
   if (left <= 0 || S.status === "timeup") { el.className = "ex-timer num up"; el.textContent = "Time is up"; if (S.status === "running") { S.status = "timeup"; banner(); } return; }
   var s = Math.ceil(left / 1000), h = Math.floor(s / 3600), mi = Math.floor((s % 3600) / 60), se = s % 60;
@@ -388,6 +422,7 @@ function question() {
     (q.has_img ? '<figure class="ex-qimg"><button type="button" data-zoom><img alt="Question ' + (cur + 1) + ' picture"></button></figure>' : "") +
     '<div class="ex-answer"><label for="ans">' + (upload ? "Working or notes (optional)" : "Your answer") + '</label>' + input + '<p class="ex-count hint" hidden></p>' +
     (q.type === "upload_required" ? '<p class="ex-need">This question needs a picture of your working.</p>' : "") + '</div>' +
+    (PREVIEW ? '<div class="ex-attach ex-pvattach"><span class="btn small">Choose picture</span><span class="btn small">Draw</span><span class="btn small">Use phone</span></div>' : "") +
     '<div class="ex-attach"' + (ro ? " hidden" : "") + '>' +
       '<label class="btn small"><input type="file" accept="image/*" multiple hidden data-file>Choose picture</label>' +
       '<button class="btn small" type="button" data-draw>Draw</button>' +
@@ -527,17 +562,23 @@ function drawDialog(q) {
 /* ---------- clicks and keys ---------- */
 document.addEventListener("click", function (e) {
   var t = e.target.closest("button,[data-go]"); if (!t || !S || !S.questions) return;
-  if (t.hasAttribute("data-go")) { cur = Number(t.getAttribute("data-go")); flush(); question(); dots(); window.scrollTo(0, 0); }
-  else if (t.hasAttribute("data-prev") && cur > 0) { cur--; flush(); question(); dots(); window.scrollTo(0, 0); }
-  else if (t.hasAttribute("data-next") && cur < S.questions.length - 1) { cur++; flush(); question(); dots(); window.scrollTo(0, 0); }
+  if (t.hasAttribute("data-go")) { cur = Number(t.getAttribute("data-go")); moved(); }
+  else if (t.hasAttribute("data-prev") && cur > 0) { cur--; moved(); }
+  else if (t.hasAttribute("data-next") && cur < S.questions.length - 1) { cur++; moved(); }
   else if (t.hasAttribute("data-handin")) handIn();
   else if (t.hasAttribute("data-draw")) drawDialog(S.questions[cur]);
   else if (t.hasAttribute("data-phone")) phoneDialog(S.questions[cur]);
   else if (t.hasAttribute("data-rm")) removePicture(t.getAttribute("data-rm"));
   else if (t.hasAttribute("data-zoom")) zoom($("img", t).src);
 });
+function moved() {
+  flush(); question(); dots(); window.scrollTo(0, 0);
+  if (PREVIEW) { if (follow && S.on && S.questions[cur].id !== S.on) { follow = false; var f = $("[data-follow]"); if (f) f.checked = false; } }
+  else if (writable()) poll();   // the server starts timing the new question now, not at the next poll
+}
 document.addEventListener("click", function (e) { var im = e.target.closest(".ex-pic img"); if (im && im.src) zoom(im.src); });
 document.addEventListener("change", function (e) {
+  if (e.target.hasAttribute && e.target.hasAttribute("data-follow")) { follow = e.target.checked; if (follow) poll(); return; }
   if (e.target.hasAttribute && e.target.hasAttribute("data-file") && S && S.questions) { addPictures(S.questions[cur].id, e.target.files, "file"); e.target.value = ""; }
 });
 
@@ -600,5 +641,6 @@ window.addEventListener("hashchange", function () { location.reload(); });
 /* ---------- go ---------- */
 if (!API || /example\.workers\.dev/.test(API)) fatal("The exam server is not set up yet", "Your teacher needs to finish the setup.");
 else if (PHONE) startPhone();
+else if (PREVIEW) { document.body.classList.add("ex-isprev"); poll(); }
 else startStudent();
 })();
