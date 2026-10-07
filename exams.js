@@ -5,6 +5,8 @@
                       Compare puts one question's answer beside its mark scheme, full screen (Ali, 7 Oct)
    Compare also lists the question's marks (M1, A1, B1... from "scheme" in exam.json) to tick (Ali, 7 Oct).
    Claude's marks (claude-marks.json next to exam.json) show on each question with Accept, and Accept all (Ali, 7 Oct).
+   Assignments (students/<s>/assignments/<id>/assignment.json, Ali 7 Oct): loaded the same way, no clock, sections with
+   Done; marking shows what he had at Done and flags anything changed after it.
    Student view opens exam.html#v=<id>: the student's page, read-only, with his answers as they are now (Ali, 7 Oct).
    The exam server holds the clock and the answers. The tutoring repo holds the questions and mark schemes. */
 (function () {
@@ -53,7 +55,10 @@ function dur(sec) { sec = Math.round(sec || 0); var m = Math.floor(sec / 60), s 
 function studentView(id) { return "exam.html#v=" + encodeURIComponent(id) + (xapi() !== (window.EXAM_API || "").replace(/\/+$/, "") ? "&api=" + encodeURIComponent(xapi()) : ""); }
 function svBtn(id) { return '<a class="btn small" href="' + esc(studentView(id)) + '" target="_blank" rel="noopener" title="Opens his exam page as he sees it, with his answers as they are now. Read-only.">Student view</a>'; }
 var LABEL = { draft: "Not opened", waiting: "Waiting", running: "Running", timeup: "Time up", submitted: "Handed in", locked: "Locked", proposed: "Proposed", ready: "Ready" };
-function chip(st) { return '<span class="xt-chip xt-' + esc(st) + '">' + esc(LABEL[st] || st) + '</span>'; }
+function chip(st, kind) { var l = kind === "assignment" && (st === "running" || st === "timeup") ? "Open" : LABEL[st] || st; return '<span class="xt-chip xt-' + esc(st) + '">' + esc(l) + '</span>' + (kind === "assignment" ? ' <span class="xt-chip xt-asg">Assignment</span>' : ""); }
+function isAsg(o) { return o && o.kind === "assignment"; }
+/* an assignment's questions, flat, each knowing its section */
+function flatQs(e) { if (!e) return []; if (!e.sections) return e.questions || []; var out = []; e.sections.forEach(function (x) { (x.questions || []).forEach(function (q) { out.push(Object.assign({ section_id: x.id }, q)); }); }); return out; }
 var TYPES = [["short", "Short answer"], ["long", "Long answer"], ["upload_required", "Picture needed"], ["upload_optional", "Picture optional"]];
 
 /* Try-out: practice exams only. They live on the exam server marked "practice", show up only in Try-out,
@@ -98,14 +103,15 @@ window.examsView = function (r) {
 };
 
 /* ===================== list ===================== */
-function examFolder(path) { return path.replace(/exam\.json$/, ""); }
+function examFolder(path) { return path.replace(/(exam|assignment)\.json$/, ""); }
 
 function listView() {
   app.innerHTML = '<div class="section-h"><h2>Exams</h2></div><div class="empty"><h3>Loading</h3></div>';
-  var base = T.studentBase() + "exams/";
+  var base = T.studentBase() + "exams/", abase = T.studentBase() + "assignments/";
   // the repo part draws as soon as it is there; the exam server's part fills in when it answers
   var repoP = T.loadTree().then(function (tree) {
-      var files = tree.filter(function (t) { return t.path.indexOf(base) === 0 && /\/exam\.json$/.test(t.path) && t.path.slice(base.length).split("/").length === 2; });
+      var files = tree.filter(function (t) { return (t.path.indexOf(base) === 0 && /\/exam\.json$/.test(t.path) && t.path.slice(base.length).split("/").length === 2) ||
+        (t.path.indexOf(abase) === 0 && /\/assignment\.json$/.test(t.path) && t.path.slice(abase.length).split("/").length === 2); });
       return Promise.all(files.map(function (f) { return T.fileJSON(f.path).then(function (j) { return { path: f.path, exam: j && j.data }; }, function (e) { return { path: f.path, error: e.message }; }); }));
     });
   var serverP = call("GET", "/api/t/exams"), done = false;
@@ -132,9 +138,9 @@ function drawList(repo, all) {
     if (!repo.length) h += '<div class="empty"><p>No exams yet. In the lesson chat, Claude proposes an exam when one is due, or ask: <i>“make a test on chapter 5”</i>.</p></div>';
     else h += '<div class="xt-list">' + repo.map(function (r) {
       if (r.error) return '<div class="card xt-row"><div><b>' + esc(r.path) + '</b><p class="hint">' + esc(r.error) + '</p></div></div>';
-      var e = r.exam || {}, qs = e.questions || [], marks = qs.reduce(function (s, q) { return s + (Number(q.marks) || 0); }, 0), st = e.status || "draft", on = loaded[r.path];
-      return '<div class="card xt-row" data-subject="' + esc(e.subject || "") + '"><div class="xt-grow"><div class="xt-title">' + esc(e.title || r.path) + ' ' + chip(st) + '</div>' +
-        '<div class="hint">' + qs.length + ' question' + (qs.length === 1 ? "" : "s") + ' · ' + marks + ' marks' + (e.date ? " · " + esc(e.date) : "") + '</div>' +
+      var e = r.exam || {}, qs = flatQs(e), marks = qs.reduce(function (s, q) { return s + (Number(q.marks) || 0); }, 0), st = e.status || "draft", on = loaded[r.path];
+      return '<div class="card xt-row" data-subject="' + esc(e.subject || "") + '"><div class="xt-grow"><div class="xt-title">' + esc(e.title || r.path) + ' ' + chip(st, e.kind) + '</div>' +
+        '<div class="hint">' + (e.sections ? e.sections.length + " sections · " : "") + qs.length + ' question' + (qs.length === 1 ? "" : "s") + ' · ' + marks + ' marks' + (e.date ? " · " + esc(e.date) : e.opens ? " · from " + esc(e.opens) : "") + '</div>' +
         (e.why ? '<p class="xt-why">' + esc(e.why) + '</p>' : "") + '</div><div class="xt-acts">' +
         (waiting ? '<span class="hint">Checking the exam server…</span>' : on ? '<a class="btn small" href="#/exams/' + esc(on.id) + '">Open</a>'
             : st === "ready" && T.isTry ? '<span class="hint">Ready. Leave Try-out to load it.</span>'
@@ -146,7 +152,7 @@ function drawList(repo, all) {
     if (waiting) h += '<p class="hint">Loading…</p>';
     else if (!server.length) h += '<p class="hint">Nothing loaded yet.</p>';
     else h += '<div class="xt-list">' + server.map(function (s) {
-      return '<a class="card xt-row xt-link" href="#/exams/' + esc(s.id) + '" data-subject="' + esc(s.subject || "") + '"><div class="xt-grow"><div class="xt-title">' + esc(s.title) + ' ' + chip(s.status) + '</div>' +
+      return '<a class="card xt-row xt-link" href="#/exams/' + esc(s.id) + '" data-subject="' + esc(s.subject || "") + '"><div class="xt-grow"><div class="xt-title">' + esc(s.title) + ' ' + chip(s.status, s.kind) + '</div>' +
         '<div class="hint">' + s.questions + ' questions · ' + s.totalMarks + ' marks · ' + (s.startedAt ? "taken " + esc(day(s.startedAt)) : "loaded " + esc(day(s.createdAt))) + '</div></div></a>';
     }).join("") + '</div>';
     app.innerHTML = h;
@@ -168,21 +174,25 @@ function loadToServer(path, btn) {
   btn.disabled = true; btn.textContent = "Loading…";
   var folder = examFolder(path);
   T.fileJSON(path).then(function (j) {
-    var e = j.data, qs = e.questions || [];
+    var e = j.data, qs = flatQs(e), asg = isAsg(e);
     var marks = qs.reduce(function (s, q) { return s + (Number(q.marks) || 0); }, 0);
     var ratio = Number(e.ratio) || null;
     var base = Number(e.minutes) || (ratio ? Math.ceil(marks * ratio / 5) * 5 : 0);
-    var body = { title: e.title, subject: e.subject || "", source_path: path, ratio: ratio, base_minutes: base || 0,
-      questions: qs.map(function (q, i) { return { id: q.id || "q" + (i + 1), label: q.label || "", text_html: q.text || "", marks: Number(q.marks) || 0, type: q.type || "long", suggested_min: q.suggestMin == null ? null : q.suggestMin }; }) };
+    var body = { title: e.title, subject: e.subject || "", source_path: path, ratio: ratio, base_minutes: asg ? 0 : base || 0,
+      questions: qs.map(function (q, i) { return { id: q.id || "q" + (i + 1), label: q.label || "", text_html: q.text || "", marks: Number(q.marks) || 0, type: q.type || "long", suggested_min: q.suggestMin == null ? null : q.suggestMin, section_id: q.section_id || null }; }) };
+    if (asg) { body.kind = "assignment"; body.sections = e.sections.map(function (x) { return { id: x.id, title: x.title, subject: x.subject, day: x.day, date: x.date, suggest_min: x.suggestMin }; }); }
+    var full = function (p) { return /^(students|books)\//.test(p) ? p : folder + p; };
     return call("POST", "/api/t/exams", body).then(function (made) {
       var chain = Promise.resolve();
       qs.forEach(function (q, i) {
-        var imgs = (q.img || []).map(function (p) { return /^(students|books)\//.test(p) ? p : folder + p; });
-        if (!imgs.length) return;
-        chain = chain.then(function () {
-          btn.textContent = "Pictures " + (i + 1) + "/" + qs.length;
-          return Promise.all(imgs.map(T.fileURL)).then(function (urls) { return stitch(urls.filter(Boolean)); })
-            .then(function (b) { return call("PUT", "/api/t/exams/" + made.id + "/questions/" + encodeURIComponent(body.questions[i].id) + "/image", b, { "Content-Type": "image/jpeg" }); });
+        // the question picture, and for an assignment its mark scheme (he sees it only after Done)
+        [["image", q.img], asg ? ["ms", q.msImg] : null].forEach(function (job) {
+          if (!job || !job[1] || !job[1].length) return;
+          chain = chain.then(function () {
+            btn.textContent = "Pictures " + (i + 1) + "/" + qs.length;
+            return Promise.all(job[1].map(full).map(T.fileURL)).then(function (urls) { return stitch(urls.filter(Boolean)); })
+              .then(function (b) { return call("PUT", "/api/t/exams/" + made.id + "/questions/" + encodeURIComponent(body.questions[i].id) + "/" + job[0], b, { "Content-Type": "image/jpeg" }); });
+          });
         });
       });
       return chain.then(function () { location.hash = "#/exams/" + made.id; });
@@ -210,7 +220,8 @@ function drawExam() {
   var st = X.status, started = X.startedAt != null || readOnly(X), total = totalMarks();
   var mode = T.ls("tutor.examRatioMode") || "papers", ratio = ratioNow() || 1.2, sugg = Math.ceil(total * ratio / 5) * 5;
   app.setAttribute("data-subject", X.subject || "");
-  var h = '<div class="section-h xt-head"><h2>' + esc(X.title) + '</h2><span id="xt-st">' + chip(st) + '</span><span class="xt-grow"></span><a class="btn small" href="#/exams">All exams</a>' + svBtn(X.id) + '<a class="btn small" href="#/exams/' + esc(X.id) + '/mark">Mark</a>' + (X.practice ? '<button class="btn small" type="button" data-delprac="' + esc(X.id) + '" data-st="' + esc(st) + '">Delete</button>' : "") + '</div>';
+  var asg = isAsg(X);
+  var h = '<div class="section-h xt-head"><h2>' + esc(X.title) + '</h2><span id="xt-st">' + chip(st, X.kind) + '</span><span class="xt-grow"></span><a class="btn small" href="#/exams">All exams</a>' + svBtn(X.id) + '<a class="btn small" href="#/exams/' + esc(X.id) + '/mark">Mark</a>' + (X.practice ? '<button class="btn small" type="button" data-delprac="' + esc(X.id) + '" data-st="' + esc(st) + '">Delete</button>' : "") + '</div>';
   if (readOnly(X)) h += RO_NOTE;
   else if (X.practice) h += '<p class="hint">Practice exam: nothing here goes to the tutoring repo.</p>';
 
@@ -220,10 +231,10 @@ function drawExam() {
   /* student link */
   h += '<section class="card xt-card"><h3>Student link</h3>' + (X.token
     ? '<div class="xt-linkrow"><input type="text" readonly id="xt-link" value="' + esc(link()) + '"><button class="btn small accent" type="button" data-copy>Copy</button><button class="btn small" type="button" data-qr>QR</button></div><p class="hint">Send this to him. It opens the exam with no login. Making a new link stops the old one.</p><button class="btn small" type="button" data-newlink' + (st === "locked" || readOnly(X) ? " disabled" : "") + '>Make a new link</button><div id="xt-qr" class="xt-qrbox" hidden></div>'
-    : '<p class="hint">Make the link when you are ready to send it. He sees a waiting screen until you press Start.</p><button class="btn accent" type="button" data-newlink' + (readOnly(X) ? " disabled" : "") + '>Make student link</button>') + '</section>';
+    : '<p class="hint">' + (asg ? "Make the link when you are ready to send it. It opens straight away: there is no Start and no clock." : "Make the link when you are ready to send it. He sees a waiting screen until you press Start.") + '</p><button class="btn accent" type="button" data-newlink' + (readOnly(X) ? " disabled" : "") + '>Make student link</button>') + '</section>';
 
-  /* time suggestion */
-  h += '<section class="card xt-card"><h3>Time</h3>' + (readOnly(X) && X.startedAt == null ? '<p>Exam time: <b>' + esc(mins(X.baseMinutes || 0)) + '</b> for ' + total + ' marks.</p>' : started ? '<p>Set at the start: <b>' + esc(mins(X.baseMinutes)) + '</b> for ' + total + ' marks. Use the + buttons above to add time.</p>' :
+  /* time suggestion (an assignment has no clock) */
+  if (!asg) h += '<section class="card xt-card"><h3>Time</h3>' + (readOnly(X) && X.startedAt == null ? '<p>Exam time: <b>' + esc(mins(X.baseMinutes || 0)) + '</b> for ' + total + ' marks.</p>' : started ? '<p>Set at the start: <b>' + esc(mins(X.baseMinutes)) + '</b> for ' + total + ' marks. Use the + buttons above to add time.</p>' :
     '<div class="xt-ratio"><div class="xt-seg" role="group" aria-label="Where the minutes per mark come from"><button type="button" class="chip" data-rmode="papers" aria-pressed="' + (mode === "papers") + '">From past papers</button><button type="button" class="chip" data-rmode="number" aria-pressed="' + (mode === "number") + '">My own number</button></div>' +
     (mode === "number"
       ? '<div class="field xt-narrow"><label for="xt-ratio">Minutes per mark</label><input type="number" id="xt-ratio" step="0.05" min="0.1" value="' + esc(myRatio || X.ratio || 1.2) + '"></div>'
@@ -234,10 +245,13 @@ function drawExam() {
     '<div class="field xt-narrow"><label for="xt-dur">Exam time (minutes)</label><input type="number" id="xt-dur" min="1" step="1" value="' + esc(X.baseMinutes || sugg) + '"></div></div>') + '</section>';
 
   /* questions */
-  h += '<section class="card xt-card"><h3>Questions <span class="hint">(' + X.questions.length + ', ' + total + ' marks)</span></h3><div class="xt-scroll"><table class="xt-table xt-qs"><thead><tr><th>#</th><th>Question</th><th>Marks</th><th>Type</th><th>Minutes</th><th>Saved · time on it</th></tr></thead><tbody>' +
+  var lastSec = null;
+  h += '<section class="card xt-card"><h3>Questions <span class="hint">(' + X.questions.length + ', ' + total + ' marks' + (asg ? ", " + (X.sections || []).length + " sections" : "") + ')</span></h3><div class="xt-scroll"><table class="xt-table xt-qs"><thead><tr><th>#</th><th>Question</th><th>Marks</th><th>Type</th><th>Minutes</th><th>Saved · time on it</th></tr></thead><tbody>' +
     X.questions.map(function (q, i) {
-      var ro = started ? " disabled" : "";
-      return '<tr data-q="' + esc(q.id) + '"><td>' + (i + 1) + '</td><td><b>' + esc(q.label) + '</b>' + (q.has_img ? '<div><img class="xt-thumb" alt="Question picture" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>' : "") + '</td>' +
+      var ro = started ? " disabled" : "", head = "";
+      if (asg && q.section_id !== lastSec) { lastSec = q.section_id; var sc = (X.sections || []).filter(function (x) { return x.id === q.section_id; })[0] || {};
+        head = '<tr class="xt-secrow"><td colspan="6"><b>' + esc(sc.title || q.section_id) + '</b>' + (sc.date ? ' <span class="hint">' + esc(sc.date) + '</span>' : "") + ' · <span data-secst="' + esc(q.section_id) + '">' + secState(sc) + '</span></td></tr>'; }
+      return head + '<tr data-q="' + esc(q.id) + '"><td>' + (i + 1) + '</td><td><b>' + esc(q.label) + '</b>' + (q.has_img ? '<div><img class="xt-thumb" alt="Question picture" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>' : "") + '</td>' +
         '<td><input type="number" class="xt-in" data-f="marks" min="0" step="0.5" value="' + esc(q.marks) + '"' + ro + '></td>' +
         '<td><select data-f="type"' + ro + '>' + TYPES.map(function (t) { return '<option value="' + t[0] + '"' + (q.type === t[0] ? " selected" : "") + '>' + t[1] + '</option>'; }).join("") + '</select></td>' +
         '<td><input type="number" class="xt-in" data-f="suggested_min" min="0" step="0.5" value="' + esc(q.suggested_min == null ? r2(q.marks * ratio) : q.suggested_min) + '"' + ro + '></td><td class="hint" data-saved></td></tr>';
@@ -249,11 +263,19 @@ function drawExam() {
   showPics(app); drawRun(); drawLog();
 }
 
+function secState(sc) { return sc && sc.doneAt != null ? "Done " + esc(day(sc.doneAt)) + " " + esc(t12(sc.doneAt)) + (sc.tookMin != null ? ", took " + esc(sc.tookMin) + " min (his word)" : "") : "Not done"; }
 function drawRun() {
   var st = X.status, b = $("#xt-btns"); if (!b) return;
-  $("#xt-st").innerHTML = chip(st);
+  $("#xt-st").innerHTML = chip(st, X.kind);
   var html = "";
   if (readOnly(X)) { b.innerHTML = '<p class="hint">Look only in Try-out.</p>'; b.setAttribute("data-k", ""); }
+  else if (isAsg(X)) {
+    var nd = (X.sections || []).filter(function (x) { return x.doneAt != null; }).length;
+    if (st === "draft" || st === "waiting") html = '<p class="hint">Make the student link (below). It opens at once.</p>';
+    if (st === "running" || st === "timeup") html = '<p><b>Open.</b> No clock: he can use it any time until you close it. ' + nd + ' of ' + (X.sections || []).length + ' sections done.</p><a class="btn accent" href="#/exams/' + esc(X.id) + '/mark">Mark the done ones</a> <button class="btn danger" type="button" data-lock>Close it (lock)</button>';
+    if (st === "locked") html = '<p><b>Closed ' + esc(day(X.lockedAt)) + ' ' + esc(t12(X.lockedAt)) + '.</b> ' + nd + ' sections done.</p><a class="btn accent" href="#/exams/' + esc(X.id) + '/mark">Mark it</a> <button class="btn" type="button" data-reopen>Reopen</button>';
+    if (b.getAttribute("data-k") !== st + html.length) { b.innerHTML = html; b.setAttribute("data-k", st + html.length); }
+  }
   else {
   if (st === "draft") html = '<p class="hint">Make the student link first (below).</p>';
   if (st === "waiting") html = '<button class="btn accent xt-start" type="button" data-start>Start the exam</button><p class="hint">' + (X.lastSeenAt && Date.now() + offset - X.lastSeenAt < 10000 ? "He has the exam open and is waiting." : "He hasn’t opened the link yet.") + '</p>';
@@ -265,7 +287,7 @@ function drawRun() {
   if (b.getAttribute("data-k") !== st + html.length) { b.innerHTML = html; b.setAttribute("data-k", st + html.length); }
   }
   var tm = $("#xt-times");
-  if (tm) tm.textContent = X.startedAt ? "Started " + t12(X.startedAt) + " · original end " + t12(X.originalEndAt) + (X.endAt !== X.originalEndAt ? " · now ends " + t12(X.endAt) : "") : "";
+  if (tm) tm.textContent = isAsg(X) ? (X.startedAt ? "Opened " + day(X.startedAt) + " " + t12(X.startedAt) : "") : X.startedAt ? "Started " + t12(X.startedAt) + " · original end " + t12(X.originalEndAt) + (X.endAt !== X.originalEndAt ? " · now ends " + t12(X.endAt) : "") : "";
   var seen = $("#xt-seen");
   if (seen) { var ago = X.lastSeenAt ? Math.round((Date.now() + offset - X.lastSeenAt) / 1000) : null; var onq = X.on ? X.questions.map(function (q) { return q.id; }).indexOf(X.on) : -1;
     seen.innerHTML = ago == null ? "Not opened by him yet" : ago < 10 ? '<span class="xt-on"></span>He is connected' + (onq >= 0 ? " · on question " + (onq + 1) : "") : "Last seen " + (ago < 120 ? ago + " s" : Math.round(ago / 60) + " min") + " ago"; }
@@ -273,7 +295,9 @@ function drawRun() {
 }
 
 function tickClock() {
-  var el = $("#xt-left"); if (!el || !X || !X.startedAt) return;
+  var el = $("#xt-left"); if (!el || !X) return;
+  if (isAsg(X)) { el.textContent = X.status === "locked" ? "Closed" : X.startedAt ? "Open" : "Not sent"; el.className = "xt-big num"; return; }
+  if (!X.startedAt) return;
   if (X.status === "submitted" || X.status === "locked") { el.textContent = X.status === "locked" ? "Locked" : "Handed in"; el.className = "xt-big num"; return; }
   var left = X.endAt - (Date.now() + offset);
   if (left <= 0) { el.textContent = "Time up"; el.className = "xt-big num up"; if (X.status === "running") { X.status = "timeup"; drawRun(); } return; }
@@ -283,11 +307,12 @@ function tickClock() {
 }
 setInterval(function () { if (X && (location.hash || "").indexOf("#/exams/" + X.id) === 0 && !/\/mark$/.test(location.hash)) tickClock(); }, 500);
 
-var EVT = { created: "Loaded to the exam server", link: "Student link made", "new-link": "New student link (old one stopped)", start: "Started", extend: "Time added", timeup: "Time up", submit: "He handed in", lock: "Locked", reopen: "Reopened", "remove-picture": "He removed a picture" };
+var EVT = { done: "He pressed Done on", created: "Loaded to the exam server", link: "Student link made", "new-link": "New student link (old one stopped)", start: "Started", extend: "Time added", timeup: "Time up", submit: "He handed in", lock: "Locked", reopen: "Reopened", "remove-picture": "He removed a picture" };
 function drawLog() {
   var ul = $("#xt-log"); if (!ul) return;
   ul.innerHTML = (X.events || []).slice().reverse().map(function (e) {
-    var what = e.kind === "extend" ? e.detail + " at " + t12(e.at) : (EVT[e.kind] || e.kind) + (e.kind === "start" ? " (" + e.detail + ")" : "");
+    var what = e.kind === "extend" ? e.detail + " at " + t12(e.at) : (EVT[e.kind] || e.kind) + (e.kind === "start" ? " (" + e.detail + ")" : e.kind === "done" ? " " + ((X.sections || []).filter(function (x) { return x.id === e.detail; }).map(function (x) { return x.title; })[0] || e.detail) : "");
+    if (isAsg(X)) return '<li><span class="num">' + esc(day(e.at)) + ' ' + esc(t12(e.at)) + '</span> ' + esc(what) + '</li>';
     return '<li><span class="num">' + esc(t12(e.at)) + '</span> ' + esc(what) + '</li>';
   }).join("") || '<li class="hint">Nothing yet.</li>';
 }
@@ -297,9 +322,11 @@ function poll() {
   if (!X) return;
   call("GET", "/api/t/exams/" + X.id + "/live").then(function (d) {
     offset = d.serverNow - Date.now();
-    var changed = d.status !== X.status || d.endAt !== X.endAt;
+    var secSig = function (l) { return JSON.stringify((l || []).map(function (x) { return x.doneAt; })); };
+    var changed = d.status !== X.status || d.endAt !== X.endAt || (d.sections && secSig(d.sections) !== secSig(X.sections));
     ["status", "startedAt", "originalEndAt", "endAt", "submittedAt", "lockedAt", "lastSeenAt", "extensions"].forEach(function (k) { X[k] = d[k]; });
-    X.on = d.on; drawRun();
+    X.on = d.on; if (d.sections) { X.sections = d.sections; d.sections.forEach(function (x) { var el = $('[data-secst="' + x.id + '"]'); if (el) el.innerHTML = secState(x); }); }
+    drawRun();
     $$("tr[data-q]").forEach(function (tr) { var qid = tr.getAttribute("data-q"), p = d.perQuestion[qid], c = $("[data-saved]", tr); if (!c) return;
       var bits = [];
       if (p && p.lastSave) bits.push("Text " + esc(t12(p.lastSave)) + (p.late ? ' <span class="xt-late">late</span>' : ""));
@@ -359,28 +386,46 @@ function lateSplit(q) {
 
 function drawMark() {
   var folder = R.sourcePath ? examFolder(R.sourcePath) : "";
-  var rq = {}; ((repoExam && repoExam.questions) || []).forEach(function (q) { rq[q.id] = q; });
+  var rq = {}; flatQs(repoExam).forEach(function (q) { rq[q.id] = q; });
   app.setAttribute("data-subject", R.subject || "");
-  var h = '<div class="section-h xt-head"><h2>Mark: ' + esc(R.title) + '</h2>' + chip(R.status) + '<span class="xt-grow"></span>' + svBtn(R.id) + '<a class="btn small" href="#/exams/' + esc(R.id) + '">Exam page</a></div>';
+  var asg = isAsg(R), secs = R.sections || [], filt = asg ? T.ls("tutor.asgFilter") || "done" : "all";
+  var h = '<div class="section-h xt-head"><h2>Mark: ' + esc(R.title) + '</h2>' + chip(R.status, R.kind) + '<span class="xt-grow"></span>' + svBtn(R.id) + '<a class="btn small" href="#/exams/' + esc(R.id) + '">Exam page</a></div>';
   h += '<div class="card xt-card xt-summary"><div><div class="xt-big num" id="xt-total">' + r2(R.total) + ' / ' + R.max + '</div><div class="hint" id="xt-marked">' + R.marked + ' of ' + R.questions.length + ' marked</div></div>' +
-    '<div class="hint">' + (R.startedAt ? "Started " + esc(t12(R.startedAt)) + " · original end " + esc(t12(R.originalEndAt)) : "Not started") +
+    '<div class="hint">' + (asg ? (R.startedAt ? "Opened " + esc(day(R.startedAt)) : "Not sent yet") + " · " + secs.filter(function (x) { return x.doneAt != null; }).length + " of " + secs.length + " sections done" :
+      R.startedAt ? "Started " + esc(t12(R.startedAt)) + " · original end " + esc(t12(R.originalEndAt)) : "Not started") +
     ((R.extensions || []).length ? "<br>Time added: " + R.extensions.map(function (e) { return "+" + e.minutes + " min at " + t12(e.at); }).map(esc).join(", ") : "") +
     (R.submittedAt ? "<br>Handed in " + esc(t12(R.submittedAt)) : "") + (R.lockedAt ? "<br>Locked " + esc(t12(R.lockedAt)) : "") + '</div>' +
     '<div class="xt-acts">' + (R.practice ? '<span class="hint">Practice exam: marks stay on the exam server only.</span>' : '<button class="btn accent" type="button" data-torepo' + (T.isTry ? " disabled title=\"Try-out mode: nothing is saved\"" : "") + '>Save to tutoring repo</button>') + '<span class="hint" id="xt-repomsg"></span></div></div>';
   if (readOnly(R)) h += RO_NOTE;
   if (claudeMarks) h += '<div class="card xt-card xt-claude"><div class="xt-grow"><b>Claude has marked this exam: ' + esc(r2(claudeTotal())) + ' / ' + R.max + '</b>' + (claudeMarks.summary ? '<p class="hint">' + esc(claudeMarks.summary) + '</p>' : "") + '<p class="hint">Check each question, then Accept it, or change the mark yourself.</p></div>' +
     '<button class="btn accent" type="button" data-acceptall' + (readOnly(R) ? " disabled" : "") + '>Accept all Claude’s marks</button></div>';
-  if (R.status === "running" || R.status === "timeup" || R.status === "waiting") h += '<div class="xt-up">The exam is still open. You can mark now, but answers may still change.</div>';
+  if (!asg && (R.status === "running" || R.status === "timeup" || R.status === "waiting")) h += '<div class="xt-up">The exam is still open. You can mark now, but answers may still change.</div>';
+  if (asg) h += '<div class="xt-filter"><label for="xt-asgf">Show</label><select id="xt-asgf" data-asgf><option value="done"' + (filt === "done" ? " selected" : "") + '>Sections he has done</option><option value="all"' + (filt === "all" ? " selected" : "") + '>All sections</option>' +
+    secs.map(function (x) { return '<option value="' + esc(x.id) + '"' + (filt === x.id ? " selected" : "") + '>' + esc(x.title) + (x.doneAt != null ? " (done)" : "") + '</option>'; }).join("") + '</select>' +
+    '<span class="hint">He is marked on what he had when he pressed Done. Anything changed after Done is shown separately: he did it with the mark scheme open.</span></div>';
+  var lastSec = null, nIn = 0, shown = 0;
   h += R.questions.map(function (q, i) {
     var r = rq[q.id] || {}, ms = (r.msImg || []).map(function (p) { return /^(students|books)\//.test(p) ? p : folder + p; });
-    return '<section class="card xt-mq" data-mq="' + esc(q.id) + '"><div class="xt-mhead"><h3>Question ' + (i + 1) + (q.label ? ' <span class="hint">(' + esc(q.label) + ')</span>' : "") + '</h3><span class="hint">' + q.marks + ' mark' + (q.marks === 1 ? "" : "s") + (r.source ? " · " + esc(r.source) : "") + '</span><button class="btn small accent" type="button" data-compare="' + i + '" title="His answer beside the mark scheme, full screen">Compare</button></div>' +
+    var head = "";
+    if (asg) {
+      var sc = secs.filter(function (x) { return x.id === q.section; })[0] || {};
+      if (filt === "done" ? sc.doneAt == null : filt !== "all" && filt !== q.section) return "";
+      if (q.section !== lastSec) { lastSec = q.section; nIn = 0; head = '<h2 class="xt-sech">' + esc(sc.title || q.section) + ' <span class="hint">' + secState(sc) + '</span></h2>'; }
+      nIn++;
+    }
+    shown++;
+    return head + '<section class="card xt-mq" data-mq="' + esc(q.id) + '"><div class="xt-mhead"><h3>Question ' + (asg ? nIn : i + 1) + (q.label ? ' <span class="hint">(' + esc(q.label) + ')</span>' : "") + '</h3><span class="hint">' + q.marks + ' mark' + (q.marks === 1 ? "" : "s") + (r.source ? " · " + esc(r.source) : "") + '</span><button class="btn small accent" type="button" data-compare="' + i + '" title="His answer beside the mark scheme, full screen">Compare</button></div>' +
       '<div class="xt-3">' +
         '<div class="xt-col"><div class="xt-lab">Question</div><div class="xt-qtext">' + T.clean(q.text_html) + '</div>' + (q.has_img ? '<img class="xt-zoomable" alt="Question picture" data-xsrc="/api/t/exams/' + esc(R.id) + '/questions/' + esc(q.id) + '/image">' : "") + '</div>' +
         '<div class="xt-col"><div class="xt-lab">His answer' + (q.finalAt ? ' <span class="hint">last saved ' + esc(t12(q.finalAt)) + '</span>' : "") + (q.writtenLate ? ' <span class="xt-late">part written late</span>' : "") + '</div>' + timeLine(q) +
-          (q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : '<p class="hint">No typed answer.</p>') +
+          (q.doneAt != null
+            ? (q.atDone ? '<div class="xt-ans">' + esc(q.atDone) + '</div>' : '<p class="hint">No typed answer when he pressed Done.</p>') +
+              (q.changedAfterDone ? '<details class="xt-det xt-after"><summary>Changed after Done (mark scheme open): not for marks</summary><div class="xt-ans">' + esc(q.final) + '</div></details>' : "")
+            : asg ? (q.final ? '<div class="xt-ans">' + esc(q.final) + '</div><p class="hint">Section not done yet.</p>' : '<p class="hint">Nothing yet; section not done.</p>')
+            : q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : '<p class="hint">No typed answer.</p>') +
           (q.writtenLate ? '<details class="xt-det"><summary>What he had at the original end time (' + esc(t12(R.originalEndAt)) + ')</summary><div class="xt-ans">' + (q.atOriginalEnd ? esc(q.atOriginalEnd) : '<span class="hint">Nothing yet</span>') + '</div></details>' : "") +
           (q.revisions.length > 1 ? '<details class="xt-det"><summary>' + q.revisions.length + ' saves</summary><ul class="xt-log">' + q.revisions.map(function (v) { return '<li><span class="num">' + esc(t12(v.at)) + '</span> ' + (v.late ? '<span class="xt-late">late</span> ' : "") + esc(v.text.length > 90 ? v.text.slice(0, 90) + "…" : v.text) + '</li>'; }).join("") + '</ul></details>' : "") +
-          (q.uploads.length ? '<div class="xt-pics">' + q.uploads.map(function (u) { return '<figure><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '"><figcaption>' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">late</span>' : "") + '</figcaption></figure>'; }).join("") + '</div>' : (q.type === "upload_required" ? '<p class="xt-up">No picture, but this question needed one.</p>' : "")) +
+          (q.uploads.length ? '<div class="xt-pics">' + q.uploads.map(function (u) { return '<figure><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '"><figcaption>' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">late</span>' : "") + (u.afterDone ? ' <span class="xt-late">after Done</span>' : "") + '</figcaption></figure>'; }).join("") + '</div>' : (q.type === "upload_required" ? '<p class="xt-up">No picture, but this question needed one.</p>' : "")) +
         '</div>' +
         '<div class="xt-col"><div class="xt-lab">Mark scheme</div>' + (ms.length ? ms.map(function (p) { return '<img class="xt-zoomable" alt="Mark scheme" data-rsrc="' + esc(p) + '">'; }).join("") : '<p class="hint">' + (repoExam ? "No mark scheme picture for this question." : "The exam file isn’t in the repo, so no mark scheme.") + '</p>') +
           (r.answer ? '<div class="xt-qtext">' + T.clean(r.answer) + '</div>' : "") + '</div>' +
@@ -390,6 +435,7 @@ function drawMark() {
         '<label class="xt-grow">Comment <textarea data-comment="' + esc(q.id) + '" rows="2"' + (readOnly(R) ? " disabled" : "") + '>' + esc(q.comment || "") + '</textarea></label><span class="hint" data-mstate="' + esc(q.id) + '"></span></div>' +
     '</section>';
   }).join("");
+  if (asg && !shown) h += '<div class="empty"><p>' + (filt === "done" ? "He hasn’t pressed Done on any section yet." : "Nothing to show.") + '</p></div>';
   app.innerHTML = h;
   showPics(app); showRepoPics(app); $$(".xt-qtext", app).forEach(T.maths);
 }
@@ -436,7 +482,7 @@ function timeLine(q) {
    The mark and comment here are the same as on the page (saved the same way). */
 /* The question's mark list: exam.json "scheme" [{part, code, text}], each line worth the number in its code
    (B2 = 2). Without one, one box per mark. */
-function repoQ(qid) { return ((repoExam && repoExam.questions) || []).filter(function (x) { return x.id === qid; })[0] || {}; }
+function repoQ(qid) { return flatQs(repoExam).filter(function (x) { return x.id === qid; })[0] || {}; }
 function schemeOf(q) {
   var sc = repoQ(q.id).scheme;
   if (sc && sc.length) return { list: sc.map(function (x) { return { part: x.part || "", code: x.code || "", text: x.text || "", val: Number(String(x.code || "").replace(/\D/g, "")) || 1 }; }) };
@@ -466,7 +512,7 @@ var cmp = null, cmpTicks = null;
 function compare(i) {
   var q = R.questions[i]; if (!q) return;
   var folder = R.sourcePath ? examFolder(R.sourcePath) : "", rq = {};
-  ((repoExam && repoExam.questions) || []).forEach(function (x) { rq[x.id] = x; });
+  flatQs(repoExam).forEach(function (x) { rq[x.id] = x; });
   var r = rq[q.id] || {}, ms = (r.msImg || []).map(function (p) { return /^(students|books)\//.test(p) ? p : folder + p; }), ro = readOnly(R);
   var sc = schemeOf(q); cmpTicks = ticksOf(q, sc);
   if (!cmp) { cmp = document.createElement("div"); cmp.className = "xt-cmp"; cmp.setAttribute("role", "dialog"); cmp.setAttribute("aria-modal", "true"); cmp.setAttribute("aria-label", "Compare answer and mark scheme"); document.body.appendChild(cmp); }
@@ -475,8 +521,9 @@ function compare(i) {
       '<button class="btn small" type="button" data-cmpgo="' + (i - 1) + '"' + (i ? "" : " disabled") + '>Previous</button><button class="btn small" type="button" data-cmpgo="' + (i + 1) + '"' + (i < R.questions.length - 1 ? "" : " disabled") + '>Next</button><button class="btn small" type="button" data-cmpx>Close</button></div>' +
     '<details class="xt-cmpq"><summary>The question</summary><div class="xt-qtext">' + T.clean(q.text_html) + '</div>' + (q.has_img ? '<img class="xt-zoomable" alt="Question picture" data-xsrc="/api/t/exams/' + esc(R.id) + '/questions/' + esc(q.id) + '/image">' : "") + '</details>' +
     '<div class="xt-cmp2"><div class="xt-col"><div class="xt-lab">His answer</div>' +
-        (q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : "") +
-        q.uploads.map(function (u) { return '<figure class="xt-cmppic"><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '"><figcaption class="hint">' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">late</span>' : "") + '</figcaption></figure>'; }).join("") +
+        (q.doneAt != null ? (q.atDone ? '<div class="xt-ans">' + esc(q.atDone) + '</div>' : "") + (q.changedAfterDone ? '<details class="xt-det xt-after"><summary>Changed after Done: not for marks</summary><div class="xt-ans">' + esc(q.final) + '</div></details>' : "")
+          : q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : "") +
+        q.uploads.map(function (u) { return '<figure class="xt-cmppic"><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '"><figcaption class="hint">' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">late</span>' : "") + (u.afterDone ? ' <span class="xt-late">after Done</span>' : "") + '</figcaption></figure>'; }).join("") +
         (!q.final && !q.uploads.length ? '<p class="hint">No answer and no picture.</p>' : "") + '</div>' +
       '<div class="xt-col"><div class="xt-lab">Mark scheme</div>' + (ms.length ? ms.map(function (p) { return '<img class="xt-zoomable" alt="Mark scheme" data-rsrc="' + esc(p) + '">'; }).join("") : '<p class="hint">No mark scheme picture.</p>') +
         (r.answer ? '<div class="xt-qtext">' + T.clean(r.answer) + '</div>' : "") + '</div>' +
@@ -551,14 +598,15 @@ function saveToRepo(btn) {
   var files = [], i = 0;
   R.questions.forEach(function (q, qi) { q.uploads.forEach(function (u, k) { files.push({ u: u, path: folder + "work/q" + (qi + 1) + "-" + (k + 1) + (u.mime === "image/png" ? ".png" : u.mime === "image/webp" ? ".webp" : ".jpg") }); }); });
   var result = {
-    examId: R.id, title: R.title, subject: R.subject, source: R.sourcePath || null, savedAt: new Date().toISOString(),
+    examId: R.id, kind: R.kind || "exam", sections: R.sections ? R.sections.map(function (x) { return { id: x.id, title: x.title, doneAt: iso(x.doneAt), tookMin: x.tookMin }; }) : undefined, title: R.title, subject: R.subject, source: R.sourcePath || null, savedAt: new Date().toISOString(),
     startedAt: iso(R.startedAt), originalEndAt: iso(R.originalEndAt), endAt: iso(R.endAt), submittedAt: iso(R.submittedAt), lockedAt: iso(R.lockedAt), status: R.status,
     extensions: (R.extensions || []).map(function (e) { return { minutes: e.minutes, at: iso(e.at) }; }),
     total: r2(R.total), max: R.max, marked: R.marked, claudeMarks: claudeMarks ? { total: r2(claudeTotal()), markedAt: claudeMarks.markedAt || null } : null,
     questions: R.questions.map(function (q) {
       return { id: q.id, label: q.label, marks: q.marks, type: q.type, score: q.score, comment: q.comment, final: q.final, finalAt: iso(q.finalAt), atOriginalEnd: q.atOriginalEnd, writtenLate: q.writtenLate,
-        revisions: q.revisions.map(function (v) { return { at: iso(v.at), late: v.late, text: v.text }; }),
-        pictures: files.filter(function (f) { return f.u.question === q.id; }).map(function (f) { return { file: f.path.slice(folder.length), source: f.u.source, at: iso(f.u.at), late: f.u.late }; }),
+        section: q.section || undefined, doneAt: q.doneAt != null ? iso(q.doneAt) : undefined, atDone: q.doneAt != null ? q.atDone : undefined, changedAfterDone: q.doneAt != null ? q.changedAfterDone : undefined,
+        revisions: q.revisions.map(function (v) { return { at: iso(v.at), late: v.late, text: v.text, afterDone: v.afterDone || undefined }; }),
+        pictures: files.filter(function (f) { return f.u.question === q.id; }).map(function (f) { return { file: f.path.slice(folder.length), source: f.u.source, at: iso(f.u.at), late: f.u.late, afterDone: f.u.afterDone || undefined }; }),
         ticks: q.ticks ? (function (sc) { return sc.list.length === q.ticks.length ? sc.list.map(function (it, k) { return { part: it.part, code: it.code || it.text, given: q.ticks[k], of: it.val }; }) : q.ticks; })(schemeOf(q)) : null,
         seconds: q.seconds || 0, visits: (q.visits || []).map(function (v) { return { from: iso(v.from), to: iso(v.to), seconds: Math.round((v.to - v.from) / 1000) }; }) };
     }),
@@ -629,6 +677,7 @@ document.addEventListener("change", function (e) {
   if (t.hasAttribute("data-score")) { saveMark(t.getAttribute("data-score")); return; }
   if (t.hasAttribute("data-comment")) { saveMark(t.getAttribute("data-comment")); return; }
   if (t.hasAttribute("data-tick")) { setTick(Number(t.getAttribute("data-tick")), t.checked ? 1 : 0); return; }
+  if (t.hasAttribute("data-asgf")) { T.ls("tutor.asgFilter", t.value); drawMark(); return; }
   if (t.hasAttribute("data-cscore")) { compareSave(t.getAttribute("data-cscore")); return; }
   if (t.hasAttribute("data-ccomment")) { compareSave(t.getAttribute("data-ccomment")); return; }
 });

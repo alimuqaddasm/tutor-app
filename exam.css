@@ -109,3 +109,21 @@
 .ex-preview .ex-pvwhat{flex:1 1 260px}
 .ex-follow{display:flex;gap:6px;align-items:center;font-weight:700;white-space:nowrap}
 .ex-pvattach .btn{opacity:.55;pointer-events:none}
+/* Assignment (7 Oct): the list of days, Done, the mark scheme after Done */
+.ex-intro{color:var(--text-2);margin:14px 0 4px;max-width:46em}
+.ex-day{margin-top:18px}
+.ex-day h2{font-size:var(--s-lg);margin:0 0 8px}
+.ex-secs{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.ex-sec{display:grid;gap:4px;text-align:left;padding:14px 16px;cursor:pointer;border:1px solid var(--line);font:inherit;color:inherit}
+.ex-sec:hover{border-color:var(--accent)}
+.ex-sectitle{font-weight:800}
+.ex-secst{font-size:var(--s-sm);font-weight:700;color:var(--text-2)}
+.ex-sec.done{background:var(--ok-wash)}
+.ex-sec.done .ex-secst{color:var(--ok)}
+.ex-sec.going .ex-secst{color:var(--warn)}
+.ex-ms{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.ex-ms h3{margin:0 0 8px;font-size:var(--s-md)}
+.ex-ms button{padding:0;border:0;background:none;cursor:zoom-in;display:block;width:100%}
+.ex-ms img{max-width:100%;border-radius:8px;background:#fff}
+.ex-took{display:grid;gap:6px;font-weight:700;margin:10px 0}
+.ex-took input{max-width:140px;min-height:var(--tap);border-radius:12px;border:1px solid var(--line-2);background:var(--surface);padding:0 10px}

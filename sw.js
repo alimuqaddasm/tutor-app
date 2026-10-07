@@ -1,7 +1,7 @@
 /* Tutor Desk offline shell. The app's own files: network first (so updates show at once), cache when offline.
    Fonts and libraries: cache first. GitHub API calls are never cached here (the app keeps its own device cache). */
-var SHELL = "tutor-shell-v43";
-var FILES = ["./", "index.html", "app.css?v=41", "app.js?v=41", "exams.js?v=7", "exam-config.js?v=2", "exam.html", "exam.js?v=6", "exam.css?v=5", "manifest.webmanifest", "icon-192.png", "icon-512.png", "logo.svg", "vendor/purify.min.js", "vendor/qrcode.js", "vendor/katex/katex.min.js", "vendor/katex/katex.min.css", "vendor/katex/contrib/auto-render.min.js"];
+var SHELL = "tutor-shell-v44";
+var FILES = ["./", "index.html", "app.css?v=42", "app.js?v=42", "exams.js?v=8", "exam-config.js?v=2", "exam.html", "exam.js?v=7", "exam.css?v=6", "manifest.webmanifest", "icon-192.png", "icon-512.png", "logo.svg", "vendor/purify.min.js", "vendor/qrcode.js", "vendor/katex/katex.min.js", "vendor/katex/katex.min.css", "vendor/katex/contrib/auto-render.min.js"];
 self.addEventListener("install", function (e) { e.waitUntil(caches.open(SHELL).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); })); });
 self.addEventListener("activate", function (e) { e.waitUntil(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k !== SHELL && k.indexOf("tutor-shell-") === 0; }).map(function (k) { return caches.delete(k); })); }).then(function () { return self.clients.claim(); })); });
 self.addEventListener("fetch", function (e) {

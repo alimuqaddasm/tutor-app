@@ -2,6 +2,8 @@
    Student view (exam.html#v=<exam id>: the same page, read-only, with his answers as they are now; needs the exam
    password this browser keeps for the Exams tab, never counts as him and never records time).
    Every poll tells the server which question is on his screen, so it can add up the time on each question.
+   Assignment (kind "assignment", Ali 7 Oct): no clock. A home list of sections (a day's maths, a day's chemistry);
+   inside one, the usual question screen plus Done, which opens that section's mark schemes under each question.
    The server owns the clock; this page only shows it. Answers are kept on this device first and sent
    to the server every few seconds and on every change, so a dropped connection loses nothing.
    Nothing here ever shows a score, a mark scheme or a correct answer. */
@@ -14,6 +16,9 @@ var API = (H.api || (PREVIEW && ls("tutor.examApi")) || window.EXAM_API || "").r
 var TOKEN = H.t || "", PHONE = H.p || "";
 var KEY = "exam." + (TOKEN || PHONE || "preview").slice(0, 12);
 var follow = true;         // Student view: keep his current question on screen
+var SEC = null;            // assignment: the section on screen (null = the list of sections)
+try { SEC = sessionStorage.getItem(KEY + ".sec") || null; } catch (e) {}
+var needQ = false;         // redraw the question after Done (its mark scheme has opened)
 var MAXSIDE = 2000, MAXBYTES = 1800000, MAXTEXT = 50000;
 
 function parseHash() {
@@ -173,7 +178,16 @@ function startStudent() {
 }
 
 /* the question on his screen, sent with every poll (not while the page is hidden) */
-function onScreen() { return !PREVIEW && S && S.questions && S.questions[cur] && writable() && !document.hidden ? S.questions[cur].id : ""; }
+function onScreen() { return !PREVIEW && S && S.questions && S.questions[cur] && writable() && !document.hidden && (!ASG() || SEC) ? S.questions[cur].id : ""; }
+
+/* ---------- assignment helpers ---------- */
+function ASG() { return S && S.kind === "assignment"; }
+function setSec(id) { SEC = id || null; try { if (SEC) sessionStorage.setItem(KEY + ".sec", SEC); else sessionStorage.removeItem(KEY + ".sec"); } catch (e) {} }
+function secOf(id) { return ((S && S.sections) || []).filter(function (x) { return x.id === id; })[0] || null; }
+/* the question indexes on screen: a section's in an assignment, all of them in an exam */
+function order() { var o = []; (S.questions || []).forEach(function (q, i) { if (!ASG() || q.section === SEC) o.push(i); }); return o; }
+function answered(q) { var d = drafts[q.id]; return (d && d.text && d.text.trim()) || (S.uploads || []).some(function (u) { return u.question === q.id; }) || pending.some(function (p) { return p.q === q.id; }); }
+function dayText(iso) { if (!iso) return ""; var d = new Date(iso + "T12:00:00"); return d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }); }
 
 function poll() {
   clearTimeout(pollTimer);
@@ -184,10 +198,14 @@ function poll() {
     setNet("ok");
     var first = !S, was = S && S.status;
     S = d;
-    if (PREVIEW && follow && d.on && d.questions) { var at = d.questions.map(function (x) { return x.id; }).indexOf(d.on); if (at >= 0 && at !== cur) { cur = at; if (!first) { question(); dots(); } } }
+    if (PREVIEW && follow && d.on && d.questions) { var at = d.questions.map(function (x) { return x.id; }).indexOf(d.on); if (at >= 0 && at !== cur) {
+      cur = at; if (ASG() && d.questions[at].section !== SEC) { setSec(d.questions[at].section); if (!first) render(); } else if (!first) { question(); dots(); } } }
+    if (ASG() && SEC && !secOf(SEC)) setSec(null);
     if (d.answers) mergeAnswers(d.answers);
     // Running and "time up" share one screen, so the answer box keeps its cursor when the time runs out.
-    if (first || group(was) !== group(d.status) || !$(".ex-q")) render(); else refresh();
+    if (ASG() && !SEC) render();          // the list redraws itself only when something on it changed
+    else if (first || group(was) !== group(d.status) || !$(".ex-q")) render(); else refresh();
+    if (needQ && $(".ex-q")) { needQ = false; question(); banner(); }
     if (was === "waiting" && (d.status === "running" || d.status === "timeup")) toast("The exam has started");
     if (anyDirty()) flush();
     sendPending();
@@ -342,14 +360,29 @@ function render() {
   }
   if (!PREVIEW && S.status === "locked") {
     var lost = anyDirty() || pending.length || rejected().length;
-    m.innerHTML = '<div class="ex-center"><div><h1>The exam has ended</h1>' + (lost
+    m.innerHTML = '<div class="ex-center"><div><h1>' + (ASG() ? "This assignment is closed" : "The exam has ended") + '</h1>' + (lost
       ? '<p><b>Some of your last work did not reach your teacher before the exam ended.</b> Tell your teacher now; it is still kept on this device.</p>'
       : '<p>Your answers are saved. Your teacher will go through them.</p>') + '</div></div>';
     return;
   }
   if (!S.questions || !S.questions.length) { m.innerHTML = '<div class="ex-center"><div><h1>' + esc(S.title) + '</h1><p>No questions yet.</p></div></div>'; return; }
+  if (ASG() && !SEC) return home(m);
   cur = Math.min(cur, S.questions.length - 1);
+  if (order().indexOf(cur) < 0) cur = order()[0] || 0;
+  m.removeAttribute("data-home");
   var done = S.status === "submitted";
+  if (ASG()) {
+    var sec = secOf(SEC);
+    m.innerHTML =
+      '<header class="ex-top"><button class="btn small" type="button" data-home>All days</button><div class="ex-title">' + esc(sec.title) + (sec.date ? ' <span class="hint">planned for ' + esc(dayText(sec.date)) + '</span>' : "") + '</div><div class="ex-save" aria-live="polite"></div><div class="ex-bannerslot"></div></header>' +
+      (PREVIEW ? '<div class="ex-preview" role="status"><b>Student view</b> <span class="ex-pvwhat"></span><label class="ex-follow"><input type="checkbox" data-follow' + (follow ? " checked" : "") + '> Follow his question</label></div>' : "") +
+      '<nav class="ex-dots" aria-label="Questions"></nav><section class="ex-q card"></section>' +
+      '<div class="ex-nav"><div class="in"><button class="btn" type="button" data-prev>Previous</button><span class="grow"></span>' +
+      (sec.doneAt == null && !PREVIEW ? '<button class="btn" type="button" data-secdone>Done with ' + esc(sec.title) + '</button>' : "") +
+      '<button class="btn accent" type="button" data-next>Next</button></div></div>';
+    dots(); question(); banner(); saveState(); previewLine();
+    return;
+  }
   m.innerHTML =
     '<header class="ex-top"><div class="ex-title">' + esc(S.title) + (S.practice ? ' <span class="ex-prac">Practice</span>' : "") + '</div><div class="ex-timer num" role="timer" aria-live="off"></div><div class="ex-save" aria-live="polite"></div>' +
     (done || PREVIEW ? "" : '<button class="btn small" type="button" data-handin>Hand in</button>') + '<div class="ex-bannerslot"></div></header>' +
@@ -364,6 +397,35 @@ function render() {
 
 function refresh() { banner(); pics(); dots(); tick(); lockInputs(); previewLine(); }
 
+/* Assignment home: every section with its state. Drawn again only when something on it changes. */
+function home(m) {
+  var secs = S.sections || [];
+  var rows = secs.map(function (x) {
+    var qs = S.questions.filter(function (q) { return q.section === x.id; }), n = qs.filter(answered).length, marks = qs.reduce(function (a, q) { return a + (Number(q.marks) || 0); }, 0);
+    var st = x.doneAt != null ? "done" : n ? "going" : "new";
+    return { x: x, qs: qs, n: n, marks: marks, st: st };
+  });
+  var sig = JSON.stringify(rows.map(function (r) { return [r.x.id, r.st, r.n]; })) + S.status + (PREVIEW ? S.on + S.lastSeenAt : "");
+  if (m.getAttribute("data-home") === sig) { saveState(); return; }
+  m.setAttribute("data-home", sig);
+  var days = [], byDay = {};
+  rows.forEach(function (r) { var k = r.x.day != null ? r.x.day : r.x.title; if (!byDay[k]) { byDay[k] = []; days.push(k); } byDay[k].push(r); });
+  var LBL = { done: "Done", going: "Started", "new": "Not started" };
+  m.innerHTML = '<header class="ex-top"><div class="ex-title">' + esc(S.title) + '</div><div class="ex-save" aria-live="polite"></div></header>' +
+    (PREVIEW ? '<div class="ex-preview" role="status"><b>Student view</b> <span class="ex-pvwhat"></span><label class="ex-follow"><input type="checkbox" data-follow' + (follow ? " checked" : "") + '> Follow his question</label></div>' : "") +
+    '<p class="ex-intro">No timer: open it as often as you like. Try each part in one go, writing every line of working. When a part is finished, press <b>Done</b>: its mark scheme then opens under each question. Your teacher marks what you had when you pressed Done.</p>' +
+    days.map(function (k) {
+      var first = byDay[k][0].x;
+      return '<section class="ex-day"><h2>' + (first.day != null ? "Day " + esc(first.day) : esc(k)) + (first.date ? ' <span class="hint">' + esc(dayText(first.date)) + '</span>' : "") + '</h2><div class="ex-secs">' +
+        byDay[k].map(function (r) {
+          return '<button type="button" class="card ex-sec ' + r.st + '" data-sec="' + esc(r.x.id) + '"><span class="ex-sectitle">' + esc(r.x.title) + '</span>' +
+            '<span class="hint">' + r.qs.length + ' question' + (r.qs.length === 1 ? "" : "s") + ' · ' + r.marks + ' marks' + (r.x.suggestMin ? ' · about ' + Math.round(r.x.suggestMin) + ' min' : "") + '</span>' +
+            '<span class="ex-secst">' + LBL[r.st] + (r.st === "going" ? " · " + r.n + " of " + r.qs.length + " answered" : "") + (r.st === "done" ? " · " + esc(clockTime(r.x.doneAt)) + ", " + esc(dayText(new Date(r.x.doneAt).toISOString().slice(0, 10))) : "") + '</span></button>';
+        }).join("") + '</div></section>';
+    }).join("");
+  saveState(); previewLine();
+}
+
 /* Student view: what he sees right now, and where he is. */
 var SEES = { draft: "the waiting screen (no link made yet)", waiting: "the waiting screen", running: "the questions", timeup: "the questions, with Time is up", submitted: "his answers, handed in", locked: "The exam has ended" };
 function previewLine() {
@@ -376,7 +438,7 @@ function previewLine() {
 function minutesText(min) { var h = Math.floor(min / 60), mm = Math.round(min % 60); return (h ? h + " h " : "") + (mm || !h ? mm + " min" : ""); }
 
 function tick() {
-  var el = $(".ex-timer"); if (!el || !S) return;
+  var el = $(".ex-timer"); if (!el || !S || ASG()) return;
   var now = Date.now() + offset;
   if (S.status === "submitted") { el.className = "ex-timer num"; el.textContent = "Handed in"; return; }
   if (S.status === "locked") { el.className = "ex-timer num"; el.textContent = "Locked"; return; }
@@ -392,6 +454,7 @@ var lastExtCount = null;
 function banner() {
   var b = $(".ex-bannerslot"); if (!b) return;
   var n = (S.extensions || []).length, html = "";
+  if (ASG()) { var sc = secOf(SEC); b.innerHTML = sc && sc.doneAt != null ? '<div class="ex-banner info" role="status">Done ' + esc(clockTime(sc.doneAt)) + '. The mark scheme is under each question now. You can still fix answers to learn from it; your teacher marks what you had when you pressed Done.</div>' : ""; return; }
   if (S.status === "timeup") html = '<div class="ex-banner up" role="status">Time is up. You can keep working until your teacher ends the exam.</div>';
   else if (S.status === "submitted") html = '<div class="ex-banner info" role="status">You have handed in. Your answers are saved; they can no longer be changed.</div>';
   else if (lastExtCount !== null && n > lastExtCount) { var e = S.extensions[n - 1]; html = '<div class="ex-banner info" role="status">Your teacher added ' + esc(e.minutes) + ' min.</div>'; toast("+" + e.minutes + " min added"); }
@@ -403,21 +466,22 @@ function banner() {
 function dots() {
   var n = $(".ex-dots"); if (!n || !S.questions) return;
   var has = {}; (S.uploads || []).forEach(function (u) { has[u.question] = 1; }); pending.forEach(function (p) { has[p.q] = 1; });
-  n.innerHTML = S.questions.map(function (q, i) {
-    var d = drafts[q.id], answered = (d && d.text && d.text.trim()) || has[q.id];
-    return '<button type="button" class="ex-dot' + (answered ? " done" : "") + '" data-go="' + i + '"' + (i === cur ? ' aria-current="true"' : "") + ' aria-label="Question ' + (i + 1) + (answered ? ", answered" : "") + '">' + (i + 1) + '</button>';
+  n.innerHTML = order().map(function (i, k) {
+    var q = S.questions[i], d = drafts[q.id], answered = (d && d.text && d.text.trim()) || has[q.id];
+    return '<button type="button" class="ex-dot' + (answered ? " done" : "") + '" data-go="' + i + '"' + (i === cur ? ' aria-current="true"' : "") + ' aria-label="Question ' + (k + 1) + (answered ? ", answered" : "") + '">' + (k + 1) + '</button>';
   }).join("");
 }
 
 function question() {
   var q = S.questions[cur], box = $(".ex-q"); if (!box) return;
+  var ord = order(), k = ord.indexOf(cur);
   var d = drafts[q.id] || { text: "" }, ro = !writable();
   var upload = q.type === "upload_required" || q.type === "upload_optional";
   var input = q.type === "short"
     ? '<input type="text" id="ans" autocomplete="off" spellcheck="false" value="' + esc(d.text) + '"' + (ro ? " disabled" : "") + '>'
     : '<textarea id="ans" spellcheck="false"' + (ro ? " disabled" : "") + '>' + esc(d.text) + '</textarea>';
   box.innerHTML =
-    '<div class="ex-qhead"><h2>Question ' + (cur + 1) + ' of ' + S.questions.length + (q.label ? ' <span class="hint">(' + esc(q.label) + ')</span>' : "") + '</h2><span class="ex-marks">' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</span></div>' +
+    '<div class="ex-qhead"><h2>Question ' + (k + 1) + ' of ' + ord.length + (q.label ? ' <span class="hint">(' + esc(q.label) + ')</span>' : "") + '</h2><span class="ex-marks">' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</span></div>' +
     '<div class="ex-qtext">' + paperHTML(q.text_html, S.subject) + '</div>' +
     (q.has_img ? '<figure class="ex-qimg"><button type="button" data-zoom><img alt="Question ' + (cur + 1) + ' picture"></button></figure>' : "") +
     '<div class="ex-answer"><label for="ans">' + (upload ? "Working or notes (optional)" : "Your answer") + '</label>' + input + '<p class="ex-count hint" hidden></p>' +
@@ -427,7 +491,9 @@ function question() {
       '<label class="btn small"><input type="file" accept="image/*" multiple hidden data-file>Choose picture</label>' +
       '<button class="btn small" type="button" data-draw>Draw</button>' +
       '<button class="btn small" type="button" data-phone>Use phone</button>' +
-    '</div><div class="ex-pics"></div>';
+    '</div><div class="ex-pics"></div>' +
+    (q.has_ms ? '<div class="ex-ms"><h3>Mark scheme</h3><button type="button" data-zoom><img alt="Mark scheme for this question"></button></div>' : "");
+  if (q.has_ms) shown($(".ex-ms img", box), "/api/s/questions/" + encodeURIComponent(q.id) + "/ms");
   if (q.has_img) shown($(".ex-qimg img", box), "/api/s/questions/" + encodeURIComponent(q.id) + "/image");
   maths($(".ex-qtext", box));
   var a = $("#ans");
@@ -436,8 +502,8 @@ function question() {
   a.addEventListener("blur", function () { flush(); });
   pics();
   var prev = $("[data-prev]"), next = $("[data-next]");
-  if (prev) prev.disabled = cur === 0;
-  if (next) next.disabled = cur === S.questions.length - 1;
+  if (prev) prev.disabled = k <= 0;
+  if (next) next.disabled = k >= ord.length - 1;
 }
 
 function lockInputs() {
@@ -488,6 +554,31 @@ function handIn() {
       clearInterval(wait);
       if (anyDirty()) { d.close(); toast("Can't hand in while offline. Your work is kept; try again when connected."); return; }
       api("POST", "/api/s/submit").then(function () { d.close(); poll(); }, function (e) { d.close(); toast(e.message); poll(); });
+    }, 300);
+  };
+}
+
+/* Done on a section: after this its mark schemes show. Asks how long it took (there is no clock). */
+function sectionDone() {
+  var sec = secOf(SEC); if (!sec) return;
+  var qs = S.questions.filter(function (q) { return q.section === SEC; }), empty = qs.filter(function (q) { return !answered(q); }).length;
+  var d = modal('<div class="ex-box" role="dialog" aria-modal="true" aria-labelledby="sd-h"><h2 id="sd-h">Done with ' + esc(sec.title) + '?</h2>' +
+    '<p>The mark scheme then opens under each question. You can still change answers to learn from it, but your teacher marks what you have now.</p>' +
+    (empty ? '<p><b>' + empty + ' question' + (empty === 1 ? " has" : "s have") + ' no answer yet.</b></p>' : "") +
+    (pending.length ? '<p><b>Some pictures are still sending. Wait a moment first.</b></p>' : "") +
+    '<label class="ex-took">How long did it take you? <input type="number" min="0" max="600" step="1" data-took placeholder="minutes"></label>' +
+    '<div class="row"><button class="btn" type="button" data-ok' + (pending.length ? " disabled" : "") + '>Done, show the mark scheme</button><button class="btn accent" type="button" data-x>Keep working</button></div></div>');
+  $("[data-x]", d.el).onclick = d.close;
+  $("[data-ok]", d.el).onclick = function () {
+    this.disabled = true; flush();
+    var took = $("[data-took]", d.el).value;
+    var wait = setInterval(function () {
+      if (anyDirty() && net === "ok") return;
+      clearInterval(wait);
+      if (anyDirty()) { d.close(); toast("Can't finish while offline. Your work is kept; try again when connected."); return; }
+      api("POST", "/api/s/sections/" + encodeURIComponent(SEC) + "/done", { tookMin: took === "" ? null : Number(took) }).then(function (r) {
+        d.close(); sec.doneAt = r.doneAt; needQ = true; var b = $("[data-secdone]"); if (b) b.remove(); banner(); poll(); toast("Mark scheme open");
+      }, function (e) { d.close(); toast(e.message); poll(); });
     }, 300);
   };
 }
@@ -563,8 +654,11 @@ function drawDialog(q) {
 document.addEventListener("click", function (e) {
   var t = e.target.closest("button,[data-go]"); if (!t || !S || !S.questions) return;
   if (t.hasAttribute("data-go")) { cur = Number(t.getAttribute("data-go")); moved(); }
-  else if (t.hasAttribute("data-prev") && cur > 0) { cur--; moved(); }
-  else if (t.hasAttribute("data-next") && cur < S.questions.length - 1) { cur++; moved(); }
+  else if (t.hasAttribute("data-prev") && order().indexOf(cur) > 0) { cur = order()[order().indexOf(cur) - 1]; moved(); }
+  else if (t.hasAttribute("data-next") && order().indexOf(cur) < order().length - 1) { cur = order()[order().indexOf(cur) + 1]; moved(); }
+  else if (t.hasAttribute("data-sec")) { setSec(t.getAttribute("data-sec")); cur = order()[0] || 0; follow = false; render(); window.scrollTo(0, 0); if (writable()) poll(); }
+  else if (t.hasAttribute("data-home")) { flush(); setSec(null); follow = false; render(); window.scrollTo(0, 0); }
+  else if (t.hasAttribute("data-secdone")) sectionDone();
   else if (t.hasAttribute("data-handin")) handIn();
   else if (t.hasAttribute("data-draw")) drawDialog(S.questions[cur]);
   else if (t.hasAttribute("data-phone")) phoneDialog(S.questions[cur]);
