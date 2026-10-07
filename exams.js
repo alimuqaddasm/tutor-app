@@ -131,6 +131,7 @@ function drawList(repo, all) {
             : st === "ready" && T.isTry ? '<span class="hint">Ready. Leave Try-out to load it.</span>'
             : st === "ready" ? '<button class="btn small accent" type="button" data-load="' + esc(r.path) + '">Load to exam server</button>'
             : '<span class="hint">Finish it with Claude first (status “ready”)</span>') +
+        (T.isTry && !waiting ? '<button class="btn small" type="button" data-loadprac="' + esc(r.path) + '" title="A practice copy: look at it and try it without starting the real one">Practice copy</button>' : "") +
         '</div></div>';
     }).join("") + '</div>';
     h += '<h3 class="xt-h3">On the exam server</h3>';
@@ -155,7 +156,9 @@ function stitch(urls) {
   });
 }
 
-function loadToServer(path, btn) {
+/* practice = a practice copy of a repo exam: not linked to the repo file, so the real one can still be loaded, and it can be deleted. */
+function loadToServer(path, btn, practice) {
+  var label = btn.textContent;
   btn.disabled = true; btn.textContent = "Loading…";
   var folder = examFolder(path);
   T.fileJSON(path).then(function (j) {
@@ -163,8 +166,9 @@ function loadToServer(path, btn) {
     var marks = qs.reduce(function (s, q) { return s + (Number(q.marks) || 0); }, 0);
     var ratio = Number(e.ratio) || null;
     var base = Number(e.minutes) || (ratio ? Math.ceil(marks * ratio / 5) * 5 : 0);
-    var body = { title: e.title, subject: e.subject || "", source_path: path, ratio: ratio, base_minutes: base || 0,
+    var body = { title: (practice ? "Practice copy: " : "") + e.title, subject: e.subject || "", source_path: practice ? "" : path, ratio: ratio, base_minutes: base || 0,
       questions: qs.map(function (q, i) { return { id: q.id || "q" + (i + 1), label: q.label || "", text_html: q.text || "", marks: Number(q.marks) || 0, type: q.type || "long", suggested_min: q.suggestMin == null ? null : q.suggestMin }; }) };
+    if (practice) body.practice = true;
     return call("POST", "/api/t/exams", body).then(function (made) {
       var chain = Promise.resolve();
       qs.forEach(function (q, i) {
@@ -178,7 +182,7 @@ function loadToServer(path, btn) {
       });
       return chain.then(function () { location.hash = "#/exams/" + made.id; });
     });
-  }).catch(function (e) { btn.disabled = false; btn.textContent = "Load to exam server"; T.toast(e.message); });
+  }).catch(function (e) { btn.disabled = false; btn.textContent = label; T.toast(e.message); });
 }
 
 /* ===================== one exam: set up and run it ===================== */
@@ -443,6 +447,7 @@ document.addEventListener("click", function (e) {
   if (b.tagName === "IMG") { if (b.src) { $("#zimg").src = b.src; $("#zoom").hidden = false; } return; }
   if (b.hasAttribute("data-practice")) return makePractice(b);
   if (b.hasAttribute("data-delprac")) return deletePractice(b.getAttribute("data-delprac"), b.getAttribute("data-st"));
+  if (b.hasAttribute("data-loadprac")) return loadToServer(b.getAttribute("data-loadprac"), b, true);
   if (T.isTry && b.hasAttribute("data-load")) return;
   if (b.hasAttribute("data-load")) return loadToServer(b.getAttribute("data-load"), b);
   if (X && readOnly(X) && b.matches("[data-newlink],[data-start],[data-ext],[data-extc],[data-lock],[data-reopen],[data-savesetup],[data-usesugg]")) return;
