@@ -1,14 +1,5 @@
-"""Round 18 (7 Oct): Ali's three exam-page suggestions.
-  smuygo8lh  Compare: his answer or picture beside the mark scheme, one button, full screen
-  smuygsew3  Student view: the exam page as he sees it, read-only, from the exam page and the marking page
-  smuygt9jf  time on each question, counting each return as a new visit
+"""Round 19 (7 Oct): smuyjk4bl, tick the mark scheme's marks (M1, A1, B1) in Compare; the mark follows the ticks.
 Same setup as tests/test_exams_tab.py (local exam server on :8787, the app on :8765, pretend GitHub).
-
-Same setup as tests/test_exam.py (local wrangler dev on :8787 with TEACHER_PASSWORD=local-test, the app on :8765).
-The pretend GitHub holds one exam Claude "wrote" (students/UK-1/exams/2026-10-04-maths/exam.json with a question
-picture and a mark-scheme picture) and records every save, so the real repo is never touched.
-
-    python tests/test_exams_tab.py
 """
 import base64, hashlib, json, os, re, struct, sys, time, urllib.request, zlib
 from playwright.sync_api import sync_playwright
@@ -62,7 +53,8 @@ exam_json = {
     "id": "2026-10-04-maths", "title": "Radians check (test)", "subject": "maths", "date": "2026-10-04", "status": "ready",
     "why": "Chapter 5 finished; 3 open mistakes on radians",
     "questions": [
-        {"id": "q1", "label": "Q1", "source": "Edexcel 9MA0/01 June 2019 Q1", "marks": 3, "type": "short", "text": "<p>Convert \\(150^\\circ\\) to radians.</p>", "img": ["assets/q1.png"], "msImg": ["assets/q1-ms.png"]},
+        {"id": "q1", "label": "Q1", "source": "Edexcel 9MA0/01 June 2019 Q1", "marks": 3, "type": "short", "text": "<p>Convert \\(150^\\circ\\) to radians.</p>", "img": ["assets/q1.png"], "msImg": ["assets/q1-ms.png"],
+         "scheme": [{"part": "(a)", "code": "M1", "text": "Multiplies by pi/180"}, {"part": "(a)", "code": "A2", "text": "5pi/6, exact"}]},
         {"id": "q2", "label": "Q2", "source": "Maths Genie 5.2 Q3", "marks": 5, "type": "upload_optional", "text": "<p>Find the arc length.</p>", "img": [], "msImg": ["assets/q2-ms.png"], "answer": "<p>\\(s=r\\theta=7.5\\) cm</p>"}
     ]}
 files = {FOLDER + "exam.json": json.dumps(exam_json).encode(), FOLDER + "assets/q1.png": png(600, 160, (230, 240, 255)),
@@ -135,85 +127,44 @@ with sync_playwright() as p:
     wait_for(lambda: "#t=" in pg.input_value("#xt-link"), 8)
     link = pg.input_value("#xt-link")
 
-    # Student view before Start: Ali can check the pages
-    sv = pg.locator("a:text('Student view')")
-    check("exam page has a Student view button", sv.count() == 1)
-    with ctx.expect_page() as newp:
-        sv.click()
-    pv = newp.value
-    pv.on("pageerror", lambda e: errs.append("preview: " + str(e)))
-    check("Student view shows the questions before Start", wait_for(lambda: pv.locator(".ex-q h2").count() == 1 and "Question 1 of 2" in pv.inner_text(".ex-q h2"), 10) is not None, pv.inner_text("body")[:300])
-    check("  ...says what he sees now (the waiting screen)", "waiting screen" in pv.inner_text(".ex-preview"), pv.inner_text(".ex-preview") if pv.locator(".ex-preview").count() else "")
-    check("  ...is read-only: no Hand in, answer box locked", pv.locator("[data-handin]").count() == 0 and pv.locator("#ans").is_disabled())
-    check("  ...did not count as him opening the link", "hasn’t opened" in pv.inner_text(".ex-preview"))
-    pv.screenshot(path=os.path.join(SHOTS, "r18-1-studentview-before.png"))
-
     pg.click("[data-start]")
     wait_for(lambda: "Running" in pg.inner_text("#xt-st"), 8)
+    token = re.search(r"#t=([A-Za-z0-9_-]+)", link).group(1)
+    sapi("PUT", "/api/s/answers/q1", token, {"text": "5pi/6", "seq": 1})
+    sapi("POST", "/api/s/submit", token)
 
-    # the student, in his own browser
-    sctx = b.new_context(viewport={"width": 1280, "height": 800}, service_workers="block", ignore_https_errors=bool(proxy))
-    st = sctx.new_page()
-    st.on("pageerror", lambda e: errs.append("student: " + str(e)))
-    st.goto(link)
-    wait_for(lambda: st.locator("#ans").count() == 1, 15)
-    st.fill("#ans", "5pi/6")
-    st.wait_for_timeout(7000)                       # about 7 s on Q1
-    st.click("[data-next]")
-    check("the exam page shows he is on question 2", wait_for(lambda: "on question 2" in pg.inner_text("#xt-seen"), 10) is not None, pg.inner_text("#xt-seen"))
-    check("  ...and marks that row", wait_for(lambda: "He is on it now" in pg.inner_text('tr[data-q="q2"] [data-saved]'), 10) is not None)
-    check("  ...with the time on Q1 so far", wait_for(lambda: re.search(r"\b([5-9]|1\d) s\b", pg.inner_text('tr[data-q="q1"] [data-saved]')), 10) is not None, pg.inner_text('tr[data-q="q1"] [data-saved]'))
-    pg.screenshot(path=os.path.join(SHOTS, "r18-2-live.png"), full_page=True)
-
-    check("Student view follows him to question 2 and shows his Q1 answer as done", wait_for(lambda: "Question 2 of 2" in pv.inner_text(".ex-q h2") and "done" in (pv.locator('.ex-dot[data-go="0"]').get_attribute("class") or ""), 12) is not None)
-    check("  ...says he is connected, on question 2", "on question 2" in pv.inner_text(".ex-preview"), pv.inner_text(".ex-preview"))
-    pv.click('.ex-dot[data-go="0"]')
-    check("  ...going to Q1 there shows his answer and stops following", pv.input_value("#ans") == "5pi/6" and not pv.is_checked("[data-follow]"))
-    pv.screenshot(path=os.path.join(SHOTS, "r18-3-studentview-live.png"))
-    st.wait_for_timeout(4000)
-    st.click("[data-prev]")                         # back to Q1: a second visit
-    st.wait_for_timeout(4000)
-    st.click("[data-next]")
-    st.wait_for_timeout(1000)
-    sapi("POST", "/api/s/submit", re.search(r"#t=([A-Za-z0-9_-]+)", link).group(1))
-    pv.close()
-
-    # marking: time per question and Compare
     pg.goto(APP + "#/exams/" + eid + "/mark")
-    check("marking page opens", wait_for(lambda: pg.locator("section.xt-mq").count() == 2, 10) is not None)
-    check("marking page has Student view too", pg.locator("a:text('Student view')").count() == 1)
-    t1 = pg.inner_text('[data-mq="q1"] .xt-tline')
-    check("Q1 shows its time over 2 visits", re.search(r"Time on it: (1\d|[89]) s over 2 visits|Time on it: \d+ s over 2 visits", t1), t1)
-    check("Q2 shows its time", "Time on it:" in pg.inner_text('[data-mq="q2"] .xt-tline'))
+    wait_for(lambda: pg.locator("section.xt-mq").count() == 2, 10)
     pg.click('[data-compare="0"]')
-    check("Compare opens full screen", wait_for(lambda: pg.locator(".xt-cmp").count() == 1, 4) is not None)
-    check("  ...his answer and the mark scheme side by side", "5pi/6" in pg.inner_text(".xt-cmp2 .xt-col >> nth=0") and wait_for(lambda: pg.locator(".xt-cmp2 .xt-col >> nth=1").locator("img").evaluate("i => i.naturalWidth > 0"), 10) is not None)
-    boxes = pg.evaluate("[...document.querySelectorAll('.xt-cmp2 .xt-col')].map(e => {var r = e.getBoundingClientRect(); return [r.left, r.top, r.width]})")
-    check("  ...answer and mark scheme sit next to each other at 1440 px", len(boxes) >= 2 and abs(boxes[0][1] - boxes[1][1]) < 2 and boxes[1][0] > boxes[0][0] + boxes[0][2] - 2, boxes)
-    pg.screenshot(path=os.path.join(SHOTS, "r18-4-compare.png"))
-    pg.fill('[data-cscore="q1"]', "2")
-    pg.dispatch_event('[data-cscore="q1"]', "change")
-    check("  ...a mark typed there saves and the total updates", wait_for(lambda: pg.inner_text("#xt-total") == "2 / 8", 6) is not None, pg.inner_text("#xt-total"))
-    pg.keyboard.press("Escape")
-    check("  ...Esc closes it and the page shows the same mark", wait_for(lambda: pg.locator(".xt-cmp").count() == 0, 3) is not None and pg.input_value('[data-score="q1"]') == "2")
-    pg.click('[data-compare="0"]')
+    check("Compare lists the question's marks to tick", wait_for(lambda: pg.locator(".xt-ticks .xt-trow").count() == 2, 5) is not None)
+    check("  ...with codes and the part", "M1" in pg.inner_text(".xt-ticks") and "A2" in pg.inner_text(".xt-ticks") and "(a)" in pg.inner_text(".xt-ticks"))
+    check("  ...a 2-mark line gives 0, 1 or 2", pg.locator('[data-tickv^="1:"]').count() == 3)
+    pg.screenshot(path=os.path.join(SHOTS, "r19-1-ticks.png"))
+    pg.click('[data-tick="0"]')
+    check("ticking M1 makes the mark 1 and saves", wait_for(lambda: pg.inner_text("#xt-total") == "1 / 8", 6) is not None, pg.inner_text("#xt-total"))
+    pg.click('[data-tickv="1:1"]')
+    check("A2 given 1 of 2: mark 2", wait_for(lambda: pg.inner_text("#xt-total") == "2 / 8" and pg.input_value('[data-cscore="q1"]') == "2", 6) is not None, pg.inner_text("#xt-total"))
+    pg.click('[data-tick="0"]')
+    check("unticking M1: mark 1", wait_for(lambda: pg.inner_text("#xt-total") == "1 / 8", 6) is not None)
+    pg.click('[data-tick="0"]')
+    wait_for(lambda: pg.inner_text("#xt-total") == "2 / 8", 6)
     pg.click("[data-cmpgo='1']")
-    check("  ...Next moves to question 2 with its mark scheme answer", wait_for(lambda: "Question 2 of 2" in pg.inner_text(".xt-cmphead") and "7.5" in pg.inner_text(".xt-cmp"), 6) is not None)
-    pg.click(".xt-cmp2 img.xt-zoomable >> nth=0")
-    check("  ...a picture zooms above it", wait_for(lambda: pg.locator("#zoom").is_visible(), 3) is not None)
-    pg.click("#zoomx")
+    check("a question without a mark list gets one box per mark", wait_for(lambda: pg.locator(".xt-ticks [data-tick]").count() == 5 and "one box per mark" in pg.inner_text(".xt-ticks"), 5) is not None)
+    pg.click('[data-tick="2"]'); pg.click('[data-tick="3"]')
+    check("  ...and they add up too", wait_for(lambda: pg.inner_text("#xt-total") == "4 / 8", 6) is not None, pg.inner_text("#xt-total"))
+    pg.wait_for_timeout(800)
     pg.click("[data-cmpx]")
-    pg.set_viewport_size({"width": 390, "height": 820})
+    check("the page shows what was ticked", "Ticked: M1, A2 (1 of 2)" in pg.inner_text('[data-mq="q1"]'), pg.inner_text('[data-mq="q1"]')[:400])
+    pg.reload()
+    wait_for(lambda: pg.locator("section.xt-mq").count() == 2, 10)
     pg.click('[data-compare="0"]')
-    check("Compare at 390 px: no sideways scrolling", not pg.evaluate("document.querySelector('.xt-cmp').scrollWidth > window.innerWidth + 1"))
+    check("ticks are still there after a reload", wait_for(lambda: pg.is_checked('[data-tick="0"]') and pg.get_attribute('[data-tickv="1:1"]', "aria-pressed") == "true", 6) is not None)
     pg.click("[data-cmpx]")
-    pg.set_viewport_size({"width": 1440, "height": 765})
-
     pg.click("[data-torepo]")
     check("Save to repo writes result.json", wait_for(lambda: (pg.wait_for_timeout(200), FOLDER + "result.json" in puts)[1], 15) is not None)
     res = json.loads(puts.get(FOLDER + "result.json", b"{}"))
     q1 = (res.get("questions") or [{}])[0]
-    check("  ...with time on each question and each visit", q1.get("seconds", 0) >= 8 and len(q1.get("visits", [])) == 2 and all("from" in v and "seconds" in v for v in q1["visits"]), q1.get("visits"))
+    check("  ...with each tick and its code", q1.get("ticks") == [{"part": "(a)", "code": "M1", "given": 1, "of": 1}, {"part": "(a)", "code": "A2", "given": 1, "of": 2}], q1.get("ticks"))
 
     check("no script errors", not errs, errs)
     b.close()

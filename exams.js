@@ -3,6 +3,7 @@
    #/exams/<id>       time suggestion, student link, Start, + minutes, Lock, live saves, log
    #/exams/<id>/mark  question | answer + pictures + times | mark scheme, marks and comments, Save to repo;
                       Compare puts one question's answer beside its mark scheme, full screen (Ali, 7 Oct)
+   Compare also lists the question's marks (M1, A1, B1... from "scheme" in exam.json) to tick (Ali, 7 Oct).
    Student view opens exam.html#v=<id>: the student's page, read-only, with his answers as they are now (Ali, 7 Oct).
    The exam server holds the clock and the answers. The tutoring repo holds the questions and mark schemes. */
 (function () {
@@ -20,7 +21,8 @@ function ready() { return xapi() && !/example\.workers\.dev/.test(xapi()) && xpw
 
 function call(method, path, body, extra) {
   var h = extra || {}; h["X-Exam-Password"] = xpw();
-  var opts = { method: method, headers: h, cache: "no-store" };
+  // his pictures never change, so the browser may keep them (the server says how long); everything else is always fresh
+  var opts = { method: method, headers: h, cache: method === "GET" && /^\/api\/t\/files\//.test(path) ? "default" : "no-store" };
   if (body instanceof Blob) opts.body = body;
   else if (body !== undefined) { opts.body = JSON.stringify(body); h["Content-Type"] = "application/json"; }
   // a request that never answers is given up, so the live page keeps polling
@@ -380,6 +382,7 @@ function drawMark() {
         '<div class="xt-col"><div class="xt-lab">Mark scheme</div>' + (ms.length ? ms.map(function (p) { return '<img class="xt-zoomable" alt="Mark scheme" data-rsrc="' + esc(p) + '">'; }).join("") : '<p class="hint">' + (repoExam ? "No mark scheme picture for this question." : "The exam file isn’t in the repo, so no mark scheme.") + '</p>') +
           (r.answer ? '<div class="xt-qtext">' + T.clean(r.answer) + '</div>' : "") + '</div>' +
       '</div>' +
+      '<div data-tsumline>' + tickSummary(q) + '</div>' +
       '<div class="xt-markrow"><label>Mark <span class="xt-of"><input type="number" class="xt-score" data-score="' + esc(q.id) + '" min="0" max="' + q.marks + '" step="0.5" value="' + (q.score == null ? "" : q.score) + '"' + (readOnly(R) ? " disabled" : "") + '> / ' + q.marks + '</span></label>' +
         '<label class="xt-grow">Comment <textarea data-comment="' + esc(q.id) + '" rows="2"' + (readOnly(R) ? " disabled" : "") + '>' + esc(q.comment || "") + '</textarea></label><span class="hint" data-mstate="' + esc(q.id) + '"></span></div>' +
     '</section>';
@@ -398,12 +401,41 @@ function timeLine(q) {
 
 /* Compare: one question's answer beside its mark scheme, full screen. Left and right arrows move between questions, Esc closes.
    The mark and comment here are the same as on the page (saved the same way). */
-var cmp = null;
+/* The question's mark list: exam.json "scheme" [{part, code, text}], each line worth the number in its code
+   (B2 = 2). Without one, one box per mark. */
+function repoQ(qid) { return ((repoExam && repoExam.questions) || []).filter(function (x) { return x.id === qid; })[0] || {}; }
+function schemeOf(q) {
+  var sc = repoQ(q.id).scheme;
+  if (sc && sc.length) return { list: sc.map(function (x) { return { part: x.part || "", code: x.code || "", text: x.text || "", val: Number(String(x.code || "").replace(/\D/g, "")) || 1 }; }) };
+  var l = []; for (var k = 0; k < Math.ceil(q.marks); k++) l.push({ part: "", code: "", text: "Mark " + (k + 1), val: 1 });
+  return { list: l, generic: true };
+}
+function ticksOf(q, sc) { return q.ticks && q.ticks.length === sc.list.length ? q.ticks.slice() : sc.list.map(function () { return 0; }); }
+function tickSummary(q) {
+  if (!q.ticks || !q.ticks.some(function (t) { return t > 0; })) return "";
+  var sc = schemeOf(q); if (q.ticks.length !== sc.list.length) return "";
+  return '<p class="hint xt-tsum">Ticked: ' + sc.list.map(function (it, k) { return q.ticks[k] ? esc((it.code || it.text) + (it.val > 1 && q.ticks[k] < it.val ? " (" + q.ticks[k] + " of " + it.val + ")" : "")) : ""; }).filter(Boolean).join(", ") + '</p>';
+}
+function tickRows(sc, ticks, ro) {
+  var last = null;
+  return sc.list.map(function (it, k) {
+    var head = it.part && it.part !== last ? '<div class="xt-tpart">' + esc(it.part) + '</div>' : ""; last = it.part || last;
+    var given = ticks[k] || 0;
+    var ctl = it.val > 1
+      ? '<span class="xt-tvals" role="group" aria-label="Marks for ' + esc(it.code) + '">' + Array.apply(null, Array(it.val + 1)).map(function (_, v) { return '<button type="button" class="chip" data-tickv="' + k + ':' + v + '" aria-pressed="' + (given === v) + '"' + (ro ? " disabled" : "") + '>' + v + '</button>'; }).join("") + '</span>'
+      : '<input type="checkbox" data-tick="' + k + '"' + (given ? " checked" : "") + (ro ? " disabled" : "") + ' aria-label="' + esc(it.code || it.text) + '">';
+    var tag = it.val > 1 ? "div" : "label";   // a label would send a click on its text to the first number button
+    return head + '<' + tag + ' class="xt-trow' + (it.val > 1 ? " multi" : "") + (given ? " on" : "") + '">' + ctl + (it.code ? '<b class="xt-tcode">' + esc(it.code) + '</b>' : "") + '<span class="xt-ttext">' + esc(it.text) + '</span></' + tag + '>';
+  }).join("");
+}
+
+var cmp = null, cmpTicks = null;
 function compare(i) {
   var q = R.questions[i]; if (!q) return;
   var folder = R.sourcePath ? examFolder(R.sourcePath) : "", rq = {};
   ((repoExam && repoExam.questions) || []).forEach(function (x) { rq[x.id] = x; });
   var r = rq[q.id] || {}, ms = (r.msImg || []).map(function (p) { return /^(students|books)\//.test(p) ? p : folder + p; }), ro = readOnly(R);
+  var sc = schemeOf(q); cmpTicks = ticksOf(q, sc);
   if (!cmp) { cmp = document.createElement("div"); cmp.className = "xt-cmp"; cmp.setAttribute("role", "dialog"); cmp.setAttribute("aria-modal", "true"); cmp.setAttribute("aria-label", "Compare answer and mark scheme"); document.body.appendChild(cmp); }
   cmp.setAttribute("data-i", i);
   cmp.innerHTML = '<div class="xt-cmphead"><b>Question ' + (i + 1) + ' of ' + R.questions.length + '</b><span class="hint">' + (q.label ? esc(q.label) + " · " : "") + q.marks + ' mark' + (q.marks === 1 ? "" : "s") + (q.seconds ? " · " + esc(dur(q.seconds)) + " on it" : "") + '</span><span class="xt-grow"></span>' +
@@ -414,10 +446,12 @@ function compare(i) {
         q.uploads.map(function (u) { return '<figure class="xt-cmppic"><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '"><figcaption class="hint">' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">late</span>' : "") + '</figcaption></figure>'; }).join("") +
         (!q.final && !q.uploads.length ? '<p class="hint">No answer and no picture.</p>' : "") + '</div>' +
       '<div class="xt-col"><div class="xt-lab">Mark scheme</div>' + (ms.length ? ms.map(function (p) { return '<img class="xt-zoomable" alt="Mark scheme" data-rsrc="' + esc(p) + '">'; }).join("") : '<p class="hint">No mark scheme picture.</p>') +
-        (r.answer ? '<div class="xt-qtext">' + T.clean(r.answer) + '</div>' : "") + '</div></div>' +
+        (r.answer ? '<div class="xt-qtext">' + T.clean(r.answer) + '</div>' : "") + '</div>' +
+      '<div class="xt-col xt-ticks"><div class="xt-lab">Marks to tick <span class="hint" data-tsum></span></div>' + (sc.generic ? '<p class="hint">No mark list in the exam file: one box per mark.</p>' : "") + '<div data-tlist>' + tickRows(sc, cmpTicks, ro) + '</div></div></div>' +
     '<div class="xt-markrow"><label>Mark <span class="xt-of"><input type="number" class="xt-score" data-cscore="' + esc(q.id) + '" min="0" max="' + q.marks + '" step="0.5" value="' + (q.score == null ? "" : q.score) + '"' + (ro ? " disabled" : "") + '> / ' + q.marks + '</span></label>' +
       '<label class="xt-grow">Comment <textarea data-ccomment="' + esc(q.id) + '" rows="2"' + (ro ? " disabled" : "") + '>' + esc(q.comment || "") + '</textarea></label><span class="hint" data-cstate></span></div>';
   showPics(cmp); showRepoPics(cmp); $$(".xt-qtext", cmp).forEach(T.maths);
+  tickTotal();
   document.documentElement.classList.add("xt-noscroll");
   var f = $("[data-cscore]", cmp); if (f && !ro) f.focus({ preventScroll: true });
 }
@@ -426,11 +460,22 @@ function closeCompare() {
   var i = Number(cmp.getAttribute("data-i")); cmp.remove(); cmp = null; document.documentElement.classList.remove("xt-noscroll");
   var sec = $$("[data-mq]")[i]; if (sec) sec.scrollIntoView({ block: "start" });
 }
+function tickTotal() { var t = $("[data-tsum]", cmp); if (t) t.textContent = cmpTicks.reduce(function (a, b) { return a + b; }, 0) + " ticked"; }
+/* a tick or an untick: the mark becomes the sum of the ticks (you can still type a different mark) */
+function setTick(k, v) {
+  if (!cmp || readOnly(R)) return;
+  var q = R.questions[Number(cmp.getAttribute("data-i"))], sc = schemeOf(q);
+  cmpTicks[k] = Math.max(0, Math.min(sc.list[k].val, v));
+  $("[data-tlist]", cmp).innerHTML = tickRows(sc, cmpTicks, false);
+  var sum = cmpTicks.reduce(function (a, b) { return a + b; }, 0);
+  $('[data-cscore="' + q.id + '"]', cmp).value = Math.min(sum, q.marks);
+  tickTotal(); compareSave(q.id, cmpTicks.slice());
+}
 /* copy the Compare box into the page's own fields, then save as usual */
-function compareSave(qid) {
+function compareSave(qid, ticks) {
   var s = $('[data-cscore="' + qid + '"]', cmp), c = $('[data-ccomment="' + qid + '"]', cmp), ps = $('[data-score="' + qid + '"]'), pc = $('[data-comment="' + qid + '"]'), st = $("[data-cstate]", cmp);
   if (!s || !ps) return;
-  ps.value = s.value; pc.value = c.value; saveMark(qid);
+  ps.value = s.value; pc.value = c.value; saveMark(qid, ticks);
   var mine = $('[data-mstate="' + qid + '"]'); if (st && mine) { st.textContent = "Saving…"; setTimeout(function () { if (cmp && st) st.textContent = mine.textContent; }, 900); }
 }
 window.addEventListener("hashchange", function () { closeCompare(); });
@@ -444,7 +489,7 @@ document.addEventListener("keydown", function (e) {
 });
 
 var markTimers = {};
-function saveMark(qid) {
+function saveMark(qid, ticks) {
   var se = $('[data-score="' + qid + '"]'), ce = $('[data-comment="' + qid + '"]'), st = $('[data-mstate="' + qid + '"]');
   if (!se || !ce || !st) return;   // the marking page was left; an earlier save already kept the comment
   var s = se.value, c = ce.value;
@@ -453,8 +498,10 @@ function saveMark(qid) {
   var score = s === "" ? null : Number(s);
   if (score != null && (score < 0 || score > q.marks)) { st.textContent = "0 to " + q.marks; return; }
   st.textContent = "Saving…";
-  call("PUT", "/api/t/exams/" + R.id + "/marks/" + encodeURIComponent(qid), { score: score, comment: c }).then(function () {
+  var body = { score: score, comment: c }; if (ticks) body.ticks = ticks;
+  call("PUT", "/api/t/exams/" + R.id + "/marks/" + encodeURIComponent(qid), body).then(function () {
     q.score = score; q.comment = c; st.textContent = "Saved";
+    if (ticks) { q.ticks = ticks; var ts = $('[data-mq="' + qid + '"] [data-tsumline]'); if (ts) ts.innerHTML = tickSummary(q); }
     R.total = R.questions.reduce(function (a, x) { return a + (x.score || 0); }, 0); R.marked = R.questions.filter(function (x) { return x.score != null; }).length;
     var tot = $("#xt-total"), mk = $("#xt-marked");   // gone if the marking page was left before the save came back
     if (tot) tot.textContent = r2(R.total) + " / " + R.max; if (mk) mk.textContent = R.marked + " of " + R.questions.length + " marked";
@@ -478,6 +525,7 @@ function saveToRepo(btn) {
       return { id: q.id, label: q.label, marks: q.marks, type: q.type, score: q.score, comment: q.comment, final: q.final, finalAt: iso(q.finalAt), atOriginalEnd: q.atOriginalEnd, writtenLate: q.writtenLate,
         revisions: q.revisions.map(function (v) { return { at: iso(v.at), late: v.late, text: v.text }; }),
         pictures: files.filter(function (f) { return f.u.question === q.id; }).map(function (f) { return { file: f.path.slice(folder.length), source: f.u.source, at: iso(f.u.at), late: f.u.late }; }),
+        ticks: q.ticks ? (function (sc) { return sc.list.length === q.ticks.length ? sc.list.map(function (it, k) { return { part: it.part, code: it.code || it.text, given: q.ticks[k], of: it.val }; }) : q.ticks; })(schemeOf(q)) : null,
         seconds: q.seconds || 0, visits: (q.visits || []).map(function (v) { return { from: iso(v.from), to: iso(v.to), seconds: Math.round((v.to - v.from) / 1000) }; }) };
     }),
     events: (R.events || []).map(function (e) { return { at: iso(e.at), kind: e.kind, detail: e.detail }; })
@@ -512,6 +560,7 @@ document.addEventListener("click", function (e) {
   if (b.hasAttribute("data-compare")) return compare(Number(b.getAttribute("data-compare")));
   if (b.hasAttribute("data-cmpgo")) return compare(Number(b.getAttribute("data-cmpgo")));
   if (b.hasAttribute("data-cmpx")) return closeCompare();
+  if (b.hasAttribute("data-tickv")) { var kv = b.getAttribute("data-tickv").split(":"); return setTick(Number(kv[0]), Number(kv[1])); }
   if (b.hasAttribute("data-practice")) return makePractice(b);
   if (b.hasAttribute("data-delprac")) return deletePractice(b.getAttribute("data-delprac"), b.getAttribute("data-st"));
   if (T.isTry && b.hasAttribute("data-load")) return;
@@ -543,6 +592,7 @@ document.addEventListener("change", function (e) {
   if (t.id === "xt-ratio") { myRatio = Number(t.value) || null; drawExam(); return; }
   if (t.hasAttribute("data-score")) { saveMark(t.getAttribute("data-score")); return; }
   if (t.hasAttribute("data-comment")) { saveMark(t.getAttribute("data-comment")); return; }
+  if (t.hasAttribute("data-tick")) { setTick(Number(t.getAttribute("data-tick")), t.checked ? 1 : 0); return; }
   if (t.hasAttribute("data-cscore")) { compareSave(t.getAttribute("data-cscore")); return; }
   if (t.hasAttribute("data-ccomment")) { compareSave(t.getAttribute("data-ccomment")); return; }
 });

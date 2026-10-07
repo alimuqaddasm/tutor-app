@@ -1003,6 +1003,22 @@ html.xt-noscroll,html.xt-noscroll body{overflow:hidden}
 .xt-cmp2 .xt-col img{width:100%;max-width:none}
 .xt-cmppic{margin:0 0 10px}
 .xt-cmp .xt-markrow{flex:none;margin-top:0}
+/* marks to tick in Compare (7 Oct) */
+.xt-cmp2{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(240px,300px)}
+.xt-ticks{display:flex;flex-direction:column}
+.xt-tpart{font-weight:800;font-size:var(--s-sm);color:var(--text-2);margin:10px 0 2px}
+.xt-trow{display:flex;gap:8px;align-items:flex-start;padding:8px;border-radius:10px;cursor:pointer;line-height:1.35}
+.xt-trow:hover{background:var(--surface-2)}
+.xt-trow.on{background:var(--ok-wash,var(--accent-wash))}
+.xt-trow input[type=checkbox]{width:22px;height:22px;flex:none;margin:0;accent-color:var(--ok)}
+.xt-tcode{flex:none;min-width:3.2em;font-variant-numeric:tabular-nums}
+.xt-ttext{font-size:var(--s-sm);color:var(--text-2);overflow-wrap:anywhere}
+.xt-tvals{display:flex;gap:4px;flex:none;flex-wrap:wrap}
+.xt-tvals .chip{min-width:34px;min-height:30px;padding:0 8px}
+.xt-tsum{margin:6px 0 0}
+.xt-trow.multi{flex-wrap:wrap;padding-left:38px}
+.xt-trow.multi .xt-tvals{order:3;flex-basis:100%}
+@media (max-width:1100px){.xt-cmp2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.xt-cmp2 .xt-ticks{grid-column:1 / -1}}
 @media (max-width:760px){.xt-cmp2{grid-template-columns:1fr;overflow:auto}.xt-cmp2 .xt-col{overflow:visible}}
 
 /* ---------- quick flow (5 Oct) ---------- */

@@ -13,3 +13,8 @@ migrations_dir = "migrations"
 
 [vars]
 ALLOWED_ORIGINS = "https://alimuqaddasm.github.io,http://localhost:8765,http://127.0.0.1:8765"
+
+# The database is in Eastern North America. Run the Worker next to it, so the many small queries stay
+# local and only one trip crosses to the user (Ali, 7 Oct: "exam loading and server stuff is pretty slow").
+[placement]
+region = "aws:us-east-1"

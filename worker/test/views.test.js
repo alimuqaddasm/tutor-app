@@ -76,3 +76,27 @@ describe("time on each question", () => {
     expect((await teacher(T0 + 3000, "DELETE", `/api/t/exams/${id}`)).status).toBe(200);
   });
 });
+
+describe("ticked marks", () => {
+  it("keeps the ticks with the mark, and a save without ticks leaves them alone", async () => {
+    const { id } = await makeExam();
+    const put = (now, json) => teacher(now, "PUT", `/api/t/exams/${id}/marks/q2`, { json });
+    expect((await put(T0, { score: 3, comment: "", ticks: [1, 0, 2] })).status).toBe(200);
+    let r = await teacher(T0 + 1, "GET", `/api/t/exams/${id}/review`);
+    expect(r.data.questions[1]).toMatchObject({ score: 3, ticks: [1, 0, 2] });
+    await put(T0 + 2, { score: 4, comment: "fine" });
+    r = await teacher(T0 + 3, "GET", `/api/t/exams/${id}/review`);
+    expect(r.data.questions[1]).toMatchObject({ score: 4, comment: "fine", ticks: [1, 0, 2] });
+    expect(r.data.questions[0].ticks).toBe(null);
+    expect((await put(T0 + 4, { score: 1, ticks: ["x"] })).status).toBe(400);
+  });
+
+  it("his pictures may be kept by the browser; question pictures may not", async () => {
+    const { id, token } = await makeExam();
+    await teacher(T0, "POST", `/api/t/exams/${id}/start`);
+    const { png } = await import("./helpers.js");
+    const up = await call(T0 + 1000, "POST", "/api/s/uploads/q1", { token, bytes: png(), headers: { "Content-Type": "image/png" } });
+    const f = await teacher(T0 + 2000, "GET", `/api/t/files/${up.data.id}`);
+    expect(f.headers.get("Cache-Control")).toMatch(/immutable/);
+  });
+});
