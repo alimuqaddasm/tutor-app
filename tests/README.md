@@ -14,6 +14,7 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/test_round14.py            # round 14 (2 Oct): Try-out button, plain dot, make-up chip, Side panel / Floating card layouts with no scrolling (15 checks)
     python tests/test_round15.py            # round 15 (2 Oct): Flip layout, question and answer screens with no scrolling (8 checks)
     python tests/test_round16.py            # round 16 (2 Oct): Flip is the default; week dots only for taught lessons (2 checks)
+    python tests/test_round17.py            # round 17 (6 Oct): fix mic notes (Heard box + editable notes), short lessons ask whose doing it was (18 checks)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
 On Windows run with PYTHONIOENCODING=utf-8, or printing ★ crashes the console.
