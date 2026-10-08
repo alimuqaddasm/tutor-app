@@ -1077,6 +1077,39 @@ html.xt-noscroll,html.xt-noscroll body{overflow:hidden}
 @media (max-width:760px){.xt-cmp2{grid-template-columns:1fr;overflow:auto}.xt-cmp2 .xt-col{overflow:visible}}
 @media (max-width:640px){.xt-3{grid-template-columns:1fr}.xt-btns{align-items:stretch;width:100%}.xt-btns .xt-add{justify-content:flex-start}.xt-run{align-items:stretch}}
 
+/* Exams and assignments list (canvas Exams board) */
+.exams{gap:var(--s6)}
+.xcard{overflow:hidden}
+.xhead{display:flex;gap:var(--s5);align-items:flex-start;flex-wrap:wrap;padding:var(--s5)}
+.xscore{font-size:var(--fs-xl);color:var(--text-3)}.xscore b{font-size:var(--fs-3xl);font-weight:700;color:var(--text);letter-spacing:-.02em}
+.xqs{border-top:1px solid var(--line)}
+.xq{display:grid;grid-template-columns:auto minmax(0,1fr) 120px 56px;gap:var(--s4);align-items:center;padding:var(--s3) var(--s5);border-top:1px solid var(--line-soft)}
+.xq:first-child{border-top:0}
+.xq b{text-align:right}
+.xq .bar > i{background:var(--maths)}
+.xq.weak{background:var(--live-soft)}.xq.weak b{color:var(--live-ink)}
+.xscope{display:flex;flex-direction:column;gap:var(--s2);padding:0 var(--s5) var(--s4)}
+.xdays{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:var(--s2);padding:0 var(--s5) var(--s5)}
+.xday{display:flex;flex-direction:column;gap:var(--s2);padding:var(--s3);border-radius:var(--r-md);background:var(--ground)}
+.xday .tag.day{align-self:flex-start}
+.xnotes{margin:0 var(--s5) var(--s5)}
+.xrow{grid-template-columns:minmax(0,1fr) auto}
+@media (max-width:760px){.xq{grid-template-columns:auto minmax(0,1fr) 52px}.xq .bar{display:none}}
+
+/* one exam (canvas ExamRun board) */
+.xexam{gap:var(--s6)}
+.xt-run.on{background:var(--live-soft);border-color:var(--live-line)}
+.xt-run .xt-big{font-size:72px;line-height:1;font-weight:700;letter-spacing:-.03em}
+.xt-btns{flex-direction:row;flex-wrap:wrap;align-items:center;gap:var(--s3)}
+.xt-btns .xt-add{justify-content:flex-start}
+.xt-btns p{margin:0}
+.xfold > summary{cursor:pointer;list-style:none}
+.xfold > summary::-webkit-details-marker{display:none}
+.xq.run{grid-template-columns:auto minmax(0,1fr) auto 220px;padding:var(--s3) var(--s5)}
+.xq.run.xt-here{background:var(--live-soft)}
+.xsec{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;padding:var(--s3) var(--s5);background:var(--sunk)}
+.xt-linkrow .input{flex:1 1 100%}
+
 /* ================= 12 question fonts: the exam board's own ================= */
 /* Edexcel maths papers are set in Times, AQA chemistry papers in Arial (Tinos and Arimo are their twins) */
 body[data-subject="maths"] :is(.qtext,.stu-q,.ans .prose,.thints .prose,.bans,.bq .bt,.ansfront .prose,.ansback .prose,.ex-qtext,.tw){font-family:var(--font-edexcel)}
@@ -1129,3 +1162,41 @@ body[data-subject="maths"] :is(.qtext,.stu-q) .katex{font-size:1.08em}
   .ctl.big.vrail .vrmenu{right:0;left:0;top:auto;bottom:calc(100% + 8px);transform:none;width:auto}
   .teach3 .chunk.cur:has(.vrail){margin-right:0;margin-bottom:80px}
 }
+
+/* marking (canvas ExamMark board): question list on the left, one question at a time */
+.xmark{display:flex;flex-direction:column;gap:var(--s5);padding-bottom:120px}
+.xexam .xt-head,.xmark .xt-head{display:flex;flex-direction:column;align-items:stretch}
+.xmbody{display:grid;grid-template-columns:250px minmax(0,1fr);gap:var(--s6);align-items:start}
+.xmlist{display:flex;flex-direction:column;gap:var(--s1);position:sticky;top:var(--s4)}
+.xml{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:var(--s2);align-items:center;min-height:56px;padding:6px 12px;border-radius:var(--r-md);border:0;background:transparent;text-align:left;cursor:pointer;width:100%;color:var(--text)}
+.xml .tag{justify-content:center}
+.xml b:not(.num){font-weight:600;font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xml:hover{background:var(--surface)}
+.xml[aria-current]{background:var(--surface);box-shadow:0 0 0 1px var(--line)}
+.xmmain{min-width:0;display:flex;flex-direction:column;gap:var(--s5)}
+.xmfoot{position:sticky;bottom:0;z-index:3;display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap;justify-content:space-between}
+@media (max-width:760px){.xmbody{grid-template-columns:1fr}.xmlist{position:static;flex-direction:row;overflow-x:auto}.xml{grid-template-columns:auto auto;min-width:max-content}.xml .stack{display:none}}
+.xmark .xt-mq{margin:0;padding:0;background:none;border:0;box-shadow:none}
+.xmark .xt-3{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.xmark .xt-3 > .xt-col:first-child{grid-column:1 / -1}
+.xmark .xt-3 > .xt-col:first-child .xt-lab{display:none}
+.xmark .xt-3 > .xt-col:first-child .xt-qtext{font-size:var(--fs-lg);line-height:1.45;color:var(--text)}
+.xmark .xt-3 > .xt-col:not(:first-child){padding:var(--s5);border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line);min-height:260px}
+.xmark .xt-markrow{padding:var(--s5);border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line)}
+@media (max-width:760px){.xmark .xt-3{grid-template-columns:1fr}}
+/* side by side (canvas ExamCompare board) */
+.xt-cmp{padding:0;gap:0}
+.xt-cmp .xt-cmphead{padding:var(--s3) var(--s5);background:var(--surface);border-bottom:1px solid var(--line);gap:var(--s3)}
+.xt-cmp .xt-cmpq{margin:var(--s4) var(--s5) 0}
+.xt-cmp .xt-cmp2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--s5);padding:var(--s5)}
+.xt-cmp .xt-cmp2 > .card{padding:var(--s5);display:flex;flex-direction:column;gap:var(--s4)}
+.xt-cmp .xt-msans{padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--sunk)}
+.xt-cmp .xt-markrow{margin:0;padding:0;border:0;background:none}
+.xt-cmpseg{overflow-x:auto;max-width:100%}
+@media (max-width:760px){.xt-cmp .xt-cmp2{grid-template-columns:1fr;padding:var(--s3)}.xt-cmp .xt-cmphead .tags{display:none}}
+.xt-cmp .xt-trow{display:grid;grid-template-columns:52px minmax(0,1fr) auto;grid-template-areas:"code text ctl";gap:var(--s3);align-items:center;padding:var(--s2) 0;margin:0;border-top:1px solid var(--line-soft);background:none}
+.xt-cmp .xt-trow > .xt-tcode{grid-area:code;text-align:center;padding:4px 0;border-radius:var(--r-sm);background:var(--sunk);font-size:var(--fs-sm)}
+.xt-cmp .xt-trow.on > .xt-tcode{background:var(--right-wash);color:var(--right)}
+.xt-cmp .xt-trow > .xt-ttext{grid-area:text;font-size:var(--fs-sm)}
+.xt-cmp .xt-trow > .xt-tvals,.xt-cmp .xt-trow > input{grid-area:ctl}
+.xt-cmp .xt-tpart{margin-top:var(--s3)}

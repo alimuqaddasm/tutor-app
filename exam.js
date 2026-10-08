@@ -296,13 +296,13 @@ function flush() {
 
 function saveState(mode) {
   var el = $(".ex-save"); if (!el) return;
-  el.className = "ex-save";
+  el.className = "ex-save status";
   var waiting = anyDirty() || pending.length, bad = rejected();
   if (bad.length) { el.classList.add("bad"); el.textContent = "Not saved: question " + bad.map(function (q) { return qNum(q); }).join(", ") + ". " + drafts[bad[0]].rejected; return; }
   if (net === "off" && waiting) { el.classList.add("off"); el.textContent = "Offline: kept on this computer, will send when back"; return; }
   if (net === "off") { el.classList.add("off"); el.textContent = "Offline: trying to reconnect"; return; }
   if (mode === "saving" || waiting) { el.textContent = "Saving"; return; }
-  el.textContent = lastSaveAt ? "Saved " + clockTime(lastSaveAt) : "All saved";
+  el.classList.add("ok"); el.innerHTML = '<span class="dot ok"></span>' + (lastSaveAt ? "Saved " + clockTime(lastSaveAt) : "All saved");
 }
 
 function qNum(id) { var i = S && S.questions ? S.questions.map(function (q) { return q.id; }).indexOf(id) : -1; return i < 0 ? id : i + 1; }
@@ -374,14 +374,17 @@ function render() {
   cur = Math.min(cur, S.questions.length - 1);
   if (order().indexOf(cur) < 0) cur = order()[0] || 0;
   var done = S.status === "submitted";
+  var sj = S.subject === "chem" ? "chem" : S.subject === "maths" ? "maths" : "", tot = S.questions.reduce(function (t, q) { return t + (Number(q.marks) || 0); }, 0);
   m.innerHTML =
-    '<header class="ex-top"><div class="ex-title">' + esc(S.title) + (S.practice ? ' <span class="ex-prac">Practice</span>' : "") + '</div><div class="ex-timer num" role="timer" aria-live="off"></div><div class="ex-save" aria-live="polite"></div>' +
-    (done || PREVIEW ? "" : '<button class="btn small" type="button" data-handin>Hand in</button>') + '<div class="ex-bannerslot"></div></header>' +
+    '<header class="topbar ex-top"><div class="stack ex-tbox"><b class="ex-title">' + esc(S.title) + '</b><div class="tags">' + (sj ? '<span class="tag ' + sj + '"><span class="dot"></span>' + (sj === "chem" ? "Chemistry" : "Maths") + '</span>' : "") +
+      '<span class="tag">' + S.questions.length + ' question' + (S.questions.length === 1 ? "" : "s") + '</span><span class="tag">' + tot + ' marks</span>' + (S.practice ? '<span class="tag live">Practice</span>' : "") + '</div></div>' +
+      '<div class="ex-save" aria-live="polite"></div><div class="clockpill ex-timer num" role="timer" aria-live="off"></div><div class="ex-bannerslot"></div></header>' +
     (PREVIEW ? '<div class="ex-preview" role="status"><b>Student view</b> <span class="ex-pvwhat"></span><label class="ex-follow"><input type="checkbox" data-follow' + (follow ? " checked" : "") + '> Follow his question</label></div>' : "") +
     '<nav class="ex-dots" aria-label="Questions"></nav>' +
-    '<section class="ex-q card"></section>' +
-    '<div class="ex-nav"><div class="in"><button class="btn" type="button" data-prev>Previous</button><span class="grow"></span>' +
-    '<button class="btn accent" type="button" data-next>Next</button></div></div>';
+    '<div class="ex-page"><article class="ex-q card"></article></div>' +
+    '<footer class="botbar ex-nav"><button class="btn" type="button" data-prev>Previous</button>' +
+    (done || PREVIEW ? '<span class="push"></span>' : '<button class="btn dash push" type="button" data-handin>Hand in exam</button>') +
+    '<button class="btn accent lg" type="button" data-next>Next question <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button></footer>';
   dots(); question(); banner(); tick(); saveState(); previewLine();
   tickTimer = setInterval(tick, 250);
 }
@@ -402,14 +405,14 @@ function minutesText(min) { var h = Math.floor(min / 60), mm = Math.round(min % 
 function tick() {
   var el = $(".ex-timer"); if (!el || !S || ASG()) return;
   var now = Date.now() + offset;
-  if (S.status === "submitted") { el.className = "ex-timer num"; el.textContent = "Handed in"; return; }
-  if (S.status === "locked") { el.className = "ex-timer num"; el.textContent = "Locked"; return; }
-  if (!S.startedAt) { el.className = "ex-timer num"; el.textContent = minutesText(S.baseMinutes || 0) + ", not started"; return; }
+  if (S.status === "submitted") { el.className = "clockpill ex-timer num"; el.textContent = "Handed in"; return; }
+  if (S.status === "locked") { el.className = "clockpill ex-timer num"; el.textContent = "Locked"; return; }
+  if (!S.startedAt) { el.className = "clockpill ex-timer num"; el.textContent = minutesText(S.baseMinutes || 0) + ", not started"; return; }
   var left = S.endAt - now;
-  if (left <= 0 || S.status === "timeup") { el.className = "ex-timer num up"; el.textContent = "Time is up"; if (S.status === "running") { S.status = "timeup"; banner(); } return; }
+  if (left <= 0 || S.status === "timeup") { el.className = "clockpill ex-timer num up"; el.textContent = "Time is up"; if (S.status === "running") { S.status = "timeup"; banner(); } return; }
   var s = Math.ceil(left / 1000), h = Math.floor(s / 3600), mi = Math.floor((s % 3600) / 60), se = s % 60;
-  el.textContent = (h ? h + ":" + String(mi).padStart(2, "0") : mi) + ":" + String(se).padStart(2, "0");
-  el.className = "ex-timer num" + (left <= 5 * 60000 ? " soon" : "");
+  el.innerHTML = (h ? h + ":" + String(mi).padStart(2, "0") : mi) + ":" + String(se).padStart(2, "0") + ' <small>left</small>';
+  el.className = "clockpill ex-timer num" + (left <= 5 * 60000 ? " soon" : "");
 }
 
 var lastExtCount = null;
@@ -440,20 +443,22 @@ function question() {
   var d = drafts[q.id] || { text: "" }, ro = !writable();
   var upload = q.type === "upload_required" || q.type === "upload_optional";
   var input = q.type === "short"
-    ? '<input type="text" id="ans" autocomplete="off" spellcheck="false" value="' + esc(d.text) + '"' + (ro ? " disabled" : "") + '>'
-    : '<textarea id="ans" spellcheck="false"' + (ro ? " disabled" : "") + '>' + esc(d.text) + '</textarea>';
+    ? '<input type="text" id="ans" class="input" autocomplete="off" spellcheck="false" value="' + esc(d.text) + '"' + (ro ? " disabled" : "") + '>'
+    : '<textarea id="ans" class="input" spellcheck="false" placeholder="Working or notes"' + (ro ? " disabled" : "") + '>' + esc(d.text) + '</textarea>';
   box.innerHTML =
-    '<div class="ex-qhead"><h2>Question ' + (k + 1) + ' of ' + ord.length + (q.label ? ' <span class="hint">(' + esc(q.label) + ')</span>' : "") + '</h2><span class="ex-marks">' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</span></div>' +
+    '<div class="row ex-qhead"><span class="tag line lg">Question ' + (k + 1) + ' of ' + ord.length + '</span><span class="tag lg">' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</span>' + (q.type === "upload_required" ? '<span class="tag ask lg push">Photo needed</span>' : "") + '</div>' +
     '<div class="ex-qtext">' + paperHTML(q.text_html, S.subject) + '</div>' +
     (q.has_img ? '<figure class="ex-qimg"><button type="button" data-zoom><img alt="Question ' + (cur + 1) + ' picture"></button></figure>' : "") +
-    '<div class="ex-answer"><label for="ans">' + (upload ? "Working or notes (optional)" : "Your answer") + '</label>' + input + '<p class="ex-count hint" hidden></p>' +
-    (q.type === "upload_required" ? '<p class="ex-need">This question needs a picture of your working.</p>' : "") + '</div>' +
-    (PREVIEW ? '<div class="ex-attach ex-pvattach"><span class="btn small">Choose picture</span><span class="btn small">Draw</span><span class="btn small">Use phone</span></div>' : "") +
-    '<div class="ex-attach"' + (ro ? " hidden" : "") + '>' +
-      '<label class="btn small"><input type="file" accept="image/*" multiple hidden data-file>Choose picture</label>' +
-      '<button class="btn small" type="button" data-draw>Draw</button>' +
-      '<button class="btn small" type="button" data-phone>Use phone</button>' +
-    '</div><div class="ex-pics"></div>';
+    (upload ? '<div class="sunk stack ex-work"><span class="lab">Your working</span>' +
+      (PREVIEW ? '<div class="row ex-pvattach"><span class="btn pri">Send from my phone</span><span class="btn">Take a photo here</span><span class="btn">Choose a photo</span><span class="btn">Draw</span></div>' : "") +
+      '<div class="row ex-attach"' + (ro ? " hidden" : "") + '>' +
+        '<button class="btn pri" type="button" data-phone><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"></rect><path d="M11 18h2"></path></svg>Send from my phone</button>' +
+        '<label class="btn"><input type="file" accept="image/*" capture="environment" hidden data-file>Take a photo here</label>' +
+        '<label class="btn"><input type="file" accept="image/*" multiple hidden data-file>Choose a photo</label>' +
+        '<button class="btn" type="button" data-draw><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"></path></svg>Draw</button>' +
+      '</div><div class="ex-pics"></div></div>' : "") +
+    '<div class="field ex-answer"><label for="ans">' + (upload ? 'Your answer <span class="hint">(optional, the photo is enough)</span>' : "Your answer") + '</label>' + input + '<p class="ex-count hint" hidden></p></div>' +
+    (upload ? "" : '<div class="row ex-attach ex-more"' + (ro ? " hidden" : "") + '><label class="btn sm"><input type="file" accept="image/*" multiple hidden data-file>Add a photo</label><button class="btn sm" type="button" data-draw>Draw</button><button class="btn sm" type="button" data-phone>Send from my phone</button></div><div class="ex-pics"></div>');
   if (q.has_img) shown($(".ex-qimg img", box), "/api/s/questions/" + encodeURIComponent(q.id) + "/image");
   maths($(".ex-qtext", box));
   var a = $("#ans");
@@ -564,37 +569,38 @@ function asgUpdate() { asgPics(); asgNav(); saveState(); previewLine(); }
 
 function pvBar() { return PREVIEW ? '<div class="ex-preview" role="status"><b>Student view</b> <span class="ex-pvwhat"></span><label class="ex-follow"><input type="checkbox" data-follow' + (follow ? " checked" : "") + '> Follow his question</label></div>' : ""; }
 
+var ADAY = null;   // the day picked in the list on his assignment home
 function asgHome(m) {
   var secs = S.sections || [], days = [], by = {};
   secs.forEach(function (x) { var k = dayKey(x); if (!by[k]) { by[k] = []; days.push(k); } by[k].push(x); });
   days.sort(function (a, b) { return a - b; });
-  var open = days.filter(function (k) { return by[k][0].open; }), shut = days.filter(function (k) { return !by[k][0].open; });
-  var today = open[open.length - 1], earlier = open.slice(0, -1).reverse();
+  var open = days.filter(function (k) { return by[k][0].open; });
+  if (ADAY == null || !by[ADAY] || !by[ADAY][0].open) ADAY = open.length ? open[open.length - 1] : days[0];
   var dname = function (k) { var x = by[k][0]; return x.day != null ? "Day " + x.day : x.title; };
-  var stateOf = function (x) { var qs = secQs(x.id), n = qs.filter(hasWork).length; return x.doneAt != null ? { k: "done", t: "Finished", n: n, of: qs.length } : n ? { k: "going", t: "Started · " + n + " of " + qs.length, n: n, of: qs.length } : { k: "new", t: "Not started", n: 0, of: qs.length }; };
-  var card = function (x) {
-    var st = stateOf(x), qs = secQs(x.id), marks = qs.reduce(function (a, q) { return a + (Number(q.marks) || 0); }, 0), notes = qs.filter(function (q) { return S.notes && S.notes[q.id]; }).length;
-    return '<button type="button" class="a-card ' + st.k + '" data-a-sec="' + esc(x.id) + '"><span class="a-cardhead"><span class="a-dot ' + subjOf(x) + '"></span><b>' + esc(shortTitle(x)) + '</b><span class="grow"></span><span class="a-st ' + st.k + '">' + esc(st.t) + '</span></span>' +
-      '<span class="a-meta">' + qs.length + ' question' + (qs.length === 1 ? "" : "s") + ' · ' + marks + ' marks' + (x.suggestMin ? ' · about ' + Math.round(x.suggestMin) + ' min' : "") + '</span>' +
-      '<span class="a-bar"><span class="' + subjOf(x) + '" style="width:' + (st.of ? Math.round(100 * st.n / st.of) : 0) + '%"></span></span>' +
-      '<span class="a-go">' + (st.k === "done" ? "See mark scheme" + (notes ? " · " + notes + " note" + (notes === 1 ? "" : "s") + " from Ali" : "") : st.k === "going" ? "Carry on" : "Start") + '</span></button>';
+  var subjTag = function (x, lg) { var sj = subjOf(x); return '<span class="tag ' + sj + (lg ? " lg" : "") + '"><span class="dot"></span>' + (sj === "chem" ? "Chemistry" : "Maths") + '</span>'; };
+  var dayBtn = function (k) {
+    var x0 = by[k][0], isOpen = x0.open, done = by[k].filter(function (x) { return x.doneAt != null; }).length;
+    var sub = isOpen ? '<span class="row s2">' + by[k].map(function (x) { return '<span class="dot ' + subjOf(x) + (x.doneAt != null ? " faded" : "") + '"></span>'; }).join("") + '<span class="hint">' + (done === by[k].length ? "All done" : done + " of " + by[k].length + " done") + '</span></span>'
+      : '<span class="hint">' + (x0.opensAt ? "Opens " + esc(whenText(x0.opensAt)) : "Opens later") + '</span>';
+    return '<button type="button" class="a-dayb" data-a-day="' + k + '"' + (k === ADAY ? ' aria-current="true"' : "") + (isOpen ? "" : " disabled") + '><span class="tag' + (k === ADAY ? " day" : "") + '">' + esc(dname(k)) + '</span><span class="stack" style="gap:0">' + sub + '</span></button>';
   };
-  var chip = function (x) { var st = stateOf(x); return '<button type="button" class="a-chip ' + st.k + '" data-a-sec="' + esc(x.id) + '">' + esc(shortTitle(x)) + ' ' + (st.k === "done" ? "finished" : st.k === "going" ? "started" : "not started") + '</button>'; };
-  var notesIn = function (k) { return by[k].reduce(function (a, x) { return a + secQs(x.id).filter(function (q) { return S.notes && S.notes[q.id]; }).length; }, 0); };
+  var qRow = function (x, q, i) {
+    var ups = mainUps(q.id).length, d = drafts[q.id], typed = d && d.text && d.text.trim(), a = (S.answers || {})[q.id];
+    var st = ups ? '<span class="status ok"><span class="dot ok"></span>Photo added</span>' : typed || (a && a.text && a.text.trim()) ? '<span class="status ok"><span class="dot ok"></span>Answer typed</span>' : '<span class="status off"><span class="dot off"></span>Not started</span>';
+    return '<button type="button" class="li a-qrow" data-a-sec="' + esc(x.id) + '" data-a-qi="' + S.questions.indexOf(q) + '"><span class="tag line lg">Q' + (i + 1) + '</span><span class="a-qlab">' + esc(q.label && q.label !== "Q" + (i + 1) ? q.label : "Question " + (i + 1)) + '</span><span class="tag">' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</span>' + st + '</button>';
+  };
+  var secCard = function (x) {
+    var qs = secQs(x.id), marks = qs.reduce(function (t, q) { return t + (Number(q.marks) || 0); }, 0), notes = qs.filter(function (q) { return S.notes && S.notes[q.id]; }).length;
+    var tags = '<span class="tag day lg">' + esc(dname(dayKey(x))) + '</span>' + subjTag(x, true) + '<span class="tag lg">' + qs.length + ' question' + (qs.length === 1 ? "" : "s") + '</span><span class="tag lg">' + marks + ' marks</span>' + (x.suggestMin ? '<span class="tag lg">About ' + Math.round(x.suggestMin) + ' min</span>' : "");
+    if (x.doneAt != null) return '<section class="card pad head a-done"><div class="tags">' + tags + '<span class="tag ok lg">✓ Done</span>' + (notes ? '<span class="tag ask lg">' + notes + ' note' + (notes === 1 ? "" : "s") + ' from Ali</span>' : "") + '</div><button class="btn ' + subjOf(x) + '-soft" type="button" data-a-sec="' + esc(x.id) + '">See mark scheme</button></section>';
+    return '<section class="card a-sec" data-subject="' + subjOf(x) + '"><div class="head a-sechead"><div class="stack s2"><div class="tags">' + tags + '</div><span class="hint">Answer on paper. Write every line, then add a photo.</span></div><button class="btn ' + subjOf(x) + '" type="button" data-a-sec="' + esc(x.id) + '">' + (qs.some(hasWork) ? "Carry on" : "Start") + '</button></div>' +
+      '<div class="list a-qlist0">' + qs.map(function (q, i) { return qRow(x, q, i); }).join("") + '</div>' +
+      '<div class="row a-warn"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 16H3z"></path><path d="M12 10v4M12 17h.01"></path></svg>After Done you can’t change your answers. The mark scheme opens.</div></section>';
+  };
   m.innerHTML = '<div class="a-root">' +
-    '<header class="a-top"><div class="a-brand">' + esc(S.title) + '</div><span class="a-sub">' + days.length + ' days · maths and chemistry</span><span class="grow"></span><div class="ex-save" aria-live="polite"></div></header>' + pvBar() +
-    '<div class="a-home"><main class="a-main">' +
-      (today != null ? '<div class="a-hero"><div class="a-eyebrow">Today</div><h1>' + esc(dname(today)) + ' is open</h1><p>Work in your notebook and write every line of working. Snap each page with your phone and it lands under the right question here.</p></div>' +
-        '<section class="a-cards">' + by[today].map(card).join("") + '</section>' : "") +
-      (earlier.length ? '<section class="a-block"><h2 class="a-eyebrow">Earlier days stay open</h2>' + earlier.map(function (k) {
-        var n = notesIn(k);
-        return '<div class="a-dayrow"><b>' + esc(dname(k)) + '</b>' + by[k].map(chip).join("") + '<span class="grow"></span>' + (n ? '<span class="a-notes">' + n + ' note' + (n === 1 ? "" : "s") + ' from Ali</span>' : "") + '</div>';
-      }).join("") + '</section>' : "") +
-      (shut.length ? '<section class="a-block"><h2 class="a-eyebrow">Still to come</h2><div class="a-soon">' + shut.map(function (k, i) {
-        var x = by[k][0], prev = i === 0 ? open[open.length - 1] : null;
-        return '<span>' + esc(dname(k)) + ' · ' + (x.opensAt ? "opens " + esc(whenText(x.opensAt)) : i === 0 && prev != null ? "opens " + esc(S.gapHours) + " h after you open " + esc(dname(prev)) : "later") + '</span>';
-      }).join("") + '</div></section>' : "") +
-    '</main>' + qrAside(false) + '</div></div>';
+    '<header class="topbar a-hometop"><div class="stack" style="gap:2px;flex:1;min-width:0"><b class="a-htitle">' + esc(S.title) + '</b><div class="tags"><span class="tag">' + days.length + ' days</span><span class="tag">No clock</span><span class="tag">Saves as you go</span></div></div><div class="ex-save" aria-live="polite"></div></header>' + pvBar() +
+    '<div class="a-home2"><nav class="a-days" aria-label="Days">' + days.map(dayBtn).join("") + '</nav>' +
+      '<main class="a-main2">' + (ADAY != null && by[ADAY] && by[ADAY][0].open ? by[ADAY].map(secCard).join("") : '<div class="empty"><b class="t-card">Your first day opens soon.</b></div>') + qrAside(false) + '</main></div></div>';
 }
 
 function header(x, extra) {
@@ -606,7 +612,7 @@ function asgWork(m) {
   if (!qs.some(function (q) { return S.questions.indexOf(q) === cur; })) cur = S.questions.indexOf(qs[0]);
   var q = S.questions[cur], k = qs.indexOf(q), d = drafts[q.id] || { text: "" }, ro = !writable();
   var input = q.type === "short"
-    ? '<input type="text" id="ans" autocomplete="off" spellcheck="false" value="' + esc(d.text) + '"' + (ro ? " disabled" : "") + '>'
+    ? '<input type="text" id="ans" class="input" autocomplete="off" spellcheck="false" value="' + esc(d.text) + '"' + (ro ? " disabled" : "") + '>'
     : '<textarea id="ans" rows="3" spellcheck="false"' + (ro ? " disabled" : "") + '>' + esc(d.text) + '</textarea>';
   m.innerHTML = '<div class="a-root">' + header(x,
       '<div class="a-sw"><span class="a-eyebrow">Stopwatch</span><span class="a-swt">00:00</span>' + (ro ? "" : '<button type="button" class="a-btn dark" data-a-sw>Start</button>') + '</div>') + pvBar() +
@@ -742,9 +748,10 @@ function asgFinish() {
 
 document.addEventListener("click", function (e) {
   if (!ASG()) return;
-  var t = e.target.closest && e.target.closest("[data-a-sec],[data-a-home],[data-a-q],[data-a-prev],[data-a-next],[data-a-sw],[data-a-finish],[data-a-mode],[data-a-again]"); if (!t) return;
+  var t = e.target.closest && e.target.closest("[data-a-day],[data-a-sec],[data-a-home],[data-a-q],[data-a-prev],[data-a-next],[data-a-sw],[data-a-finish],[data-a-mode],[data-a-again]"); if (!t) return;
   var ord = secQs(SEC || "").map(function (q) { return S.questions.indexOf(q); }), k = ord.indexOf(cur);
-  if (t.hasAttribute("data-a-sec")) openSec(t.getAttribute("data-a-sec"));
+  if (t.hasAttribute("data-a-day")) { ADAY = Number(t.getAttribute("data-a-day")); render(); }
+  else if (t.hasAttribute("data-a-sec")) { openSec(t.getAttribute("data-a-sec")); if (t.hasAttribute("data-a-qi")) goQ(Number(t.getAttribute("data-a-qi"))); }
   else if (t.hasAttribute("data-a-home")) { flush(); swSet(false); setSec(null); follow = false; render(); window.scrollTo(0, 0); }
   else if (t.hasAttribute("data-a-q")) goQ(Number(t.getAttribute("data-a-q")));
   else if (t.hasAttribute("data-a-prev") && k > 0) goQ(ord[k - 1]);
@@ -792,7 +799,7 @@ function zoom(src) {
 
 function phoneDialog(q) {
   api("POST", "/api/s/phone-token/" + encodeURIComponent(q.id)).then(function (r) {
-    var link = location.origin + location.pathname + "#p=" + encodeURIComponent(r.token) + (H.api ? "&api=" + encodeURIComponent(H.api) : "");
+    var link = location.origin + location.pathname + "#p=" + encodeURIComponent(r.token) + (H.api ? "&api=" + encodeURIComponent(H.api) : "") + (S.subject === "chem" || S.subject === "maths" ? "&s=" + S.subject : "");
     var d = modal('<div class="ex-box" role="dialog" aria-modal="true" aria-labelledby="ph-h"><h2 id="ph-h">Add a photo from your phone</h2><p>Scan this with your phone’s camera. Photos you take there appear under Question ' + (cur + 1) + ' here.</p>' +
       '<div class="ex-qr"></div><p class="ex-link">' + esc(link) + '</p><div class="row"><button class="btn" type="button" data-x>Done</button></div></div>');
     try { var qr = qrcode(0, "M"); qr.addData(link); qr.make(); $(".ex-qr", d.el).innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }); }
@@ -898,18 +905,26 @@ function phonePoll() {
 }
 var phoneQueue = [];
 function phoneRender() {
-  var open = P.status === "running" || P.status === "timeup";
-  $("#ex").innerHTML = '<div class="ex-phone"><h1>' + esc(P.title) + '</h1><p class="hint">Question ' + esc(P.number || "") + (P.label ? " (" + esc(P.label) + ")" : "") + '</p>' +
-    (open ? '<label class="btn accent big"><input type="file" accept="image/*" capture="environment" data-cam>Take a photo</label>' +
-            '<label class="btn big"><input type="file" accept="image/*" multiple data-gal>Choose from photos</label>' +
-            '<p class="hint" style="margin-top:10px">Each photo appears under the question on the computer.</p>'
+  var open = P.status === "running" || P.status === "timeup", qn = P.number ? "Question " + P.number : "this question", sj = H.s === "chem" || H.s === "maths" ? H.s : "";
+  if (sj) document.body.setAttribute("data-subject", sj);
+  $("#ex").innerHTML = '<div class="ex-phone stack s5"><header class="stack s2"><div class="tags">' + (sj ? '<span class="tag ' + sj + '"><span class="dot"></span>' + (sj === "chem" ? "Chemistry" : "Maths") + '</span>' : "") + '<span class="tag">' + esc(P.title) + '</span><span class="tag line">' + esc(cap(qn)) + (P.label ? " (" + esc(P.label) + ")" : "") + '</span></div>' +
+    '<h1>Add a photo</h1><span class="hint">It shows under ' + esc(qn) + ' on the tablet.</span></header>' +
+    (open ? '<div class="stack s3"><label class="btn accent full ex-shoot"><input type="file" accept="image/*" capture="environment" data-cam><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>Take a photo</label>' +
+            '<label class="btn full ex-choose"><input type="file" accept="image/*" multiple data-gal>Choose a photo</label></div>'
           : '<div class="ex-banner info">The exam is not open for photos right now.</div>') +
-    '<div class="ex-pics" id="phpics"></div></div>';
+    '<section class="list ex-sent" id="phpics"></section><p class="hint ex-keep">Keep this page open until every photo says Sent.</p></div>';
   phonePics();
 }
+function cap(t) { t = String(t || ""); return t.charAt(0).toUpperCase() + t.slice(1); }
 function phonePics() {
   var box = $("#phpics"); if (!box) return;
   var mine = (P.uploads || []).filter(function (u) { return !P.all || u.question === PQ; }), queued = phoneQueue.filter(function (p) { return !P.all || p.q === PQ; });
+  if (!P.all) {
+    var lab = P.number ? "Q" + P.number : "Photo";
+    box.hidden = !mine.length && !queued.length;
+    box.innerHTML = mine.map(function (u) { return '<div class="li ex-sentrow"><img alt="Sent photo" data-src="/api/p/files/' + esc(u.id) + '"><span class="stack" style="gap:0"><b>' + esc(lab) + '</b><span class="hint">Sent ' + esc(clockTime(u.at)) + '</span></span><svg class="icon ok" viewBox="0 0 24 24" aria-label="Sent"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></div>'; }).join("") +
+      queued.map(function (p) { return '<div class="li ex-sentrow"><img alt="Photo sending" src="' + p.url + '"><span class="stack" style="gap:0"><b>' + esc(lab) + '</b><span class="hint">' + (p.err ? esc(p.err) : "Waiting to send") + '</span></span><span class="ex-spin" aria-label="Sending"></span></div>'; }).join("");
+  } else
   box.innerHTML = mine.map(function (u) { return '<div class="ex-pic"><img alt="Sent photo" data-src="/api/p/files/' + esc(u.id) + '"><div class="meta"><span>Sent ' + esc(clockTime(u.at)) + '</span></div></div>'; }).join("") +
     queued.map(function (p) { return '<div class="ex-pic pending"><img alt="Photo sending" src="' + p.url + '"><div class="meta"><span>' + (p.err ? esc(p.err) : "Sending") + '</span></div></div>'; }).join("");
   $$("img[data-src]", box).forEach(function (im) { shown(im, im.getAttribute("data-src")); });

@@ -432,7 +432,8 @@ function fillHomeAsg() {
     list = list.filter(function (a) { return a && a.status !== "done"; }); if (!list.length || !$("#homeasg")) return;
     $("#homeasg").innerHTML = list.map(function (a) {
       var secs = a.sections || [], days = secs.reduce(function (m, x) { m[x.day] = 1; return m; }, {});
-      return '<a class="asgstrip" href="#/exams"><span class="tag">Assignment</span><b>' + esc(a.title || "Assignment") + '</b><span class="hint">' + Object.keys(days).length + ' days · ' + secs.length + ' parts' + (a.status === "ready" ? " · ready to load" : a.status ? " · " + esc(a.status) : "") + '</span><span class="go">Open in Exams</span></a>';
+      var ttl = String(a.title || "Assignment").replace(/,\s*\d{1,2}(\s+\w+)?\s+to\s+\d{1,2}\s+\w+$/, ""), dd = secs.map(function (x) { return x.date; }).filter(Boolean).sort();
+      return '<a class="asgstrip" href="#/exams">' + tag("Assignment", "ask") + '<b>' + esc(ttl) + '</b><span class="tags">' + (dd.length ? tag(esc(fmtDate(dd[0]) + " to " + fmtDate(dd[dd.length - 1]))) : "") + tag(Object.keys(days).length + " days") + tag(secs.length + " sections") + (a.status === "ready" ? tag("Not sent yet", "dash") : a.status ? tag(esc(cap(a.status))) : "") + '</span><span class="go">Open in Exams</span></a>';
     }).join("");
   });
 }
@@ -1407,7 +1408,7 @@ function slDraw() { var c = TCH.seq[TCH.pos], cur = $(".chunk.cur"); if (!c || !
 function sliderHTML(c) { var q = c.b;
   if (SL.q !== q) { SL = { q: q, i: 0, back: false }; for (var j = 0; j < q.parts.length; j++) if (!asked_((L.session.answers[slKey(q, j)] || {}).v)) { SL.i = j; break; } }
   var i = SL.i, p = q.parts[i], k = slKey(q, i), a = L.session.answers[k] || {}, hasBack = !!(p.answer || (p.ms || []).length);
-  var sym = { right: "\u2713", wrong: "\u2717", partly: "\u00bd", wording: "W", terminology: "T", skipped: "\u2013" };
+  var sym = { right: "\u2713", wrong: "\u2717", partly: "\u00bd", wording: "W", terminology: "T", skipped: "-" };
   var pills = q.parts.map(function (x, j) { var b = L.session.answers[slKey(q, j)] || {};
     return '<button type="button" class="sl-pill' + (j === i ? " cur" : "") + (asked_(b.v) ? " v-" + b.v : "") + '" data-slgo="' + j + '">' + esc(x.lab || String(j + 1)) + (asked_(b.v) ? " " + (b.m != null ? esc(b.m) : sym[b.v] || "") : "") + '</button>'; }).join("");
   function peek(j, cls) { var x = q.parts[j], b = L.session.answers[slKey(q, j)] || {};
@@ -1956,7 +1957,7 @@ if (TRY) { document.body.classList.add("tryout");
 flowPressed();
 
 /* the Exams tab (exams.js) works through these */
-window.TD = { app: app, $: $, $$: $$, esc: esc, clean: clean, ls: ls, toast: toast, maths: maths, CFG: CFG, gh: gh, putB64: putB64, b64enc: b64enc, loadTree: loadTree, shaOf: shaOf, blobBytes: blobBytes, fileJSON: fileJSON, fileURL: fileURL, studentBase: studentBase, isTry: TRY, render: render };
+window.TD = { tag: tag, subjTag: subjTag, topicStrTag: topicStrTag, refTag: refTag, cap: cap, fmtDate: fmtDate, hmin: hmin, app: app, $: $, $$: $$, esc: esc, clean: clean, ls: ls, toast: toast, maths: maths, CFG: CFG, gh: gh, putB64: putB64, b64enc: b64enc, loadTree: loadTree, shaOf: shaOf, blobBytes: blobBytes, fileJSON: fileJSON, fileURL: fileURL, studentBase: studentBase, isTry: TRY, render: render };
 
 render();
 })();
