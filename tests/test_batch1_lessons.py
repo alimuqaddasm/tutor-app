@@ -95,7 +95,7 @@ with sync_playwright() as p:
         pg.goto(APP + "#/new")
         pg.wait_for_selector("#newform", timeout=15000)
         pg.fill("#n-date", date)
-        pg.select_option("#n-subj", "maths")
+        pg.click("[data-npick=maths]")
         pg.fill("#n-title", title)
         pg.click("#newform button[type=submit]")
         pg.wait_for_timeout(800)

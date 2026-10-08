@@ -38,7 +38,7 @@ try:
         p.keyboard.press("ArrowLeft"); p.wait_for_timeout(300)
         check("back on it, the button shows it is set", p.locator(".tfoot .btn.iskip").get_attribute("aria-pressed") == "true")
         p.keyboard.press("6"); p.wait_for_timeout(200)
-        check("key 6 is 'He didn't answer' and replaces it", p.locator('.chunk.cur .vs[data-v="skipped"]').get_attribute("aria-pressed") == "true")
+        check("key 6 is 'He didn't answer' and replaces it", p.locator('.chunk.cur [data-v="skipped"]').first.get_attribute("aria-pressed") == "true")
         p.screenshot(path=os.path.join(R.OUT, "r11-quiz-skip.png")); c.close()
         # 2. three buttons while the clock runs
         c = ctx_(b); c.add_init_script("localStorage.setItem('tutor.fold.maths', '0')"); p = page(c, "?try#/lesson/" + MA + "/teach")  # maths 1 Oct: nothing ticked yet; hints shown as steps for this check

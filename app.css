@@ -31,7 +31,7 @@ img{max-width:100%}
 .side-foot .btn{width:100%}
 .save{font-size:var(--fs-xs);font-weight:600;color:var(--right)}
 .save.err{color:var(--wrong)}
-main{max-width:1180px;width:100%;margin:0 auto;padding:0 var(--s7) 110px;box-sizing:border-box}
+main{max-width:1180px;width:100%;margin:0 auto;padding:var(--s7) var(--s7) var(--s8);box-sizing:border-box}
 @media (max-width:900px){
   .shell{grid-template-columns:minmax(0,1fr)}
   .side{position:static;height:auto;flex-direction:row;align-items:center;flex-wrap:wrap;gap:var(--s3);padding:var(--s3) var(--s4);padding-top:calc(var(--s3) + env(safe-area-inset-top,0px));border-right:0;border-bottom:1px solid var(--line)}
@@ -44,12 +44,22 @@ main{max-width:1180px;width:100%;margin:0 auto;padding:0 var(--s7) 110px;box-siz
   .side .nav{position:fixed;left:0;right:0;bottom:0;z-index:40;display:grid;grid-template-columns:repeat(6,1fr);gap:0;background:var(--surface);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
   .side .nav a{position:relative;flex-direction:column;justify-content:center;gap:2px;min-height:56px;padding:4px 0;font-size:12px}
   .side .nav .badge{position:absolute;top:2px;left:calc(50% + 6px);margin:0;min-width:20px;height:18px;padding:0 5px;font-size:11px}
-  main{padding:0 var(--s4) 140px}
+  main{padding:var(--s5) var(--s4) 140px}
 }
+
+/* lesson pages (Plan, After the lesson, His work, Extra questions, Part times): the thin icon rail instead of the sidebar */
+.iconrail{display:none}
+body.focus .shell{grid-template-columns:72px minmax(0,1fr)}
+body.focus .side{display:none}
+body.focus .iconrail{display:flex;position:sticky;top:0;height:100vh;z-index:30}
+.iconrail a svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+body.focus main{max-width:1240px;padding-top:40px}
+body.teaching .iconrail,body.student .iconrail{display:none}
+@media (max-width:900px){body.focus .shell{grid-template-columns:minmax(0,1fr)}body.focus .side{display:flex}body.focus .iconrail{display:none}body.focus main{padding-top:var(--s5)}}
 
 /* ================= 2 shared pieces ================= */
 /* page header band: full width at the top of a page */
-.phead{margin:0 calc(-1 * var(--s7)) var(--s6);padding:var(--s6) var(--s7) var(--s5);background:var(--surface);border-bottom:1px solid var(--line)}
+.phead{margin:calc(-1 * var(--s7)) calc(-1 * var(--s7)) var(--s6);padding:var(--s6) var(--s7) var(--s5);background:var(--surface);border-bottom:1px solid var(--line)}
 .phead h1{font-size:var(--fs-3xl);line-height:1.15;letter-spacing:-.02em}
 .lhead.phead h1{font-size:var(--fs-2xl);line-height:1.2}
 .phead p,.phead .sub{margin:var(--s2) 0 0;max-width:72ch;color:var(--text-2)}
@@ -61,6 +71,14 @@ main{max-width:1180px;width:100%;margin:0 auto;padding:0 var(--s7) 110px;box-siz
 .section-h:first-child{margin-top:var(--s6)}
 .section-h h2{font-size:var(--fs-xl)}
 .back{display:inline-flex;align-items:center;gap:6px;margin:var(--s5) 0 0;color:var(--text-3);text-decoration:none;font-weight:600;font-size:var(--fs-sm)}
+/* list pages: .wrap > .head (title + tags) > sections; settings-style groups: title left, card right */
+.wrap{margin:0 auto}
+.grp{display:grid;grid-template-columns:220px minmax(0,1fr);gap:var(--s5);padding:var(--s6) 0;border-top:1px solid var(--line)}
+.cols2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4)}
+.cols3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s4)}
+.savebar{position:sticky;bottom:0;justify-content:flex-end;padding:var(--s4) 0;background:var(--ground);border-top:1px solid var(--line)}
+.choice{font:inherit;color:inherit}
+@media (max-width:860px){.grp{grid-template-columns:minmax(0,1fr)}.cols2,.cols3{grid-template-columns:minmax(0,1fr)}}
 /* old "pill" markup draws as a tag */
 .pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:var(--r-sm);font-size:var(--fs-xs);font-weight:600;line-height:1;white-space:nowrap;background:var(--sunk);color:var(--text-2)}
 .pill.chem{background:var(--chem-wash);color:var(--chem-ink)}.pill.maths{background:var(--maths-wash);color:var(--maths-ink)}
@@ -234,13 +252,40 @@ table.t tr[data-href]:hover td{background:var(--hover)}
 .asgstrip:hover{background:var(--hover)}
 @media (max-width:1100px){.home{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:900px){
-  .phead{margin:0 calc(-1 * var(--s4)) var(--s5);padding:var(--s5) var(--s4) var(--s4)}
+  .phead{margin:calc(-1 * var(--s5)) calc(-1 * var(--s4)) var(--s5);padding:var(--s5) var(--s4) var(--s4)}
   .phead h1{font-size:var(--fs-xl)}
   .week{grid-template-columns:repeat(7,minmax(0,1fr));width:100%;box-sizing:border-box}
   .lrow{grid-template-columns:44px minmax(0,1fr) auto;grid-template-areas:"d t m" "d s s";gap:var(--s2) var(--s3);padding:var(--s3) var(--s4)}
   .lrow .dblock{grid-area:d}.lrow .lt{grid-area:t}.lrow .mins{grid-area:m;align-self:start}.lrow .score{grid-area:s}
   .asks .ask{padding:var(--s3) var(--s4)}.ask-a .btn{flex:1 1 auto}
 }
+
+/* ================= 3b record, videos, warm-up ================= */
+.jump{position:sticky;top:var(--s2);z-index:2;align-self:flex-start;border-radius:var(--r-full)}
+.jump a{border-radius:var(--r-full)}
+.mrow p{margin:0}
+.mrow > .tags,.mrow > p{grid-column:2}
+.search{display:flex;align-items:center;gap:var(--s3);min-height:52px;padding:0 var(--s4);border-radius:var(--r-md);border:1px solid var(--line-strong);background:var(--surface);color:var(--text-3)}
+.search input{flex:1;min-width:0;min-height:48px;border:0;outline:0;background:transparent;font-size:var(--fs-md);color:var(--text)}
+.li.vr{grid-template-columns:40px minmax(0,1fr) auto 64px;min-height:56px;padding:var(--s2) var(--s5)}
+.li.vr .pl{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--sunk);color:var(--text-2)}
+.li.vr b{font-size:15px;font-weight:500}
+.li.vr[aria-current]{background:var(--chem-wash)}
+.li.vr[aria-current] .pl{background:var(--chem);color:#fff}
+.videos .vframe{max-width:none}
+.bigv{flex:1 1 160px;min-height:64px;display:inline-flex;align-items:center;justify-content:center;gap:var(--s3);border-radius:var(--r-lg);font-size:18px;font-weight:600;cursor:pointer}
+.bigv.ok{background:var(--right-wash);border:1px solid #BFE2CC;color:var(--right)}
+.bigv.bad{background:var(--wrong-wash);border:1px solid #F2C6BF;color:var(--wrong)}
+.bigv.skip{background:var(--surface);border:1px solid var(--line-strong);color:var(--text-2)}
+.bigv span{font-size:22px}
+.box{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--text-4)}
+.box i{width:28px;height:8px;border-radius:4px;background:var(--line)}
+.box.on{color:var(--live-ink)}.box.on i{background:var(--live)}
+.box.done{color:var(--right)}.box.done i{background:var(--right)}
+.pick{flex:1;display:flex;align-items:center;gap:var(--s3);min-height:56px;padding:0 20px;border-radius:var(--r-md);border:1px solid var(--line-strong);background:var(--surface);font-size:var(--fs-md);font-weight:600;cursor:pointer}
+.pick[aria-pressed="true"]{border:2px solid var(--accent);padding:0 19px;background:var(--accent-wash);color:var(--accent-ink)}
+.pick .dot{width:10px;height:10px}
+@media (max-width:760px){.li.vr{grid-template-columns:40px minmax(0,1fr) 52px;padding:var(--s2) var(--s4)}.li.vr .tags{display:none}}
 
 /* ================= 4 lesson plan ================= */
 .lhead .ltags{margin-bottom:var(--s3)}
@@ -341,6 +386,60 @@ tr[data-v="right"] td{background:var(--right-wash)}tr[data-v="wrong"] td{backgro
   .page{padding:var(--s4) var(--s4) var(--s5)}
   .screen{display:flex;flex-direction:column;gap:6px}
 }
+
+/* the lesson's own pages */
+.lpage{max-width:1120px}
+.crumb button{all:unset;cursor:pointer;color:var(--text-3)}
+.crumb button:hover{color:var(--text)}
+.crumb button:focus-visible{outline:3px solid var(--slate);outline-offset:2px;border-radius:4px}
+.drop{display:flex;flex-direction:column;align-items:center;gap:var(--s3);padding:var(--s6) var(--s4);border:2px dashed var(--line-strong);border-radius:var(--r-lg);background:var(--ground);text-align:center;cursor:pointer}
+.drop .cam{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;background:var(--maths-wash);color:var(--maths)}
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--s4)}
+.shots .fig img{border-radius:var(--r-md)}
+.rate{width:48px;height:48px;border-radius:var(--r-md);border:1px solid var(--line-strong);background:var(--surface);font-size:var(--fs-md);font-weight:600;color:var(--text-2);cursor:pointer}
+.rate[aria-pressed="true"]{background:var(--slate);border-color:var(--slate);color:var(--on-slate)}
+.newmk{padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--wrong-wash)}
+.newmk.partly{background:var(--partly-wash)}.newmk.wording{background:var(--wording-wash)}.newmk.terminology{background:var(--term-wash)}
+.newmk .tag{background:var(--surface)}
+.item .row .input{flex:1;min-width:0}
+
+/* Plan (the canvas's Plan board): band header, parts on the left, the part on the right */
+.band.lhead2{margin:-40px calc(-1 * var(--s7)) var(--s6);padding:var(--s6) var(--s7) var(--s5)}
+.lesson{grid-template-columns:290px minmax(0,860px)}
+.rail button{grid-template-columns:32px minmax(0,1fr)}
+.rail button .n{grid-row:span 3;width:32px;height:32px}
+.rail button .tags{grid-column:2}
+.rail button.opt .n{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line-strong)}
+.rail button.opt .nm{color:var(--text-2)}
+.rail .railh{padding:0 var(--s3)}
+.page{padding:0;background:transparent;border:0;display:flex;flex-direction:column;gap:var(--s5)}
+.page > * + *{margin-top:0}
+.screen{display:flex;align-items:flex-start;gap:var(--s4);padding:var(--s4) var(--s5);border-radius:var(--r-lg);background:var(--accent-wash)}
+.screen > .icon{color:var(--accent);margin-top:2px}
+.screen .lab{color:var(--accent-ink)}
+.btn.accent-soft{background:var(--accent-wash);border-color:var(--accent-wash);color:var(--accent-ink)}
+.module{overflow:hidden}
+.module > summary{padding:var(--s4) var(--s5);border-bottom:1px solid var(--line);flex-wrap:nowrap}
+.module:not([open]) > summary{border-bottom:0}
+.module > summary h3{font-size:18px}
+.module .mbody{padding:var(--s2) var(--s5) var(--s5);gap:var(--s4)}
+.module.deep{border-style:dashed;border-color:var(--line-strong)}
+.module.deep > summary{min-height:56px;padding-block:0}
+.module.deep > summary h3{font-size:var(--fs-md)}
+.steps{display:flex;flex-direction:column;gap:0}
+.step{display:grid;grid-template-columns:72px minmax(0,1fr) 44px;gap:var(--s4);align-items:start;padding:var(--s3) 0}
+.step + .step{border-top:1px solid var(--line-soft)}
+.step > .tag{justify-content:center}
+.step .body{font-size:17px}
+.step.done .body{color:var(--text-2)}
+.tick{width:40px;height:40px;color:var(--text-4)}
+.qcard{padding:0;border:0;background:transparent;gap:var(--s3)}
+.qbody{padding:var(--s5);font-size:20px;color:#000}
+.qmark .ctl{display:flex;flex-direction:column;gap:var(--s3)}
+.ctl .verdicts{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center}
+.ctl .input.mk{width:5em;min-height:44px}
+.item .ctl{flex-direction:column;align-items:stretch}
+.vblock .vbody{padding:0 var(--s5) var(--s5)}
 
 /* ================= 5 warm-up card, show him, zoom ================= */
 .rev{display:grid;gap:var(--s4);max-width:880px;padding:var(--s5) var(--s6)}
@@ -580,6 +679,30 @@ button.upnext:hover span{color:var(--text-2);text-decoration:underline}
   .btn.skip,.btn.look,.btn.iskip{min-height:52px;white-space:nowrap}
 }
 
+/* Teach, as on the canvas: tags in the top bar, a parts strip with progress, a raised card, accent "Taught, next" */
+.tbar{background:rgba(246,247,249,.94);backdrop-filter:blur(6px);gap:var(--s3)}
+.tcrumb > .tag{flex:none}
+.tcrumb > b{font-weight:600;font-size:var(--fs-sm)}
+.tflow i{height:6px}
+.tlabel{margin-bottom:var(--s3)}
+.tlabel .tag{font-weight:600}
+.teach3 .chunk.cur{border:0;box-shadow:var(--raise);padding:var(--s6)}
+.tphase h2,.teach3 .chunk.cur .tphase h2{font-size:var(--fs-2xl);line-height:1.2}
+.tphase,.teach3 .chunk.cur .tphase{padding:0}
+.btn.next{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.next kbd{border-color:rgba(255,255,255,.5)}
+.btn.look{border-color:transparent;background:transparent;color:var(--text-2)}
+.upnext .lab{flex:none}
+.runway .ttl{font-size:18px}
+.opart.now{background:var(--accent-wash);border-radius:var(--r-md)}
+.opart.now > summary{background:transparent}
+.opart.now > summary .nm{color:var(--accent-ink)}
+.opart > summary .kinds{margin-bottom:2px}
+.oc.cur,.om.cur{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 0 0 1px var(--line)}
+.onclock{margin-top:auto;padding:var(--s4);border-radius:var(--r-lg);background:var(--live-soft);border:1px solid var(--live-line)}
+.qcard .qbody{font-size:24px}
+.ctl.big.vrail .vd b{font-weight:700}
+
 /* ================= 7 teach: Flip, the one layout for questions ================= */
 /* the question fills the screen with the answer text under it; A turns the screen to the mark scheme pictures and hints */
 .chunk.cur.fit{display:block;overflow:hidden}
@@ -782,7 +905,6 @@ body[data-tlayout="flip"] .tfoot > .btn{min-height:var(--tap)}
 .sl-mk input{width:64px;min-height:40px;padding:0 var(--s2);border-radius:10px;border:1px solid var(--line-strong);background:var(--surface);font:inherit}
 .sl-foot{display:flex;align-items:center;justify-content:center;gap:var(--s3)}
 .sl-foot .hint{font-size:13px}
-.sug-card.wu{width:min(760px,100%)}
 
 /* ================= 9 student view: his screen, the question and nothing else ================= */
 .stu{display:flex;flex-direction:column;height:100vh;background:var(--ground)}
@@ -829,8 +951,9 @@ body.tryout .btn.trytoggle{background:var(--live-wash)}
 .trypanel{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;max-width:calc(100vw - 48px);padding:var(--s2) 10px;border-radius:var(--r-lg);background:var(--live-soft);border:1px solid var(--live-line);color:var(--live-ink);box-shadow:var(--raise);font-size:var(--fs-sm)}
 .trypanel .btn{background:var(--slate);border-color:var(--slate);color:var(--on-slate)}
 .trypanel .laysw .chip{background:var(--surface);color:var(--text)}
-.sug{position:fixed;inset:0;z-index:95;display:grid;place-items:center;padding:var(--s4);background:rgba(27,33,48,.4)}
-.sug-card{width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;display:flex;flex-direction:column;gap:var(--s3);padding:var(--s5);border-radius:var(--r-lg);background:var(--surface);color:var(--text);box-shadow:var(--raise-lg)}
+.sug{position:fixed;inset:0;z-index:95;background:rgba(27,33,48,.18)}
+.sug-card{position:absolute;top:var(--s4);right:var(--s4);bottom:var(--s4);width:min(440px,calc(100vw - 32px));overflow:auto;padding:var(--s6);border-radius:var(--r-lg);background:var(--surface);color:var(--text);box-shadow:var(--raise-lg)}
+.sug-card.wu{left:50%;right:auto;transform:translateX(-50%);width:min(760px,calc(100vw - 32px))}
 .sug-head{display:flex;justify-content:space-between;align-items:center}
 .sug-head h3{font-size:var(--fs-lg)}
 .sug-where{display:flex;flex-direction:column;gap:3px;padding:10px var(--s3);border-radius:var(--r-md);background:var(--sunk);font-size:var(--fs-sm)}
@@ -954,6 +1077,39 @@ html.xt-noscroll,html.xt-noscroll body{overflow:hidden}
 @media (max-width:760px){.xt-cmp2{grid-template-columns:1fr;overflow:auto}.xt-cmp2 .xt-col{overflow:visible}}
 @media (max-width:640px){.xt-3{grid-template-columns:1fr}.xt-btns{align-items:stretch;width:100%}.xt-btns .xt-add{justify-content:flex-start}.xt-run{align-items:stretch}}
 
+/* Exams and assignments list (canvas Exams board) */
+.exams{gap:var(--s6)}
+.xcard{overflow:hidden}
+.xhead{display:flex;gap:var(--s5);align-items:flex-start;flex-wrap:wrap;padding:var(--s5)}
+.xscore{font-size:var(--fs-xl);color:var(--text-3)}.xscore b{font-size:var(--fs-3xl);font-weight:700;color:var(--text);letter-spacing:-.02em}
+.xqs{border-top:1px solid var(--line)}
+.xq{display:grid;grid-template-columns:auto minmax(0,1fr) 120px 56px;gap:var(--s4);align-items:center;padding:var(--s3) var(--s5);border-top:1px solid var(--line-soft)}
+.xq:first-child{border-top:0}
+.xq b{text-align:right}
+.xq .bar > i{background:var(--maths)}
+.xq.weak{background:var(--live-soft)}.xq.weak b{color:var(--live-ink)}
+.xscope{display:flex;flex-direction:column;gap:var(--s2);padding:0 var(--s5) var(--s4)}
+.xdays{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:var(--s2);padding:0 var(--s5) var(--s5)}
+.xday{display:flex;flex-direction:column;gap:var(--s2);padding:var(--s3);border-radius:var(--r-md);background:var(--ground)}
+.xday .tag.day{align-self:flex-start}
+.xnotes{margin:0 var(--s5) var(--s5)}
+.xrow{grid-template-columns:minmax(0,1fr) auto}
+@media (max-width:760px){.xq{grid-template-columns:auto minmax(0,1fr) 52px}.xq .bar{display:none}}
+
+/* one exam (canvas ExamRun board) */
+.xexam{gap:var(--s6)}
+.xt-run.on{background:var(--live-soft);border-color:var(--live-line)}
+.xt-run .xt-big{font-size:72px;line-height:1;font-weight:700;letter-spacing:-.03em}
+.xt-btns{flex-direction:row;flex-wrap:wrap;align-items:center;gap:var(--s3)}
+.xt-btns .xt-add{justify-content:flex-start}
+.xt-btns p{margin:0}
+.xfold > summary{cursor:pointer;list-style:none}
+.xfold > summary::-webkit-details-marker{display:none}
+.xq.run{grid-template-columns:auto minmax(0,1fr) auto 220px;padding:var(--s3) var(--s5)}
+.xq.run.xt-here{background:var(--live-soft)}
+.xsec{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;padding:var(--s3) var(--s5);background:var(--sunk)}
+.xt-linkrow .input{flex:1 1 100%}
+
 /* ================= 12 question fonts: the exam board's own ================= */
 /* Edexcel maths papers are set in Times, AQA chemistry papers in Arial (Tinos and Arimo are their twins) */
 body[data-subject="maths"] :is(.qtext,.stu-q,.ans .prose,.thints .prose,.bans,.bq .bt,.ansfront .prose,.ansback .prose,.ex-qtext,.tw){font-family:var(--font-edexcel)}
@@ -961,3 +1117,91 @@ body[data-subject="chem"] :is(.qtext,.stu-q,.ans .prose,.bans,.bq .bt,.ansfront 
 body[data-subject="maths"] .qtext{font-size:1.6rem;line-height:1.55}
 body[data-subject="maths"] .stu-q{font-weight:400}
 body[data-subject="maths"] :is(.qtext,.stu-q) .katex{font-size:1.08em}
+.revcard{padding:40px}
+.rev-q{font-size:28px;line-height:1.35;color:#000}
+.revcard details.fold > summary{min-height:56px;font-size:17px;color:var(--chem-ink)}
+.qbody .fig img{width:100%;max-height:none;border:0}
+/* his screen, as on the canvas */
+.stu-top{position:fixed;top:0;left:0;right:0;z-index:4;display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s5);pointer-events:none}
+.stu-top > *{pointer-events:auto}
+.stu-top .stu-menu{position:static;display:grid;place-items:center;background:transparent;color:var(--text-3);opacity:.6}
+.stu.clean .stu-view{padding:64px 96px 88px}
+.stu-card,.stu-twin{width:min(100%,1100px);margin:auto;padding:var(--s7);border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line)}
+.stu-card .stu-q{max-width:none;margin:0;text-align:left;font-size:clamp(1.6rem,3vw,2.6rem)}
+.stu-edge{width:56px;height:120px;display:grid;place-items:center;background:rgba(255,255,255,.7);color:var(--text-4);opacity:1}
+.stu-edge:hover,.stu-edge:focus-visible{opacity:1;color:var(--text-2);background:var(--surface)}
+.stu-chips{position:fixed;left:0;right:0;bottom:var(--s5);z-index:4;display:flex;justify-content:center;gap:var(--s2);flex-wrap:wrap;padding:0 var(--s4)}
+.stu-chips .it{display:flex;align-items:center;gap:var(--s2);min-height:40px;padding:0 14px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface);font-size:var(--fs-sm);font-weight:600;color:var(--text-2);cursor:pointer;white-space:nowrap}
+.stu-chips .it[aria-current]{background:var(--accent-wash);border-color:var(--accent-wash);color:var(--accent-ink)}
+@media (max-width:760px){.stu.clean .stu-view{padding:56px 12px 120px}.stu-card,.stu-twin{padding:var(--s5)}.stu-edge{display:none}}
+
+/* ================= phone (390 px), as on the canvas's phone boards ================= */
+@media (max-width:760px){
+  .brand > span:not(.logo),.brand small,.side-foot{display:none}
+  .side{flex-wrap:nowrap;justify-content:space-between}
+  .subjsw{flex:0 1 260px}
+  .phead .week{display:none}
+  .phead .tags > .tag:not(.mkchip){display:none}
+  .phead h1{font-size:var(--fs-xl)}
+  .home h2.sec{font-size:var(--fs-md)}
+  .tile{padding:var(--s4)}
+  .tile .flow em{display:none}
+  .tile .tag.topic{display:none}
+  .lrow .lt .tags,.lrow .score .bar{display:none}
+  .lrow{grid-template-areas:"d t m" "d s m"}
+  .inkcard .tags#homerevm{display:none}
+  /* Teach: menu, kind tag, step, clock; the verdicts as a row above the buttons */
+  .tcrumb > a,.tcrumb > b,.tcrumb > .hint,.tmini > a.btn,.tmini .preview,.tmini .tmore{display:none}
+  .teach3 .tcrumb{contain:none;flex:1 1 auto;overflow:visible}
+  .olab{display:none}
+  .tmini .clockpill{min-height:40px;padding:0 var(--s3);font-size:16px}
+  .teach3 .tbar-row{flex-wrap:nowrap}.teach3 .tcrumb{flex:1 1 auto}.teach3 .tmini{flex:none;flex-wrap:nowrap}
+  .ctl.big.vrail{top:auto;bottom:calc(var(--footh,80px) + 8px);left:var(--s3);right:var(--s3);transform:none;flex-direction:row;justify-content:space-between;overflow-x:auto;border-radius:var(--r-lg);padding:6px}
+  .ctl.big.vrail .vd{width:46px;height:46px;border-radius:14px}
+  .ctl.big.vrail .vrsep{width:1px;height:30px;margin:0}
+  .ctl.big.vrail .vrmenu{right:0;left:0;top:auto;bottom:calc(100% + 8px);transform:none;width:auto}
+  .teach3 .chunk.cur:has(.vrail){margin-right:0;margin-bottom:80px}
+  .tmini > .tag.num{display:none}
+  .tfoot kbd{display:none}.tfoot{gap:var(--s2)}.tfoot > .btn{padding:0 var(--s3);white-space:nowrap}.tfoot.three > .btn .icon{display:none}
+  .tflow{min-width:0;max-width:100%}.tflow > span{min-width:0;flex:1 1 0}
+  .qcard > .row,.qbody .row{flex-wrap:wrap;min-width:0}
+  .qcard .ref{max-width:100%;min-width:0;overflow:hidden}.qcard .ref > span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+
+/* marking (canvas ExamMark board): question list on the left, one question at a time */
+.xmark{display:flex;flex-direction:column;gap:var(--s5);padding-bottom:120px}
+.xexam .xt-head,.xmark .xt-head{display:flex;flex-direction:column;align-items:stretch}
+.xmbody{display:grid;grid-template-columns:250px minmax(0,1fr);gap:var(--s6);align-items:start}
+.xmlist{display:flex;flex-direction:column;gap:var(--s1);position:sticky;top:var(--s4)}
+.xml{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:var(--s2);align-items:center;min-height:56px;padding:6px 12px;border-radius:var(--r-md);border:0;background:transparent;text-align:left;cursor:pointer;width:100%;color:var(--text)}
+.xml .tag{justify-content:center}
+.xml b:not(.num){font-weight:600;font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xml:hover{background:var(--surface)}
+.xml[aria-current]{background:var(--surface);box-shadow:0 0 0 1px var(--line)}
+.xmmain{min-width:0;display:flex;flex-direction:column;gap:var(--s5)}
+.xmfoot{position:sticky;bottom:0;z-index:3;display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap;justify-content:space-between}
+@media (max-width:760px){.xmbody{grid-template-columns:1fr}.xmlist{position:static;flex-direction:row;overflow-x:auto}.xml{grid-template-columns:auto auto;min-width:max-content}.xml .stack{display:none}}
+.xmark .xt-mq{margin:0;padding:0;background:none;border:0;box-shadow:none}
+.xmark .xt-3{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.xmark .xt-3 > .xt-col:first-child{grid-column:1 / -1}
+.xmark .xt-3 > .xt-col:first-child .xt-lab{display:none}
+.xmark .xt-3 > .xt-col:first-child .xt-qtext{font-size:var(--fs-lg);line-height:1.45;color:var(--text)}
+.xmark .xt-3 > .xt-col:not(:first-child){padding:var(--s5);border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line);min-height:260px}
+.xmark .xt-markrow{padding:var(--s5);border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line)}
+@media (max-width:760px){.xmark .xt-3{grid-template-columns:1fr}}
+/* side by side (canvas ExamCompare board) */
+.xt-cmp{padding:0;gap:0}
+.xt-cmp .xt-cmphead{padding:var(--s3) var(--s5);background:var(--surface);border-bottom:1px solid var(--line);gap:var(--s3)}
+.xt-cmp .xt-cmpq{margin:var(--s4) var(--s5) 0}
+.xt-cmp .xt-cmp2{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--s5);padding:var(--s5)}
+.xt-cmp .xt-cmp2 > .card{padding:var(--s5);display:flex;flex-direction:column;gap:var(--s4)}
+.xt-cmp .xt-msans{padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--sunk)}
+.xt-cmp .xt-markrow{margin:0;padding:0;border:0;background:none}
+.xt-cmpseg{overflow-x:auto;max-width:100%}
+@media (max-width:760px){.xt-cmp .xt-cmp2{grid-template-columns:1fr;padding:var(--s3)}.xt-cmp .xt-cmphead .tags{display:none}}
+.xt-cmp .xt-trow{display:grid;grid-template-columns:52px minmax(0,1fr) auto;grid-template-areas:"code text ctl";gap:var(--s3);align-items:center;padding:var(--s2) 0;margin:0;border-top:1px solid var(--line-soft);background:none}
+.xt-cmp .xt-trow > .xt-tcode{grid-area:code;text-align:center;padding:4px 0;border-radius:var(--r-sm);background:var(--sunk);font-size:var(--fs-sm)}
+.xt-cmp .xt-trow.on > .xt-tcode{background:var(--right-wash);color:var(--right)}
+.xt-cmp .xt-trow > .xt-ttext{grid-area:text;font-size:var(--fs-sm)}
+.xt-cmp .xt-trow > .xt-tvals,.xt-cmp .xt-trow > input{grid-area:ctl}
+.xt-cmp .xt-tpart{margin-top:var(--s3)}

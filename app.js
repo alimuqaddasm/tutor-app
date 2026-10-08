@@ -191,7 +191,7 @@ function nav(r) { var k = r.indexOf("/record") === 0 ? "record" : r.indexOf("/se
   $$("[data-nav]").forEach(function (a) { if (a.getAttribute("data-nav") === k) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   $("#who").textContent = CFG.token ? CFG.student + " · " + CFG.device : ""; if (typeof subjSync === "function") subjSync(); }
 function render() {
-  var r = route(); nav(r); document.body.removeAttribute("data-subject"); document.body.classList.remove("teaching", "student", "toc-open");
+  var r = route(); nav(r); document.body.removeAttribute("data-subject"); document.body.classList.remove("teaching", "student", "toc-open", "focus");
   if (!CFG.token && r.indexOf("/settings") !== 0) { location.hash = "#/settings"; return; }
   if (r.indexOf("/settings") === 0) return settingsView();
   if (r.indexOf("/lesson/") === 0) { var rest = decodeURIComponent(r.slice(8)), mm = /\/(teach|student)$/.exec(rest); MODE = mm ? mm[1] : "plan"; return lessonView(rest.replace(/\/(teach|student)$/, "")); }
@@ -207,28 +207,37 @@ function fail(e) { if (e && e.broken) { app.innerHTML = '<div class="empty"><h3>
 
 /* ---------------- settings ---------------- */
 function settingsView() {
-  var f = ls("tutor.font") || "jakarta";
-  app.innerHTML = '<div class="section-h"><h2>Settings for this device</h2></div>' +
-    '<form class="card form" id="setform" style="padding:20px 22px">' +
-    '<div class="field"><label for="s-token">GitHub key</label><input type="password" id="s-token" autocomplete="off" value="' + esc(CFG.token) + '" placeholder="github_pat_…"><span class="hint">Fine-grained token with Contents read and write on the tutoring repo. It stays in this browser only.</span></div>' +
-    '<div class="row2"><div class="field"><label for="s-repo">Repo</label><input type="text" id="s-repo" value="' + esc(CFG.repo) + '"></div>' +
-    '<div class="field"><label for="s-dev">Device name</label><input type="text" id="s-dev" value="' + esc(CFG.device) + '" placeholder="tablet, la57, mac"></div>' +
-    '<div class="field"><label for="s-stu">Student</label><input type="text" id="s-stu" value="' + esc(CFG.student) + '"></div>' +
-    '<div class="field"><label for="s-xapi">Exam server</label><input type="text" id="s-xapi" value="' + esc(ls("tutor.examApi") || window.EXAM_API || "") + '" placeholder="https://tutor-exams….workers.dev"></div>' +
-    '<div class="field"><label for="s-xpw">Exam password</label><input type="password" id="s-xpw" autocomplete="off" value="' + esc(ls("tutor.examPw") || "") + '"><span class="hint">For the Exams tab. It stays in this browser only.</span></div>' +
-    '<div class="field"><label for="s-font">Font</label><select id="s-font">' + [["jakarta", "Plus Jakarta Sans (standard)"], ["hanken", "Hanken Grotesk (rounder)"], ["atkinson", "Atkinson Hyperlegible (easiest to read)"]].map(function (o) { return '<option value="' + o[0] + '"' + (f === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + '</select></div></div>' +
-    '<div class="field"><span class="lab">Teach flow</span><span class="laysw" role="group">' + FLOWS.map(function (f) { return '<button type="button" class="chip" data-flow="' + f[0] + '" aria-pressed="' + ((ls("tutor.flow") || "quick") === f[0]) + '">' + f[1] + '</button>'; }).join("") + '</span><span class="hint">Quick: no title screens, a section\u2019s points on one screen beside its picture, the quiz as one list you tap.</span></div>' +
-    '<div class="field"><span class="lab">Hints in Teach</span><label class="mkchk"><input type="checkbox" data-fold="maths"' + (foldOn("maths") ? " checked" : "") + '> Maths: fold the hints under each question (open them only when he is stuck)</label><label class="mkchk"><input type="checkbox" data-fold="chem"' + (foldOn("chem") ? " checked" : "") + '> Chemistry: fold the hints the same way</label></div>' +
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="submit">Save and test</button><button class="btn" type="button" id="s-cache">Clear this device’s cache</button><button class="btn danger" type="button" id="s-clear">Remove key from this device</button><span class="hint" id="s-msg"></span></div></form>' +
-    '<div class="card" style="padding:18px 20px;margin-top:16px;max-width:820px"><h3 style="font-size:var(--fs-lg)">Install on this device</h3><p class="hint" style="margin:6px 0 12px">Adds a Tutor Desk icon to the home screen. It opens full screen, and lessons you have opened before keep working without internet; taps upload when you are back online. On the Samsung tablet: browser menu \u2192 <b>Add page to</b> \u2192 <b>Home screen</b> (or <b>Install app</b>).</p><button class="btn primary" type="button" id="s-install" hidden>Install Tutor Desk</button></div>';
+  var f = ls("tutor.font") || "jakarta", fl = ls("tutor.flow") || "quick";
+  var grp = function (id, title, hint, body) { return '<section class="grp" aria-labelledby="' + id + '"><div class="stack s2"><h2 id="' + id + '" class="t-sec">' + title + '</h2><span class="hint">' + hint + '</span></div>' + body + '</section>'; };
+  var fonts = [["jakarta", "Plus Jakarta Sans", "Friendly, the default"], ["hanken", "Hanken Grotesk", "Plain and compact"], ["atkinson", "Atkinson Hyperlegible Next", "Extra readable"]];
+  app.innerHTML = '<form class="wrap settings" id="setform" style="gap:0;max-width:1040px">' +
+    '<header class="head" style="padding-bottom:var(--s6)"><div class="stack s2"><h1 class="t-page">Settings</h1><div class="tags">' + tag("This device only") + tag("Not saved to GitHub") + '</div></div><span class="tag lg" id="s-msg" aria-live="polite">Not tested yet</span></header>' +
+    grp("s1", "GitHub", "Where the lessons live.", '<div class="card pad stack s5"><div class="field"><label for="s-token">GitHub key</label><input class="input" type="password" id="s-token" autocomplete="off" value="' + esc(CFG.token) + '" placeholder="github_pat_…"><div class="tags">' + tag("Fine-grained token") + tag("Contents: read and write") + tag("Stays in this browser") + '</div></div>' +
+      '<div class="cols3"><div class="field"><label for="s-repo">Repo</label><input class="input" type="text" id="s-repo" value="' + esc(CFG.repo) + '"></div><div class="field"><label for="s-dev">Device name</label><input class="input" type="text" id="s-dev" value="' + esc(CFG.device) + '" placeholder="Tablet, laptop"></div><div class="field"><label for="s-stu">Student</label><input class="input" type="text" id="s-stu" value="' + esc(CFG.student) + '"></div></div></div>') +
+    grp("s2", "Exam server", "For the Exams tab.", '<div class="card pad cols2"><div class="field"><label for="s-xapi">Server address</label><input class="input" type="text" id="s-xapi" value="' + esc(ls("tutor.examApi") || window.EXAM_API || "") + '" placeholder="https://tutor-exams.workers.dev"></div><div class="field"><label for="s-xpw">Exam password</label><input class="input" type="password" id="s-xpw" autocomplete="off" value="' + esc(ls("tutor.examPw") || "") + '"></div></div>') +
+    grp("s3", "Teaching", "How Teach behaves.", '<div class="card pad stack s5"><div class="field"><span class="fl">Teach flow</span><div class="cols2" role="group" aria-label="Teach flow">' +
+      '<button class="choice" type="button" data-flow="steps" aria-pressed="' + (fl === "steps") + '"><b>Step by step</b><span class="tags">' + tag("Title screens") + tag("One point at a time") + '</span></button>' +
+      '<button class="choice" type="button" data-flow="quick" aria-pressed="' + (fl === "quick") + '"><b>Quick flow</b><span class="tags">' + tag("Points beside the picture") + tag("Quiz as one list") + '</span></button></div>' +
+      '<div class="tags"><span class="lab">Questions</span>' + tag("Question fills the screen") + tag("Verdicts on the right edge") + tag("A turns to the answer") + '</div></div>' +
+      '<div class="field"><span class="fl">Hints in Teach</span><label class="check"><input type="checkbox" data-fold="maths"' + (foldOn("maths") ? " checked" : "") + '>Maths: fold the hints under each question</label><label class="check"><input type="checkbox" data-fold="chem"' + (foldOn("chem") ? " checked" : "") + '>Chemistry: fold the hints the same way</label></div></div>') +
+    grp("s4", "Font", "Questions always keep the exam board’s font.", '<div class="card pad cols3" role="group" aria-label="Font"><input type="hidden" id="s-font" value="' + esc(f) + '">' + fonts.map(function (o) {
+      return '<button class="choice" type="button" data-fontpick="' + o[0] + '" aria-pressed="' + (f === o[0]) + '"><span style="font-family:\'' + o[1] + '\',sans-serif;font-size:26px;font-weight:600;line-height:1.2">Aa</span><b>' + o[1].replace(" Next", "") + '</b><span class="hint">' + o[2] + '</span></button>'; }).join("") + '</div>') +
+    grp("s5", "This device", "Install, cache and key.", '<div class="card pad stack"><div class="row"><button class="btn" type="button" id="s-install" hidden>Install on this device</button><div class="tags">' + tag("Opens full screen") + tag("Works offline") + '</div></div>' +
+      '<div class="row"><button class="btn" type="button" id="s-cache">Clear this device’s cache</button><span class="hint">Reloads lessons from GitHub. Nothing is lost.</span></div><div class="row"><button class="btn danger" type="button" id="s-clear">Remove key from this device</button></div><div class="row"><button class="btn" type="button" data-suggest>Suggest a change</button><button class="btn trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button><span class="hint">Try-out: practise on real lessons, nothing saves.</span></div></div>') +
+    '<div class="row savebar"><a class="btn quiet" href="#/">Cancel</a><button class="btn pri" type="submit">Save and test</button></div></form>';
+  if (installEvt) $("#s-install").hidden = false;
+  if (CFG.token) testConnection();
 }
+document.addEventListener("change", function (e) { if (e.target.id === "wk-files") { var n = e.target.files.length, p = $("#wk-pick"); if (p) p.textContent = n ? n + (n > 1 ? " files" : " file") + " chosen" : ""; } });
+document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-fontpick]"); if (!b) return; $("#s-font").value = b.getAttribute("data-fontpick");
+  $$("[data-fontpick]").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); }); });
 function testConnection() {
-  var m = $("#s-msg"); m.textContent = "Testing…";
-  gh("/repos/" + CFG.repo).then(function (r) {
-    if (r.status === 404) { m.textContent = "Repo not found, or the key can’t see it."; return; }
-    var p = r.json.permissions || {}; m.textContent = p.push ? "Connected. This device can read and save." : "Connected, but the key can’t save. Give it Contents: read and write.";
-    if (p.push) setTimeout(function () { location.hash = "#/"; }, 900);
-  }).catch(function (e) { m.textContent = e.status === 401 ? "GitHub refused the key." : "Couldn’t connect: " + e.message; });
+  var m = $("#s-msg"), say = function (txt, cls) { if (!m) return; m.className = "tag lg" + (cls ? " " + cls : ""); m.innerHTML = (cls === "ok" ? '<span class="dot ok"></span>' : "") + esc(txt); };
+  say("Testing…");
+  return gh("/repos/" + CFG.repo).then(function (r) {
+    if (r.status === 404) { say("Repo not found, or the key can’t see it", "bad"); return; }
+    var p = r.json.permissions || {}; if (p.push) say("Connected · can read and save", "ok"); else say("Connected, but the key can’t save", "live");
+  }).catch(function (e) { say(e.status === 401 ? "GitHub refused the key" : "Couldn’t connect: " + e.message, "bad"); });
 }
 
 /* ---------------- lessons list ---------------- */
@@ -277,21 +286,43 @@ function doneOf(x, k, kind) { if (!x) return false; if (kind === "q") { var a = 
 function partsOf(s, x) { if (!s || !s.phases) return [];
   return s.phases.map(function (p) { var its = phaseItems(p).filter(function (i) { return i.kind !== "module"; }), d = its.filter(function (i) { return doneOf(x, i.k, i.kind); }).length; return { name: p.name, w: pw(p), f: its.length ? d / its.length : 0 }; }); }
 /* tags (Clear Desk: repeated facts are tags, not sentences) */
-function tag(txt, cls) { return '<span class="tag' + (cls ? " " + cls : "") + '">' + txt + '</span>'; }
+/* a tag starts with a capital (Ali, 8 Oct), whatever the data says; "pH" and the like stay as they are */
+function tag(txt, cls) { txt = String(txt); if (/^[a-z][a-z]/.test(txt)) txt = txt.charAt(0).toUpperCase() + txt.slice(1); return '<span class="tag' + (cls ? " " + cls : "") + '">' + txt + '</span>'; }
 function subjTag(sj) { return tag('<span class="dot"></span>' + esc(SUBJ[sj] || sj), esc(sj)); }
 function topicTag(s) { var tp = s && s.topic; if (!tp || !(tp.code || tp.name)) return ""; return tag((tp.code ? '<b>' + esc(tp.code) + '</b>' : "") + esc(tp.name || ""), "topic"); }
+/* first letter upper case on every label (Ali, 8 Oct) */
+function cap(s) { s = String(s == null ? "" : s); return s.charAt(0).toUpperCase() + s.slice(1); }
+/* "4 binomial expansion" or "3.3.7 optical isomerism" as a topic tag: the number bold, the name after it */
+function topicStrTag(s) { var m = /^(\d+(?:\.\d+)*)\s+(.+)$/.exec(String(s || "").trim()); if (!m) return s ? tag(esc(cap(s)), "topic") : ""; return tag('<b>' + esc(m[1]) + '</b>' + esc(cap(m[2])), "topic"); }
+/* "Edexcel C3 January 2010 Q8" as a source reference: publisher | paper | question */
+var PUBS = ["Maths Genie", "Chemistry Tutor", "Solomon", "Edexcel", "AQA", "OCR", "CGP", "Pearson", "Physics and Maths Tutor", "PMT"];
+function refTag(src) { src = String(src || "").replace(/\s*\((?![a-z]{1,4}\))[^)]*\)/g, "").replace(/Trigonometry Worksheet/g, "Trig").replace(/,\s*(?=Q\d)/, " ").trim(); if (!src) return "";
+  var q = /\s(Q\d+\w*(?:\s?\([a-z]+\))?)$/.exec(src), qn = q ? q[1] : "", rest = q ? src.slice(0, q.index) : src, pub = "";
+  PUBS.forEach(function (p) { if (!pub && rest.indexOf(p) === 0) pub = p; });
+  var mid = pub ? rest.slice(pub.length).trim() : rest;
+  mid = mid.replace(/^Year (\d) Question Set /, "Y$1 Set ");
+  return '<span class="ref">' + (pub ? '<span>' + esc(pub) + '</span>' : "") + (mid ? '<span>' + esc(mid) + '</span>' : "") + (qn ? '<span class="qn">' + esc(qn) + '</span>' : "") + '</span>'; }
+function hmin(m) { m = Math.round(+m || 0); var h = Math.floor(m / 60); return h ? h + " h " + (m % 60) + " min" : m + " min"; }
+var VCOL = { right: "var(--right)", partly: "var(--partly)", wording: "var(--wording)", terminology: "var(--term)", wrong: "var(--wrong)", skipped: "var(--none)" };
 /* the kind of a lesson part, from the start of its name ("Practice: Set 6" is Practice). Older names are matched on their words */
 var KINDS = [["Quiz", /^(hard )?(oral )?quiz/i], ["Starter", /^starter/i], ["Re-teach", /^re-?teach/i], ["New", /^(new\b|teach\b)/i], ["Practice", /^practi[cs]e/i], ["Revision", /^revision/i],
   ["Exam", /^(exam|test)\b/i], ["Video", /^video/i], ["Keep it fresh", /^keep it fresh/i], ["Check", /^(exit check|check|last topic)/i], ["Homework", /^(homework|set the)/i], ["If time", /^(if time|extra material)/i],
   ["Bank", /^question bank/i], ["Recycle", /^recycle/i]];
 function kindOf(name) { name = String(name || "").trim(); for (var i = 0; i < KINDS.length; i++) if (KINDS[i][1].test(name)) return KINDS[i][0]; var c = /^([^:]{2,16}):/.exec(name); return c ? c[1] : ""; }
-function partKinds(s) { var seen = {}; return ((s && s.phases) || []).map(function (p) { return kindOf(p.name); }).filter(function (k) { if (!k || k === "Bank" || k === "Recycle" || k === "Homework" || seen[k]) return false; seen[k] = 1; return true; }); }
+function partKinds(s) { var seen = {}; return ((s && s.phases) || []).map(function (p) { return kindOf(p.name); }).filter(function (k) { if (!k || k === "If time" || k === "Bank" || k === "Recycle" || k === "Homework" || seen[k]) return false; seen[k] = 1; return true; }); }
 function kindsHTML(s) { var ks = partKinds(s); return ks.length ? '<span class="kinds">' + ks.map(function (k) { return '<span class="k' + (k === "If time" ? " opt" : "") + '">' + esc(k) + '</span>'; }).join("") + '</span>' : ""; }
 /* a part's name without its kind ("Practice: Set 6, Q15 to Q18" shows as "Set 6, Q15 to Q18" under a Practice tag) */
 function partTitle(name) { var k = kindOf(name), m = /^[^:]{2,24}:\s*(.+)$/.exec(String(name || "")); return k && m ? m[1].charAt(0).toUpperCase() + m[1].slice(1) : name; }
 /* the lesson's title is its main topic. Older titles list the parts ("Hard quiz, then Tollens'"): show the part after "then" */
-function lessonTitle(s, x) { var t = (s && s.title) || (x && x.title) || "Lesson"; if (s && s.topic) return t;
-  var m = /,\s*then\s+(?:the\s+)?(.+)$/i.exec(t); if (m) t = m[1]; t = t.replace(/,\s*after\s+.+$/i, ""); return t.charAt(0).toUpperCase() + t.slice(1); }
+function lessonTitle(s, x) { return lessonParts(s, x).name; }
+/* "7.1 Addition formulae" splits into a topic tag (7.1) and the name; "the chapters 1 to 6 test" into an Exam tag and "Chapters 1 to 6" (Ali, 8 Oct) */
+function lessonParts(s, x) { var t = (s && s.title) || (x && x.title) || "Lesson";
+  if (!(s && s.topic)) { var m = /,\s*then\s+(?:the\s+)?(.+)$/i.exec(t); if (m) t = m[1]; t = t.replace(/,\s*after\s+.+$/i, ""); }
+  var c = /^(\d+(?:\.\d+)+)\s+(.+)$/.exec(t), code = c ? c[1] : ""; if (c) t = c[2];
+  var e = /^(.+?)\s+(test|exam|mock)$/i.exec(t), exam = !!e; if (e) t = e[1];
+  return { name: cap(t), code: code, exam: exam }; }
+/* the tags a lesson title carries: its section number (when the topic tag doesn't show it already) and Exam */
+function lessonTags(s, x) { var p = lessonParts(s, x), tp = s && s.topic; return (p.code && !(tp && tp.code) ? tag('<b>' + esc(p.code) + '</b>', "topic") : "") + (p.exam ? tag("Exam", "live") : ""); }
 /* ---------------- missed lessons and make-up time ----------------
    students/<s>/makeup.json = {"start": {"date", "owed", "note"}, "entries": [{"id", "at", "date", "lesson", "subject", "kind": "miss", "by": "ali|student", "minutes", "note", "d"}]}
    A lesson counts as taught when it is finished, has minutes and has feedback. Once its day has passed without that, the
@@ -359,7 +390,7 @@ function homeHTML(items) {
     if (d < t) (byDay[d] = byDay[d] || []).push({ s: sj, k: "miss", tip: SUBJ[sj] + ": not taught" });
     var due = dueOf(it); if (due >= t) (byDay[due] = byDay[due] || []).push({ s: sj, k: "plan", tip: SUBJ[sj] + ": planned" + (due !== d ? " (moved from " + fmtDate(d) + ")" : "") }); });
   var week = '<div class="week" aria-label="This week">' + wk.map(function (d) { var dd = pdate(d), off = OFFDAYS.indexOf(dd.getDay()) >= 0;
-    return '<div class="wd' + (d === t ? " today" : off ? " off" : "") + '"><span>' + DAY[dd.getDay()] + '</span><span class="n">' + dd.getDate() + '</span><span class="dots">' + (d === t ? "today" : off ? "off" : (byDay[d] || []).map(function (o) { return '<i class="' + esc(o.s) + ' ' + o.k + '" title="' + esc(o.tip) + '"></i>'; }).join("")) + '</span></div>'; }).join("") + '</div>';
+    return '<div class="wd' + (d === t ? " today" : off ? " off" : "") + '"><span>' + DAY[dd.getDay()] + '</span><span class="n">' + dd.getDate() + '</span><span class="dots">' + (d === t ? "Today" : off ? "Off" : (byDay[d] || []).map(function (o) { return '<i class="' + esc(o.s) + ' ' + o.k + '" title="' + esc(o.tip) + '"></i>'; }).join("")) + '</span></div>'; }).join("") + '</div>';
   var mko = makeupSum(HOMEALL.length ? HOMEALL : items); mkSide(mko);
   var h = '<header class="phead"><div class="phead-row"><div class="stack s3" style="min-width:0"><h1>' + esc(DAYL[pdate(t).getDay()] + " " + pdate(t).getDate() + " " + MONL[pdate(t).getMonth()]) + '</h1><div class="tags">' +
     (sp !== "all" ? subjTag(sp) : "") + tag(OFFDAYS.length ? [1, 2, 3, 4, 5, 6, 0].filter(function (d) { return OFFDAYS.indexOf(d) < 0; }).map(function (d) { return DAY[d]; }).join(" · ") : "Every day") + tag(LESSON_MIN + " min a subject") +
@@ -374,9 +405,9 @@ function homeHTML(items) {
       var when = dateOf(up) < t ? (dueOf(up) < t ? tag("Was it taught? See above", "live") : tag("Moved to " + esc(fmtDate(dueOf(up))), "live")) : dateOf(up) > t ? tag(esc(fmtDate(dateOf(up))), "day") : "";
       var ps = partsOf(s, x), mins = ((s.phases || []).reduce(function (m, p) { return Math.max(m, +p.end || 0); }, 0)) || LESSON_MIN;
       var cur = ps.findIndex(function (p) { return p.f < 1; });
-      var flow = ps.length ? '<div class="flow ' + esc(sj) + '">' + ps.filter(function (p) { var k = kindOf(p.name); return k !== "Bank" && k !== "Recycle"; }).map(function (p, i) { var k = kindOf(p.name) || p.name;
+      var flow = ps.length ? '<div class="flow ' + esc(sj) + '">' + ps.filter(function (p) { var k = kindOf(p.name); return k !== "Bank" && k !== "Recycle" && k !== "If time"; }).map(function (p, i) { var k = kindOf(p.name) || p.name; if (k === "Keep it fresh") k = "Fresh";
         return '<span style="flex:' + p.w + '"' + (i === cur ? ' class="on"' : k === "If time" ? ' class="opt"' : "") + ' title="' + esc(p.name) + '"><i></i><em>' + esc(k) + '</em></span>'; }).join("") + '</div>' : "";
-      return '<article class="tile" data-subject="' + sj + '"><div class="tags">' + subjTag(sj) + topicTag(s) + st + when + '</div><h2>' + esc(lessonTitle(s, x)) + '</h2>' + flow +
+      return '<article class="tile" data-subject="' + sj + '"><div class="tags">' + subjTag(sj) + topicTag(s) + lessonTags(s, x) + st + when + '</div><h2>' + esc(lessonTitle(s, x)) + '</h2>' + flow +
         '<div class="acts"><a class="btn go" href="#/lesson/' + encodeURIComponent(up.id) + '/teach">Teach ▶</a><a class="btn" href="#/lesson/' + encodeURIComponent(up.id) + '">Open the plan</a>' + tag(mins + " min") + '</div></article>'; }
     return '<article class="tile none" data-subject="' + sj + '"><div class="tags">' + subjTag(sj) + tag("No script yet", "dash") + '</div><h2>Next ' + esc(SUBJ[sj].toLowerCase()) + ' lesson</h2>' +
       (last ? '<div class="tags"><span class="hint">Last</span>' + tag(esc(fmtDate(dateOf(last)))) + tag(esc(lessonTitle(last.s, last.x)), "line") + '</div>' : '<p>Ask Claude to draft the first script.</p>') +
@@ -387,14 +418,14 @@ function homeHTML(items) {
     var s = it.s || {}, x = it.x, sj = subjOf(it), d = pdate(dateOf(it)), sc = x ? score(x) : { n: 0 }, m = x && x.time && x.time.minutes;
     var st = x && x.status === "finished" ? "" : x && x.status === "in-progress" ? tag("In progress", "live") : s.status === "draft" ? tag("Draft script") : it.script ? tag("Script ready") : "";
     var extra = st + (it.marking ? tag("Marked", "ok") : it.work ? tag(it.work + " photo" + (it.work > 1 ? "s" : "")) : "");
-    return '<a class="lrow" data-subject="' + esc(sj) + '" href="#/lesson/' + encodeURIComponent(it.id) + '"><span class="dblock">' + DAY[d.getDay()] + '<b>' + d.getDate() + '</b></span><span class="lt"><b>' + esc(lessonTitle(s, x)) + '</b>' + (kindsHTML(s) || extra ? '<span class="tags">' + kindsHTML(s) + extra + '</span>' : "") + '</span>' +
+    return '<a class="lrow" data-subject="' + esc(sj) + '" href="#/lesson/' + encodeURIComponent(it.id) + '"><span class="dblock">' + DAY[d.getDay()] + '<b>' + d.getDate() + '</b></span><span class="lt"><b>' + esc(lessonTitle(s, x)) + '</b>' + (kindsHTML(s) || extra || lessonTags(s, x) ? '<span class="tags">' + lessonTags(s, x) + kindsHTML(s) + extra + '</span>' : "") + '</span>' +
       '<span class="score">' + (sc.n ? '<span>' + sc.r + '/' + sc.n + ' right</span><span class="bar"><i style="width:' + Math.round(sc.r / sc.n * 100) + '%"></i></span>' : '<span class="hint">' + (x && x.status === "finished" ? "No verdicts" : "") + '</span>') + '</span>' +
       '<span class="mins' + (m && x.status === "finished" && m < LESSON_MIN - 5 ? " short" : "") + '">' + (m ? esc(Math.round(m)) + '<small> min</small>' : "") + '</span></a>'; }).join("");
   /* this week's numbers */
   var mins = 0, r = 0, n = 0, logged = 0;
   items.forEach(function (it) { if (wk.indexOf(dateOf(it)) < 0 || !it.x) return; if (it.x.time && it.x.time.minutes) mins += +it.x.time.minutes; if (it.x.status === "finished") logged++; var sc = score(it.x); r += sc.r; n += sc.n; });
   var side = '<div class="inkcard" id="homerev"><div class="k">Mistakes warm-up</div><div class="tags"><span class="tag live num" id="homerevn">…</span></div><div class="q" id="homerevq">Loading his mistakes…</div><div class="tags" id="homerevm"></div><a class="btn" href="#/revise">Start warm-up · 5 min</a></div>' +
-    '<div class="statcard"><span class="k">This week</span><div class="row base" style="gap:var(--s5)"><span><span class="big">' + Math.floor(mins / 60) + ' h ' + Math.round(mins % 60) + '</span> <span class="hint">taught</span></span><span><span class="big">' + (n ? r + "/" + n : "–") + '</span> <span class="hint">right</span></span></div>' +
+    '<div class="statcard"><span class="k">This week</span><div class="row base" style="gap:var(--s5)"><span><span class="big">' + Math.floor(mins / 60) + ' h ' + Math.round(mins % 60) + '</span> <span class="hint">taught</span></span><span><span class="big">' + (n ? r + "/" + n : "-") + '</span> <span class="hint">right</span></span></div>' +
     '<div class="statline"><span>Lessons logged</span><b>' + logged + '</b></div></div>';
   side += makeupCard(HOMEALL.length ? HOMEALL : items);
   return h + askHTML(items) + '<div id="homeasg"></div><div class="home"><div><h2 class="sec" style="margin-top:0">Today</h2><div class="tiles">' + tiles + '</div>' + (rows ? '<div class="sech"><h2 class="sec">Recent lessons</h2><a class="link" href="#/record">See all in Record</a></div><div class="rows">' + rows + '</div>' : "") + '</div><div>' + side + '</div></div>';
@@ -409,7 +440,8 @@ function fillHomeAsg() {
     list = list.filter(function (a) { return a && a.status !== "done"; }); if (!list.length || !$("#homeasg")) return;
     $("#homeasg").innerHTML = list.map(function (a) {
       var secs = a.sections || [], days = secs.reduce(function (m, x) { m[x.day] = 1; return m; }, {});
-      return '<a class="asgstrip" href="#/exams"><span class="tag">Assignment</span><b>' + esc(a.title || "Assignment") + '</b><span class="hint">' + Object.keys(days).length + ' days · ' + secs.length + ' parts' + (a.status === "ready" ? " · ready to load" : a.status ? " · " + esc(a.status) : "") + '</span><span class="go">Open in Exams</span></a>';
+      var ttl = String(a.title || "Assignment").replace(/,\s*\d{1,2}(\s+\w+)?\s+to\s+\d{1,2}\s+\w+$/, ""), dd = secs.map(function (x) { return x.date; }).filter(Boolean).sort();
+      return '<a class="asgstrip" href="#/exams">' + tag("Assignment", "ask") + '<b>' + esc(ttl) + '</b><span class="tags">' + (dd.length ? tag(esc(fmtDate(dd[0]) + " to " + fmtDate(dd[dd.length - 1]))) : "") + tag(Object.keys(days).length + " days") + tag(secs.length + " sections") + (a.status === "ready" ? tag("Not sent yet", "dash") : a.status ? tag(esc(cap(a.status))) : "") + '</span><span class="go">Open in Exams</span></a>';
     }).join("");
   });
 }
@@ -429,10 +461,18 @@ document.addEventListener("click", function (e) { var b = e.target.closest && e.
 
 /* ---------------- new unscripted lesson ---------------- */
 function newView() {
-  app.innerHTML = '<a class="back" href="#/">← Lessons</a><div class="section-h"><h2>Log a lesson without a script</h2></div><form class="card form" id="newform" style="padding:20px 22px">' +
-    '<div class="row2"><div class="field"><label for="n-date">Date</label><input type="date" id="n-date" value="' + todayIso() + '" required></div><div class="field"><label for="n-subj">Subject</label><select id="n-subj"><option value="chem">Chemistry</option><option value="maths">Maths</option></select></div></div>' +
-    '<div class="field"><label for="n-title">What’s it on?</label><input type="text" id="n-title" required placeholder="e.g. 7.1 Addition formulae"></div><label class="mkchk"><input type="checkbox" id="n-makeup"> Make-up lesson <span class="hint">(all its minutes come off the make-up time; any day)</span></label><div><button class="btn primary" type="submit">Start logging</button></div></form>';
+  var sj = subjPick() === "maths" ? "maths" : "chem";
+  app.innerHTML = '<div class="wrap narrow" style="max-width:640px"><header class="stack s3"><div class="crumb"><a href="#/">Lessons</a><span aria-hidden="true">/</span><span>New</span></div><h1 class="t-title">Log a lesson without a script</h1><div class="tags">' + tag("Add notes, photos and times after") + '</div></header>' +
+    '<form class="card pad-l stack s5" id="newform"><input type="hidden" id="n-subj" value="' + sj + '"><div class="field"><span class="fl">Subject</span><div class="row" role="group" aria-label="Subject">' +
+    [["chem", "Chemistry"], ["maths", "Maths"]].map(function (o) { return '<button class="pick" type="button" data-subject="' + o[0] + '" data-npick="' + o[0] + '" aria-pressed="' + (sj === o[0]) + '"><span class="dot ' + o[0] + '"></span>' + o[1] + '</button>'; }).join("") + '</div></div>' +
+    '<div class="field"><label for="n-date">Date</label><input class="input" type="date" id="n-date" value="' + todayIso() + '" required></div>' +
+    '<div class="field"><label for="n-title">Main topic</label><input class="input" type="text" id="n-title" required placeholder="e.g. Addition formulae"></div>' +
+    '<label class="check"><input type="checkbox" id="n-makeup">Make-up lesson <span class="hint">All its minutes come off make-up owed</span></label>' +
+    '<div class="row"><button class="btn pri" type="submit" data-nclock="1">Start the clock now</button><button class="btn" type="submit" data-nclock="0">Log it, no clock</button></div></form></div>';
 }
+document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-npick]"); if (b) { $("#n-subj").value = b.getAttribute("data-npick"); $$("[data-npick]").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); }); return; }
+  var c = e.target.closest && e.target.closest("[data-nclock]"); if (c) NEWCLOCK = c.getAttribute("data-nclock") === "1"; });
+var NEWCLOCK = false, STARTCLOCK = null;
 
 /* ---------------- lesson view ---------------- */
 var OPENAT = null;   // {id, phase}: open a lesson on a given part (the make-up "Yes" opens After the lesson)
@@ -488,38 +528,44 @@ function drawLesson() {
   document.body.setAttribute("data-subject", subj);
   var ps = phases(); if (!L.phase || !ps.some(function (p) { return p.id === L.phase; })) L.phase = x.status === "finished" ? "_after" : ps[0].id;
   var r = replay(x.time.log);
-  var tags = subjTag(subj) + tag(esc(fmtDate(x.date || s.date))) + topicTag(s) + (s.status === "draft" ? tag("Draft script") : "") + (x.status === "finished" ? tag("Logged", "ok") : x.status === "in-progress" ? tag("In progress", "live") : "") + (x.makeup ? tag("Make-up", "live") : "");
-  var h = '<div class="lhead phead"><div class="stack s2" style="min-width:0;flex:1 1 520px"><div class="crumb"><a href="#/">Lessons</a><span aria-hidden="true">/</span><span>' + esc(SUBJ[subj] || subj) + '</span></div><div class="tags">' + tags + '</div>' +
-    '<h1 title="' + esc(s.title || x.title || "") + '">' + esc(lessonTitle(s, x)) + '</h1>' + (s.summary ? '<div class="sub">' + clean(s.summary) + '</div>' : "") + '</div>' +
-    '<div class="stack s3" style="align-items:flex-end"><div class="modes"><a href="#/lesson/' + encodeURIComponent(L.id) + '" aria-current="true">Plan</a><a href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach ▶</a><a href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a></div>' +
-    '<div class="clock" aria-label="Lesson clock"><span class="t" id="clk">0:00</span><button class="btn small primary" id="clkgo" type="button"></button>' + (r.running ? '<button class="btn small" id="clkend" type="button">End lesson</button>' : "") + '<button class="btn small quiet" type="button" data-phase="_time">Edit part times</button><span class="st" id="clkst"></span></div></div></div>';
-  h += '<div class="lesson"><nav class="rail" aria-label="Lesson phases">' + ps.map(function (p, i) {
-    var pm = x.time.phaseMinutes && x.time.phaseMinutes[p.id], planned = p.start != null ? p.start + "–" + p.end + " min" : "";
-    var tm = p.sys ? ({ _revise: REV ? dueList(x.subject).length + " due" : "his old mistakes", _extra: x.extra.length ? x.extra.length + " logged" : "add as you go", _work: x.work.filter(function (w) { return !w.removed; }).length ? x.work.filter(function (w) { return !w.removed; }).length + " uploaded" : "upload photos", _time: x.time.minutes != null ? x.time.minutes + " min" + (x.time.started ? " · " + hhmm(x.time.started) + "–" + (x.time.ended ? hhmm(x.time.ended) : "") : "") : "not recorded yet", _after: x.feedback && x.feedback.at ? "saved " + hhmm(x.feedback.at) : "notes + finish" })[p.id] : planned + (pm ? " · took " + pm : "") + (phaseCount(p) ? " · " + phaseCount(p) : "");
+  if (/^_/.test(L.phase)) { document.body.classList.add("focus"); app.innerHTML = '<div class="wrap lpage">' + sysPage(L.phase) + '</div>'; var pg = $(".lpage"); fillRows(pg); loadImages(pg); maths(pg); if (L.phase === "_revise") reviseInto($("#revbox"), x.subject); tick(); return; }
+  document.body.classList.add("focus");
+  var mins = (s.phases || []).reduce(function (m, p) { return Math.max(m, +p.end || 0); }, 0);
+  var tags = subjTag(subj) + tag(esc(fmtDate(x.date || s.date))) + topicTag(s) + lessonTags(s, x) + (s.status === "draft" ? tag("Draft script") : "") + (x.status === "finished" ? tag("Logged", "ok") : x.status === "in-progress" ? tag("In progress", "live") : "") + (x.makeup ? tag("Make-up", "live") : "") + (mins ? tag(mins + " min") : "");
+  var focus = (s.focus || []).length ? '<div class="tags"><span class="lab">Focus</span>' + s.focus.map(function (f) { return '<button class="tag ask" type="button" data-focus>' + esc(plain(f.want)) + '</button>'; }).join("") + '</div>' : "";
+  var real = ps.filter(function (p) { return !p.sys && kindOf(p.name) !== "Bank" && kindOf(p.name) !== "Recycle"; }), ci = real.indexOf(ps.filter(function (p) { return p.id === L.phase; })[0]);
+  var flow = real.length > 1 ? '<div class="flow ' + esc(subj) + '" aria-label="Parts" style="padding-top:var(--s2)">' + real.map(function (p, k) { var kd = kindOf(p.name);
+    return '<span style="flex:' + pw(p) + '"' + (k === ci ? ' class="on"' : kd === "If time" ? ' class="opt"' : "") + ' title="' + esc(p.name) + '"><i></i><em>' + esc(kd ? kd + (kd === "New" ? " · " + partTitle(p.name) : "") : p.name) + '</em></span>'; }).join("") + '</div>' : "";
+  var h = '<header class="band stack lhead2"><div class="crumb"><a href="#/">Lessons</a><span aria-hidden="true">/</span><span>' + esc(SUBJ[subj] || subj) + '</span></div><div class="head"><div class="stack s3" style="min-width:0;flex:1 1 480px"><div class="tags">' + tags + '</div>' +
+    '<h1 class="t-title" title="' + esc(s.title || x.title || "") + '">' + esc(lessonTitle(s, x)) + '</h1>' + focus + (!focus && s.summary ? '<span class="hint">' + esc(plain(s.summary)) + '</span>' : "") + '</div>' +
+    '<div class="stack s3" style="align-items:flex-end"><div class="seg modes" role="group" aria-label="Mode"><a href="#/lesson/' + encodeURIComponent(L.id) + '" aria-current="true">Plan</a><a href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach</a><a href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"></path></svg></a></div>' +
+    '<div class="row"><span class="clockpill' + (r.running ? " live" : "") + '"><span class="dot"></span><span id="clk" class="num">0:00</span></span><button class="btn pri" id="clkgo" type="button"></button>' + (r.running ? '<button class="btn danger" id="clkend" type="button">End lesson</button>' : "") + '<button class="btn sm quiet" type="button" data-phase="_time">Edit part times</button></div></div></div>' + flow +
+    (s.focus && s.focus.length ? '<div id="focusbox" hidden>' + focusTable(s.focus) + '</div>' : "") + '</header>';
+  var ICO = { _revise: '<path d="M20 12a8 8 0 1 1-2.34-5.66"></path><path d="M20 4v5h-5"></path>', _extra: '<path d="M12 5v14M5 12h14"></path>', _work: '<rect x="3" y="5" width="18" height="15" rx="2"></rect><circle cx="12" cy="12.5" r="3.5"></circle>', _time: '<circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2 2M9 2h6"></path>', _after: '<path d="M5 12l5 5L20 7"></path>' };
+  h += '<div class="lesson"><nav class="rail" aria-label="Lesson parts">' + ps.map(function (p, i) {
+    var pm = x.time.phaseMinutes && x.time.phaseMinutes[p.id], planned = p.start != null ? p.start + " to " + p.end + " min" : "", live = x.work.filter(function (w) { return !w.removed; }).length;
+    var tm = p.sys ? ({ _revise: REV ? dueList(x.subject).length + " " + (SUBJ[x.subject] || "").toLowerCase() + " due" : "His old mistakes", _extra: x.extra.length ? x.extra.length + " logged" : "None yet", _work: live ? live + (live > 1 ? " photos" : " photo") : "No photos yet", _time: x.time.minutes != null ? Math.round(x.time.minutes) + " min" + (x.time.started ? " · " + hhmm(x.time.started) + (x.time.ended ? " to " + hhmm(x.time.ended) : "") : "") : "Not recorded yet", _after: x.feedback && x.feedback.at ? "Saved " + hhmm(x.feedback.at) : "Notes and finish" })[p.id]
+      : [planned, pm ? "took " + pm + " min" : "", phaseCount(p)].filter(Boolean).join(" · ");
     var kd = p.sys ? "" : kindOf(p.name);
-    return (p.id === "_revise" ? '<div class="sep"></div><div class="railh">Around the lesson</div>' : i === 0 ? '<div class="railh">Parts</div>' : "") + '<button type="button" data-phase="' + esc(p.id) + '" data-real="' + (p.sys ? "" : "1") + '"' + (p.id === L.phase ? ' aria-current="step"' : "") + '><span class="n">' + (p.sys ? { _revise: "↻", _extra: "+", _work: "▤", _time: "⏱", _after: "✓" }[p.id] : i + 1) + '</span>' + (kd ? tag(esc(kd), kd === "If time" ? "dash" : "line") : "") + '<span class="nm">' + esc(kd ? partTitle(p.name) : p.name) + '</span><span class="tm">' + esc(tm) + '</span></button>';
-  }).join("") + '</nav><section class="card page" id="phasebox"></section></div>';
-  app.innerHTML = h; drawPhase(); tick(); prefetchLesson();
+    return (p.id === "_revise" ? '<div class="sep"></div><div class="railh">Around the lesson</div>' : i === 0 ? '<div class="railh">Parts</div>' : "") + '<button type="button" class="' + (kd === "If time" ? "opt" : "") + '" data-phase="' + esc(p.id) + '" data-real="' + (p.sys ? "" : "1") + '"' + (p.id === L.phase ? ' aria-current="step"' : "") + '><span class="n">' + (p.sys ? '<svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true">' + ICO[p.id] + '</svg>' : i + 1) + '</span>' + (kd ? '<span class="tags">' + tag(esc(kd), kd === "If time" ? "dash" : "line") + '</span>' : "") + '<span class="nm">' + esc(kd ? partTitle(p.name) : p.name) + '</span><span class="tm num">' + esc(cap(tm)) + '</span></button>';
+  }).join("") + '</nav><section class="page" id="phasebox"></section></div>';
+  app.innerHTML = h; drawPhase(); tick(); prefetchLesson(); if (STARTCLOCK === L.id) { STARTCLOCK = null; var cg = $("#clkgo"); if (cg) cg.click(); }
 }
 function railCount() { var p = phases().filter(function (q) { return q.id === L.phase && !q.sys; })[0]; if (!p) return; var b = $('.rail button[data-phase="' + p.id + '"] .tm'); if (!b) return;
-  var pm = L.session.time.phaseMinutes && L.session.time.phaseMinutes[p.id], planned = p.start != null ? p.start + "–" + p.end + " min" : "";
-  b.textContent = planned + (pm ? " · took " + pm : "") + (phaseCount(p) ? " · " + phaseCount(p) : "");
+  var pm = L.session.time.phaseMinutes && L.session.time.phaseMinutes[p.id], planned = p.start != null ? p.start + " to " + p.end + " min" : "";
+  b.textContent = cap([planned, pm ? "took " + pm + " min" : "", phaseCount(p)].filter(Boolean).join(" \u00b7 "));
 }
 function drawPhase() {
   var ps = phases(), p = ps.filter(function (q) { return q.id === L.phase; })[0], box = $("#phasebox"), h = "";
-  if (p.id === "_revise") { box.innerHTML = '<div class="phase-top"><h2>Mistakes warm-up</h2><span class="hint">His old mistakes, brought back on a schedule until he gets them right</span></div><div id="revbox"></div>'; reviseInto($("#revbox"), L.session.subject); return; }
-  if (p.id === "_extra") h = extraView(); else if (p.id === "_work") h = workView(); else if (p.id === "_time") h = timeView(); else if (p.id === "_after") h = afterView();
-  else {
-    var nq = slidesOf(p).length;
-    h += '<div class="phase-top"><h2>' + esc(p.name) + '</h2><div style="display:flex;gap:10px;align-items:center">' + (nq ? '<button class="btn small accent" type="button" data-show="*">Show him all ' + nq + '</button>' : "") + (p.start != null ? '<span class="hint num">' + p.start + '–' + p.end + ' min</span>' : "") + '</div></div>';
-    if (p.show) h += '<div class="screen"><span class="label">On screen</span><div>' + clean(p.show) + '</div></div>';
-    if (L.script && L.script.focus && ps[0] === p) h += focusTable(L.script.focus);
+    var nq = slidesOf(p).length, kd = kindOf(p.name), real2 = ps.filter(function (q) { return !q.sys; });
+    h += '<div class="head" style="align-items:center"><div class="stack s2"><div class="tags">' + tag("Part " + (real2.indexOf(p) + 1)) + (kd ? tag(esc(kd), kd === "If time" ? "dash" : "line") : "") + (p.start != null ? tag(p.start + " to " + p.end + " min", "num") : "") + '</div><h2 class="t-title" style="font-size:28px">' + esc(kd ? partTitle(p.name) : p.name) + '</h2></div>' + (nq ? '<button class="btn accent-soft" type="button" data-show="*">Show him all ' + nq + '</button>' : "") + '</div>';
+    if (p.show) h += '<div class="screen"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg><div class="stack" style="gap:2px"><span class="lab">On his screen</span><div>' + clean(p.show) + '</div></div></div>';
     h += blocks(p.blocks || []);
-    var i = ps.indexOf(p); if (i < ps.length - 1) h += '<div style="display:flex;justify-content:flex-end"><button class="btn accent" type="button" data-phase="' + esc(ps[i + 1].id) + '" data-real="' + (ps[i + 1].sys ? "" : "1") + '">Next: ' + esc(ps[i + 1].name) + ' →</button></div>';
-  }
+    var i = ps.indexOf(p), nx = ps[i + 1]; if (nx) h += '<div class="row" style="justify-content:flex-end"><button class="btn accent" type="button" data-phase="' + esc(nx.id) + '" data-real="' + (nx.sys ? "" : "1") + '">Next: ' + esc(nx.sys ? nx.name : partTitle(nx.name)) + ' <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button></div>';
   box.innerHTML = h; fillRows(box); loadImages(box); maths(box); drawTally();
 }
-function focusTable(rows) { return '<details class="module"><summary><span class="lvl deep">Plan</span><h3>Pick your focus</h3><span class="chev">›</span></summary><div class="mbody"><div class="tablewrap"><table class="t"><thead><tr><th>Focus on</th><th>Spend the time on</th><th>Cut down</th></tr></thead><tbody>' + rows.map(function (r) { return '<tr><td><b>' + clean(r.want) + '</b></td><td>' + clean(r.spend) + '</td><td>' + clean(r.cut) + '</td></tr>'; }).join("") + '</tbody></table></div></div></details>'; }
+function focusTable(rows) { return '<div class="card" style="margin-top:var(--s4);overflow-x:auto"><table class="tbl"><thead><tr><th>Pick your focus</th><th>Spend the time on</th><th>Cut down</th></tr></thead><tbody>' + rows.map(function (r) { return '<tr><td><b>' + clean(r.want) + '</b></td><td>' + clean(r.spend) + '</td><td>' + clean(r.cut) + '</td></tr>'; }).join("") + '</tbody></table></div>'; }
+document.addEventListener("click", function (e) { if (!(e.target.closest && e.target.closest("[data-focus]"))) return; var b = $("#focusbox"); if (b) b.hidden = !b.hidden; });
 /* "taught" ticks: keyed by the content itself, so they survive edits elsewhere in the script */
 function plain(h) { return String(h == null ? "" : h).replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/g, " ").replace(/\s+/g, " ").trim(); }
 function isDone(k) { var d = L && L.session.done && L.session.done[k]; return !!(d && !d.off); }
@@ -573,16 +619,18 @@ function blocks(bs) {
   (bs || []).forEach(function (b) { if (b.type === "figure" && b.img) run.push(b); else { flush(); out.push(block(b)); } });
   flush(); return out.join("");
 }
+var STEPTAG = { ask: "ask", check: "ok", draw: "bad", say: "chem", show: "maths" };
 function block(b) {
   switch (b.type) {
     case "text": var gr = gradeRows(clean(b.html)); if (gr.rows.length) return '<div class="prose">' + gr.html + '</div>';
       if (plain(b.html).length <= 40) return '<div class="prose">' + clean(b.html) + '</div>';
       var tk = textKey(b.html); return '<div class="prose tickable' + (isDone(tk) ? " done" : "") + '" data-tk="' + esc(tk) + '">' + tick_(tk, plain(b.html)) + clean(b.html) + '</div>';
-    case "steps": return '<ol class="steps">' + (b.items || []).map(function (s) { var k = s.kind || "do", sk = stepKey(s.html); return '<li class="' + esc(k) + (isDone(sk) ? " done" : "") + '" data-tk="' + esc(sk) + '"><span class="kind ' + esc(k) + '">' + (KIND[k] || esc(k)) + '</span><div class="body prose">' + clean(s.html) + '</div>' + tick_(sk, plain(s.html)) + '</li>'; }).join("") + '</ol>';
-    case "module": var mk = modKey(b.name); return '<details class="module' + (isDone(mk) ? " done" : "") + '" data-tk="' + esc(mk) + '"' + (b.level !== "deep" ? " open" : "") + '><summary>' + tick_(mk, b.name) + '<span class="lvl ' + (b.level === "deep" ? "deep" : "core") + '">' + (b.level === "deep" ? "If time" : "Core") + '</span><h3>' + esc(b.name) + '</h3>' + (b.minutes ? '<span class="pill">' + esc(b.minutes) + ' min</span>' : "") + '<span class="chev">›</span></summary><div class="mbody">' + blocks(b.blocks) + '</div></details>';
+    case "steps": return '<div class="steps">' + (b.items || []).map(function (s) { var k = s.kind || "do", sk = stepKey(s.html); return '<div class="step ' + esc(k) + (isDone(sk) ? " done" : "") + '" data-tk="' + esc(sk) + '"><span class="tag ' + (STEPTAG[k] || "") + '">' + (KIND[k] || esc(cap(k))) + '</span><div class="body prose">' + clean(s.html) + '</div>' + tick_(sk, plain(s.html)) + '</div>'; }).join("") + '</div>';
+    case "module": var mk = modKey(b.name), deep = b.level === "deep";
+      return '<details class="module' + (deep ? " deep" : "") + (isDone(mk) ? " done" : "") + '" data-tk="' + esc(mk) + '"' + (deep ? "" : " open") + '><summary>' + tag(deep ? "If time" : "Core", deep ? "dash" : "line") + '<h3 class="t-card">' + esc(b.name) + '</h3>' + (b.minutes ? '<span class="tag push num">' + esc(b.minutes) + ' min</span>' : '<span class="push"></span>') + tick_(mk, b.name) + '</summary><div class="mbody">' + blocks(b.blocks) + '</div></details>';
     case "figure": return b.img ? img(b.img, b.caption).replace("</figure>", (b.caption ? '<figcaption>' + clean(b.caption) + '</figcaption>' : "") + '</figure>') : '<figure class="fig">' + clean(b.html) + '</figure>';
-    case "reveal": return '<details class="reveal"><summary>' + esc(b.label || "Answer") + '</summary><div class="prose">' + clean(b.html) + (b.img || []).map(function (i) { return img(i); }).join("") + '</div></details>';
-    case "drill": return '<div><div class="label" style="margin-bottom:8px">' + esc(b.title || "Quick-fire drill") + '</div><div class="items">' + (b.items || []).map(function (d, i) { var dk = drillKey(d[0]), a = L.session.answers[dk] || {}; return '<div class="item" data-v="' + esc(a.v || "") + '"><span class="qn">' + (i + 1) + '</span><div><div>' + clean(d[0]) + '</div><details><summary class="linkbtn">Answer</summary><div class="da prose">' + clean(d[1]) + '</div></details></div>' + ctl(dk, null, a, plain(d[0])) + '</div>'; }).join("") + '</div></div>';
+    case "reveal": return '<details class="fold"><summary>' + esc(cap(b.label || "Answer")) + '</summary><div class="prose">' + clean(b.html) + (b.img || []).map(function (i) { return img(i); }).join("") + '</div></details>';
+    case "drill": return '<div class="stack s3"><span class="lab">' + esc(cap(b.title || "Quick-fire drill")) + '</span><div class="items">' + (b.items || []).map(function (d, i) { var dk = drillKey(d[0]), a = L.session.answers[dk] || {}; return '<div class="item" data-v="' + esc(a.v || "") + '"><span class="qn">' + (i + 1) + '</span><div><div>' + clean(d[0]) + '</div><details><summary class="linkbtn">Answer</summary><div class="da prose">' + clean(d[1]) + '</div></details></div>' + ctl(dk, null, a, plain(d[0])) + '</div>'; }).join("") + '</div></div>';
     case "video": return videoBlock(b);
     case "quiz": return quizBlock(b);
     case "question": return questionBlock(b);
@@ -602,21 +650,20 @@ function loadVideos(root) { $$("video[data-vsrc]:not([data-on])", root).forEach(
   fileURL(vidPath(v.getAttribute("data-vsrc"))).then(function (u) { if (u) { v.src = u; if (ph && ph.classList.contains("vph")) ph.remove(); } else if (ph) ph.textContent = "Video not found: " + v.getAttribute("data-vsrc"); })
     .catch(function () { v.removeAttribute("data-on"); if (ph) ph.textContent = "Couldn\u2019t load the video. Reopen the lesson to retry."; }); }); }
 function videoBlock(b) {
-  if (b.src) return '<div class="vid"><div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap"><div><div class="label" style="margin-bottom:8px">' + esc(b.channel || "Video") + '</div><h3 style="font-size:var(--fs-lg);margin-bottom:10px">' + esc(b.title || "") + '</h3></div><button class="btn small" type="button" data-show="' + esc(vidKey(b)) + '">Show him</button></div>' +
-    '<div class="vframe local">' + localVideo(b) + '</div>' +
-    ((b.moments || []).length ? '<div class="qbar" style="margin-top:10px">' + b.moments.map(function (m) { return '<button class="chip" type="button" data-lseek="' + esc(vidKey(b)) + '" data-t="' + esc(m.t) + '">' + esc(m.t) + ' · ' + esc(m.label || "") + '</button>'; }).join("") + '</div>' : "") +
-    (b.note ? '<div class="prose hint" style="margin-top:8px">' + clean(b.note) + '</div>' : "") + '</div>';
-  var id = String(b.id || "").replace(/[^A-Za-z0-9_-]/g, "");
-  return '<div class="vid"><div class="label" style="margin-bottom:8px">' + esc(b.channel || "Video") + '</div><h3 style="font-size:var(--fs-lg);margin-bottom:10px">' + esc(b.title || "") + '</h3>' +
-    '<div class="vframe"><iframe loading="lazy" data-vid="' + id + '" src="' + vsrc(id, b.start || 0) + '" title="' + esc(b.title || "Video") + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>' +
-    ((b.moments || []).length ? '<div class="qbar" style="margin-top:10px">' + b.moments.map(function (m) { return '<button class="chip" type="button" data-seek="' + id + '" data-t="' + esc(m.t) + '">' + esc(m.t) + ' · ' + esc(m.label || "") + '</button>'; }).join("") + '</div>' : "") +
-    (b.note ? '<div class="prose hint" style="margin-top:8px">' + clean(b.note) + '</div>' : "") + '</div>';
+  var id = String(b.id || "").replace(/[^A-Za-z0-9_-]/g, ""), key = b.src ? vidKey(b) : "yt:" + id;
+  var player = b.src ? '<div class="vframe local">' + localVideo(b) + '</div>' : '<div class="vframe"><iframe loading="lazy" data-vid="' + id + '" data-lazysrc="' + vsrc(id, b.start || 0) + '" title="' + esc(b.title || "Video") + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>';
+  var moments = (b.moments || []).length ? '<div class="tags">' + b.moments.map(function (m) { return '<button class="chip" type="button" ' + (b.src ? 'data-lseek="' + esc(vidKey(b)) + '"' : 'data-seek="' + id + '"') + ' data-t="' + esc(m.t) + '">' + esc(m.t) + ' · ' + esc(cap(m.label || "")) + '</button>'; }).join("") + '</div>' : "";
+  return '<section class="card vblock"><div class="row" style="padding:var(--s4) var(--s5)">' + tag("Video", "line") + '<div class="stack" style="gap:0;flex:1;min-width:200px"><b style="font-weight:600">' + esc(cap(b.title || "")) + '</b><span class="hint">' + esc(b.src ? "Made for this lesson" : cap(b.channel || "YouTube")) + '</span></div>' +
+    '<button class="btn sm" type="button" data-vplay="' + esc(key) + '">Play here</button>' + (b.src ? '<button class="btn sm" type="button" data-show="' + esc(vidKey(b)) + '">Show him</button>' : "") + '</div>' +
+    '<div class="vbody stack s3" hidden>' + player + moments + (b.note ? '<div class="prose hint">' + clean(b.note) + '</div>' : "") + '</div></section>';
 }
+document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-vplay]"); if (!b) return; var box = b.closest(".vblock").querySelector(".vbody"); box.hidden = !box.hidden; b.textContent = box.hidden ? "Play here" : "Hide";
+  var fr = box.querySelector("iframe[data-lazysrc]"); if (fr && !box.hidden && !fr.src) fr.src = fr.getAttribute("data-lazysrc"); if (!box.hidden) loadVideos(box); });
 function ctl(id, marks, a, qtext) {
   a = a || L.session.answers[id] || {};
-  return '<div class="ctl" data-item="' + esc(id) + '"' + (qtext ? ' data-q="' + esc(String(qtext).slice(0, 160)) + '"' : "") + '>' + VERD.map(function (v) { return '<button class="v" type="button" data-v="' + v[0] + '" title="' + esc(VHELP[v[0]]) + '" aria-pressed="' + (a.v === v[0]) + '">' + v[1] + '</button>'; }).join("") +
-    (marks ? '<input class="mk" type="number" min="0" max="' + esc(marks) + '" step="0.5" inputmode="decimal" aria-label="Marks out of ' + esc(marks) + '" data-mk value="' + (a.m != null ? esc(a.m) : "") + '"><span class="hint num">/ ' + esc(marks) + '</span>' : "") +
-    '<input class="note" type="text" data-note aria-label="What he said or got wrong" placeholder="What he said or got wrong" value="' + esc(a.note || "") + '"></div>';
+  return '<div class="ctl" data-item="' + esc(id) + '"' + (qtext ? ' data-q="' + esc(String(qtext).slice(0, 160)) + '"' : "") + '><div class="verdicts">' + VERD.map(function (v) { return '<button class="v" type="button" data-v="' + v[0] + '" title="' + esc(cap(VHELP[v[0]])) + '" aria-pressed="' + (a.v === v[0]) + '">' + v[1] + '</button>'; }).join("") +
+    (marks ? '<span class="row s2"><input class="input mk" type="number" min="0" max="' + esc(marks) + '" step="0.5" inputmode="decimal" aria-label="Marks out of ' + esc(marks) + '" data-mk value="' + (a.m != null ? esc(a.m) : "") + '"><span class="hint num">/ ' + esc(marks) + ' marks</span></span>' : "") + '</div>' +
+    '<input class="input note" type="text" data-note aria-label="What he said or got wrong" placeholder="What he said or got wrong" value="' + esc(a.note || "") + '"></div>';
 }
 function quizBlock(b) {
   var items = b.items || [], hasStar = items.some(function (i) { return i.star; });
@@ -630,11 +677,13 @@ function quizBlock(b) {
     }).join("") + '</div>';
 }
 function questionBlock(q, big) {
-  var h = '<div class="qcard"><div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap"><div><h3>' + esc(q.label || "Question") + '</h3>' + (q.source ? '<div class="src">' + esc(q.source) + '</div>' : "") + '</div>' + ((q.img || []).length || (q.parts || []).length ? '<button class="btn small" type="button" data-show="' + esc(q.id) + '">Show him</button>' : "") + '</div>' + (q.html ? '<div class="prose">' + clean(q.html) + '</div>' : "") + (q.parts && !big ? twinHTML(q) : "") + (q.img || []).map(function (i) { return img(i, q.label); }).join("");
-  if (q.answer || (q.answerImg || []).length) h += '<details class="reveal"><summary>Mark scheme</summary><div class="prose">' + clean(q.answer || "") + (q.answerImg || []).map(function (i) { return img(i, "Mark scheme"); }).join("") + '</div></details>';
+  var paper = q.source && /edexcel|solomon|maths genie|pearson/i.test(q.source) || (L.script || {}).subject === "maths" ? "q-edexcel" : "q-aqa";
+  var h = '<div class="qcard"><div class="row">' + tag("Question", "line") + (q.source ? refTag(q.source) : tag(esc(q.label || ""), "line")) + ((q.img || []).length || (q.parts || []).length ? '<button class="btn sm push" type="button" data-show="' + esc(q.id) + '">Show him</button>' : "") + '</div>' +
+    (q.html || (q.parts && !big) || (q.img || []).length ? '<div class="card qbody ' + paper + '">' + (q.html ? '<div class="prose">' + clean(q.html) + '</div>' : "") + (q.parts && !big ? twinHTML(q) : "") + (q.img || []).map(function (i) { return img(i, q.label); }).join("") + '</div>' : "");
+  if (q.answer || (q.answerImg || []).length) h += '<details class="fold reveal"><summary>Mark scheme</summary><div class="prose">' + clean(q.answer || "") + (q.answerImg || []).map(function (i) { return img(i, "Mark scheme"); }).join("") + '</div></details>';
   var a = L.session.answers[q.id] || {};
   if (big) return h + ctlBig(q.id, a, q.label, q.marks) + '</div>';
-  return h + '<div class="items"><div class="item" data-v="' + esc(a.v || "") + '"><span class="qn">▸</span><div class="label" style="padding-top:12px">How he did</div>' + ctl(q.id, q.marks) + '</div></div></div>';
+  return h + '<div class="stack s3 qmark" data-v="' + esc(a.v || "") + '"><span class="lab">How he did</span>' + ctl(q.id, q.marks) + '</div></div>';
 }
 function drawTally() {
   var old = $("#tally"); if (old) old.remove(); var box = $("#phasebox"); if (!box || L.phase === "_after" || L.phase === "_time") return;
@@ -684,31 +733,40 @@ function prefetchAhead(chunks) { var first = [];
   pfQ = first.concat(pfQ.filter(function (p) { return first.indexOf(p) < 0; })); pfPump(); }
 
 /* extra questions: asked on the spot, editable any time */
+/* the lesson's own pages (Ali, 8 Oct, from the canvas): a crumb back to the plan, tags, a title, then the page */
+function sysPage(id) { return id === "_extra" ? extraView() : id === "_work" ? workView() : id === "_time" ? timeView() : id === "_after" ? afterView() : reviseLesson(); }
+function pageHead(title, hint, right) { var s = L.script || {}, x = L.session, subj = s.subject || x.subject, first = phases()[0];
+  return '<header class="stack s3"><div class="crumb"><button type="button" data-phase="' + esc(first.id) + '" data-real="">' + esc(lessonTitle(s, x)) + '</button><span aria-hidden="true">/</span><span>' + esc(title) + '</span></div>' +
+    '<div class="head"><div class="stack s2"><div class="tags">' + subjTag(subj) + tag(esc(fmtDate(x.date || s.date))) + topicTag(s) + '</div><h1 class="t-title">' + esc(title) + '</h1>' + (hint ? '<span class="hint">' + hint + '</span>' : "") + '</div>' + (right || "") + '</div></header>'; }
+function reviseLesson() { return pageHead("Mistakes warm-up", "His old mistakes, back on day 1, 3, 7, 14 and 30 until he gets them right.", '<div id="revseg"></div>') + '<div class="tags" id="revtags"></div><div id="revbox" class="stack s5" style="max-width:840px"></div>'; }
 function extraView() {
   var x = L.session;
-  var h = '<div class="phase-top"><h2>Extra questions</h2><span class="hint">Anything you asked that isn’t in the script</span></div>';
-  h += '<form class="card form" id="exform" style="padding:16px 18px;max-width:none"><div class="field"><label for="ex-q">Question you asked</label><input type="text" id="ex-q" required placeholder="e.g. Why is propanone’s product not chiral?"></div>' +
-    '<div class="field"><span class="lab">How he did</span><div style="display:flex;gap:6px;flex-wrap:wrap">' + VERD.map(function (v) { return '<button class="v" type="button" data-exv="' + v[0] + '" aria-pressed="false">' + v[1] + '</button>'; }).join("") + '</div></div>' +
-    '<div class="field"><label for="ex-note">What he said or got wrong</label><input type="text" id="ex-note"></div><div><button class="btn primary" type="submit">Add</button></div></form>';
-  h += x.extra.length ? '<div class="items">' + x.extra.map(function (e, i) { return '<div class="item" data-v="' + esc(e.v || "") + '"><span class="qn">' + (i + 1) + '</span><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><input style="flex:1 1 260px;min-height:42px;border-radius:10px;border:1px solid var(--line-strong);background:var(--surface);padding:0 12px;font-weight:700" type="text" data-exq="' + esc(e.id) + '" value="' + esc(e.q) + '" aria-label="Question"><span class="hint">' + esc(hhmm(e.at)) + '</span><button class="btn small danger" type="button" data-exdel="' + esc(e.id) + '">Remove</button></div>' + ctl("x:" + e.id, null, e) + '</div>'; }).join("") + '</div>'
-    : '<div class="empty"><h3>None yet</h3><p>Every question you add here counts in his record like a scripted one, and you can change it later.</p></div>';
+  var h = pageHead("Extra questions", "Anything you asked that isn’t in the script. Wrong ones go into his mistakes.");
+  h += '<form class="card pad-l stack s5" id="exform" style="max-width:860px"><div class="field"><label for="ex-q">Question you asked</label><input class="input" type="text" id="ex-q" required placeholder="e.g. Why is propanone’s product not chiral?"></div>' +
+    '<div class="field"><span class="fl">How he did</span><div class="verdicts" role="group" aria-label="How he did">' + VERD.filter(function (v) { return v[0] !== "tskip"; }).map(function (v) { return '<button class="v" type="button" data-exv="' + v[0] + '" aria-pressed="false">' + v[1] + '</button>'; }).join("") + '</div></div>' +
+    '<div class="field"><label for="ex-note">What he said or got wrong</label><input class="input" type="text" id="ex-note"></div><div><button class="btn pri" type="submit">Add</button></div></form>';
+  h += x.extra.length ? '<section class="stack" style="max-width:860px"><div class="head" style="align-items:baseline"><h2 class="t-sec">Asked so far</h2>' + tag(x.extra.length + " logged") + '</div><div class="items">' + x.extra.map(function (e, i) { return '<div class="item" data-v="' + esc(e.v || "") + '"><span class="qn">' + (i + 1) + '</span><div class="row" style="flex-wrap:nowrap"><input class="input" style="font-weight:600" type="text" data-exq="' + esc(e.id) + '" value="' + esc(e.q) + '" aria-label="Question">' + tag(esc(hhmm(e.at))) + '<button class="btn sm danger" type="button" data-exdel="' + esc(e.id) + '">Remove</button></div>' + ctl("x:" + e.id, null, e) + '</div>'; }).join("") + '</div></section>'
+    : '<section class="empty" style="max-width:860px"><b class="t-card">None yet</b><span class="hint">Each one shows here with the time. Wrong ones go into his mistakes.</span></section>';
   return h;
 }
-
 /* photos of his work */
+var CAMIC = '<svg class="icon lg" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15" rx="2"></rect><circle cx="12" cy="12.5" r="3.5"></circle><path d="M8 5l1.5-2h5L16 5"></path></svg>';
 function workView() {
-  var x = L.session, items = itemsList();
-  var h = '<div class="phase-top"><h2>His work</h2><span class="hint">Photos go to GitHub for Claude to read, mark and log</span></div>';
-  h += '<form class="card form" id="wkform" style="padding:16px 18px;max-width:none"><div class="field"><label for="wk-files">Photos or PDFs</label><input type="file" id="wk-files" accept="image/*,application/pdf" multiple required><span class="hint">Photos are resized to stay sharp but small. Several pages at once is fine.</span></div>' +
-    '<div class="row2"><div class="field"><label for="wk-item">Which question?</label><select id="wk-item"><option value="">Whole lesson / several questions</option>' + items.map(function (i) { return '<option value="' + esc(i.id) + '">' + esc(i.label) + '</option>'; }).join("") + '</select></div>' +
-    '<div class="field"><label for="wk-kind">What is it?</label><select id="wk-kind"><option value="class">Class work</option><option value="homework">Homework</option><option value="test">Test</option><option value="other">Other</option></select></div></div>' +
-    '<div class="field"><label for="wk-note">Note for Claude (optional)</label><input type="text" id="wk-note" placeholder="e.g. page 2 is blurry"></div><div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn primary" type="submit" id="wk-go">Upload</button><span class="hint" id="wk-st"></span></div></form>';
-  var m = L.marking;
-  if (m) h += '<div class="card" style="padding:16px 18px"><div class="label">Claude’s marking</div>' + (m.summary ? '<p>' + clean(m.summary) + '</p>' : "") + (m.score != null ? '<p><b>' + esc(m.score) + ' / ' + esc(m.max) + '</b></p>' : "") + '<ul class="list-plain">' + (m.mistakes || []).map(function (k) { return '<li class="mistake ' + esc(k.type || "") + '"><div><b>' + esc(labelOf(k.item) || k.item || "") + '</b> ' + clean(k.what || "") + '</div>' + (k.fix ? '<div class="fix">Fix: ' + clean(k.fix) + '</div>' : "") + '</li>'; }).join("") + '</ul></div>';
-  var live = x.work.filter(function (w) { return !w.removed; });
-  h += live.length ? '<div class="items">' + live.map(function (w) { return '<div class="item"><span class="qn">▤</span><div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><b>' + esc(labelOf(w.item) || "Whole lesson") + '</b><span class="pill">' + esc(w.kind) + '</span><span class="hint">' + esc(hhmm(w.at)) + (w.note ? " · " + esc(w.note) : "") + '</span><button class="btn small danger" type="button" data-wkdel="' + esc(w.file) + '" style="margin-left:auto">Remove from lesson</button></div><div class="thumbs" style="margin-top:10px">' + (/\.pdf$/i.test(w.file) ? '<span class="pdf">PDF</span>' : '<figure class="fig"><img data-src="' + esc(w.file) + '" alt="His work" hidden style="width:104px;height:104px;object-fit:cover"><div class="ph" style="width:104px">loading</div></figure>') + '</div></div></div>'; }).join("") + '</div>'
-    : '<div class="empty"><h3>No photos yet</h3><p>Upload his answers. Claude reads each one, marks it against the real mark scheme and notes every mistake.</p></div>';
-  return h;
+  var x = L.session, items = itemsList(), live = x.work.filter(function (w) { return !w.removed; }), m = L.marking;
+  var h = pageHead("His work", "", '<div class="tags">' + tag("Goes to GitHub") + tag("Claude marks it") + '</div>');
+  h += '<div class="split"><form class="card pad-l stack s5" id="wkform" style="flex:1 1 360px;max-width:420px"><label for="wk-files" class="drop"><span class="cam">' + CAMIC + '</span><b>Take a photo or choose files</b><span class="tags" style="justify-content:center">' + tag("Photos") + tag("PDFs") + tag("Many pages at once") + '</span><span class="hint" id="wk-pick"></span>' +
+    '<input id="wk-files" class="sr" type="file" accept="image/*,application/pdf" multiple required></label>' +
+    '<div class="field"><label for="wk-item">Which question?</label><select class="input" id="wk-item"><option value="">Whole lesson or several questions</option>' + items.map(function (i) { return '<option value="' + esc(i.id) + '">' + esc(i.label) + '</option>'; }).join("") + '</select></div>' +
+    '<div class="field"><label for="wk-kind">What is it?</label><select class="input" id="wk-kind"><option value="class">Working in the lesson</option><option value="homework">Homework</option><option value="test">Test</option><option value="other">Other</option></select></div>' +
+    '<div class="field"><label for="wk-note">Note for Claude <span class="hint" style="font-weight:400">(optional)</span></label><input class="input" type="text" id="wk-note" placeholder="e.g. Page 2 is blurry"></div><div class="row"><button class="btn pri" type="submit" id="wk-go">Upload</button><span class="hint" id="wk-st"></span></div></form>';
+  h += '<section class="grow stack"><div class="head" style="align-items:baseline"><h2 class="t-sec">Uploaded</h2><span class="hint">' + (live.length ? "Tap a photo to zoom" : "") + '</span></div>' +
+    (live.length ? '<div class="shots">' + live.map(function (w) { return '<div class="stack s2">' + (/\.pdf$/i.test(w.file) ? '<div class="ph" style="aspect-ratio:3/4;border:1px solid var(--line)">PDF</div>' : '<figure class="fig"><img data-src="' + esc(w.file) + '" alt="His work" hidden style="width:100%;aspect-ratio:3/4;object-fit:cover"><div class="ph" style="aspect-ratio:3/4;border:1px solid var(--line)">Loading</div></figure>') +
+      '<div class="tags">' + tag(esc(labelOf(w.item) || "Whole lesson"), "line") + tag(esc(hhmm(w.at))) + (w.kind && w.kind !== "class" ? tag(esc(cap(w.kind))) : "") + '<button class="btn sm quiet" type="button" data-wkdel="' + esc(w.file) + '">Remove</button></div>' + (w.note ? '<span class="hint">' + esc(w.note) + '</span>' : "") + '</div>'; }).join("") + '</div>'
+      : '<div class="empty" style="padding:var(--s6) var(--s5)"><b class="t-card">No photos yet</b><span class="hint">Upload his answers. Claude reads each one and marks it against the real mark scheme.</span></div>');
+  h += m ? '<div class="card pad stack s3"><div class="row"><span class="lab">Claude’s marking</span>' + (m.score != null ? tag(esc(m.score) + "/" + esc(m.max) + " marks", "ok") : "") + '</div>' + (m.summary ? '<p>' + clean(m.summary) + '</p>' : "") + (m.mistakes || []).map(function (k) { var vt = VTAG[k.type] || ["", ""];
+      return '<div class="mrow" style="padding:var(--s3) 0"><span class="edge" style="background:' + (VCOL[k.type] || "var(--line-strong)") + '"></span><div class="tags">' + (k.type ? tag(vt[0], vt[1]) : "") + tag(esc(labelOf(k.item) || k.item || ""), "line") + '</div><p>' + clean(k.what || "") + '</p>' + (k.fix ? '<p class="fix"><b>Fix</b> · ' + clean(k.fix) + '</p>' : "") + '</div>'; }).join("") + '</div>'
+    : '<div class="empty" style="padding:var(--s6) var(--s5)"><b>Claude’s marking</b><span class="hint">Shows here after Claude reads the photos: each question, the mark and what to fix.</span></div>';
+  return h + '</section></div>';
 }
 function itemsList() { var out = [];
   phases().forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) { if (b.type === "question") out.push({ id: b.id, label: b.label || b.id }); if (b.type === "quiz") (b.items || []).forEach(function (q, i) { out.push({ id: q.id, label: "Quiz " + (i + 1) + ": " + String(q.q).replace(/<[^>]+>/g, "").slice(0, 60) }); }); if (b.blocks) walk(b.blocks); }); })(p.blocks); });
@@ -717,21 +775,23 @@ function labelOf(id) { if (!id) return ""; var a = L.session.answers[id]; if (a 
 
 /* times: everything editable, including undoing "End lesson" */
 function tval(iso) { return iso ? hhmm(iso) : ""; }
+function timeFields(x, withDate) { var t = x.time, ed = t.edit || {}, a = t.auto || {}, r = replay(t.log);
+  return '<div class="cols3">' + (withDate ? '<div class="field"><label for="tm-date">Date</label><input class="input" type="date" id="tm-date" data-tm="date" value="' + esc(x.date || parseId(L.id).date) + '"></div>' : "") +
+    '<div class="field"><label for="tm-s">Started</label><input class="input" type="time" id="tm-s" data-tm="started" value="' + esc(tval(ed.started || a.started)) + '"><span class="hint">' + (a.started ? "Clock: " + esc(tval(a.started)) : "Clock not started. Type a time.") + '</span></div>' +
+    '<div class="field"><label for="tm-e">Ended</label><input class="input" type="time" id="tm-e" data-tm="ended" value="' + esc(tval(ed.ended || a.ended)) + '"><span class="hint">' + (a.ended ? "Clock: " + esc(tval(a.ended)) : r.running ? "Clock still running" : "Not ended. Type a time.") + '</span></div>' +
+    '<div class="field"><label for="tm-m">Minutes taught</label><input class="input" type="number" id="tm-m" data-tm="minutes" min="0" step="1" inputmode="numeric" value="' + esc(ed.minutes != null ? ed.minutes : t.minutes != null ? t.minutes : "") + '"><span class="hint">Counted: <b id="tm-now">' + esc(t.minutes != null ? t.minutes : "-") + '</b></span></div></div>'; }
 function timeView() {
-  var x = L.session, t = x.time, ed = t.edit || {}, a = t.auto || {}, r = replay(t.log), ended = t.log.length && t.log[t.log.length - 1].e === "end";
-  var h = '<div class="phase-top"><h2>Times</h2><span class="hint">Change anything. Leave a box empty to use the clock’s value.</span></div>';
-  h += '<div class="card form" style="padding:18px 20px;max-width:none"><div class="row2 timegrid">' +
-    '<div class="field"><label for="tm-date">Date</label><input type="date" id="tm-date" data-tm="date" value="' + esc(x.date || parseId(L.id).date) + '"></div>' +
-    '<div class="field"><label for="tm-s">Started at</label><input type="time" id="tm-s" data-tm="started" value="' + esc(tval(ed.started)) + '"><span class="hint">Clock: ' + esc(tval(a.started) || "not started") + '</span></div>' +
-    '<div class="field"><label for="tm-e">Ended at</label><input type="time" id="tm-e" data-tm="ended" value="' + esc(tval(ed.ended)) + '"><span class="hint">Clock: ' + esc(tval(a.ended) || (r.running ? "still running" : "not ended")) + '</span></div>' +
-    '<div class="field"><label for="tm-m">Minutes taught</label><input type="number" id="tm-m" data-tm="minutes" min="0" step="1" inputmode="numeric" value="' + esc(ed.minutes != null ? ed.minutes : "") + '"><span class="hint">Now counted: <b id="tm-now">' + esc(t.minutes != null ? t.minutes : "—") + '</b> (clock: ' + esc(a.minutes != null ? a.minutes : "—") + ')</span></div></div>';
+  var x = L.session, t = x.time, ed = t.edit || {}, a = t.auto || {}, ended = t.log.length && t.log[t.log.length - 1].e === "end";
+  var h = pageHead("Part times", "Change anything. Leave a box empty to use the clock’s time.");
+  h += '<div class="card pad-l stack s5" style="max-width:860px">' + timeFields(x, true);
   var real = phases().filter(function (p) { return !p.sys; });
-  h += '<div><div class="label" style="margin-bottom:8px">Minutes per part</div><div class="row2 timegrid">' + real.map(function (p) { var e = (ed.phaseMinutes || {})[p.id]; return '<div class="field"><label for="tp-' + esc(p.id) + '">' + esc(p.name) + '</label><input type="number" id="tp-' + esc(p.id) + '" data-tp="' + esc(p.id) + '" min="0" step="0.5" inputmode="decimal" value="' + esc(e != null ? e : "") + '" placeholder="' + esc((a.phaseMinutes || {})[p.id] != null ? a.phaseMinutes[p.id] : "") + '"></div>'; }).join("") + '</div></div>';
-  h += '<div style="display:flex;gap:10px;flex-wrap:wrap">' + (ended ? '<button class="btn" type="button" id="tm-undo">Undo “End lesson”</button>' : "") + '<button class="btn" type="button" id="tm-clear">Clear typed times</button><button class="btn danger" type="button" id="tm-reset">Reset the clock</button></div></div>';
-  if (t.log.length) h += '<details class="reveal"><summary>Clock history (' + t.log.length + ' taps)</summary><div><ul class="list-plain">' + t.log.map(function (e, i) { var pn = e.p ? (phases().filter(function (p) { return p.id === e.p; })[0] || {}).name : ""; return '<li style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="num" style="min-width:3.5em">' + esc(hhmm(e.t)) + '</span><span>' + esc({ start: "Started", pause: "Paused", resume: "Resumed", phase: "Moved to", end: "Ended" }[e.e] || e.e) + (pn ? " · " + esc(pn) : "") + '</span><span class="hint">' + esc(e.d || "") + '</span><button class="btn small danger" type="button" data-logdel="' + i + '" style="margin-left:auto">Delete</button></li>'; }).join("") + '</ul></div></details>';
+  h += '<div class="field"><span class="fl">Minutes per part</span><div class="cols3">' + real.map(function (p) { var e = (ed.phaseMinutes || {})[p.id], k = kindOf(p.name); return '<div class="field"><label for="tp-' + esc(p.id) + '" class="row s2">' + (k ? tag(esc(k), "line") : "") + '<span>' + esc(k ? partTitle(p.name) : p.name) + '</span></label><input class="input" type="number" id="tp-' + esc(p.id) + '" data-tp="' + esc(p.id) + '" min="0" step="0.5" inputmode="decimal" value="' + esc(e != null ? e : "") + '" placeholder="' + esc((a.phaseMinutes || {})[p.id] != null ? a.phaseMinutes[p.id] : "") + '"></div>'; }).join("") + '</div></div>';
+  h += '<div class="row">' + (ended ? '<button class="btn" type="button" id="tm-undo">Undo “End lesson”</button>' : "") + '<button class="btn" type="button" id="tm-clear">Clear typed times</button><button class="btn danger" type="button" id="tm-reset">Reset the clock</button></div></div>';
+  if (t.log.length) h += '<details class="fold" style="max-width:860px"><summary>Clock history (' + t.log.length + ' taps)</summary><div class="list">' + t.log.map(function (e, i) { var pn = e.p ? (phases().filter(function (p) { return p.id === e.p; })[0] || {}).name : "";
+    return '<div class="row" style="padding:var(--s2) var(--s4)"><span class="num" style="min-width:3.5em">' + esc(hhmm(e.t)) + '</span><span>' + esc({ start: "Started", pause: "Paused", resume: "Resumed", phase: "Moved to", end: "Ended" }[e.e] || cap(e.e)) + (pn ? " · " + esc(pn) : "") + '</span><span class="hint">' + esc(cap(e.d || "")) + '</span><button class="btn sm danger push" type="button" data-logdel="' + i + '">Delete</button></div>'; }).join("") + '</div></details>';
   return h;
 }
-function timeEdited() { L.session.time.editAt = now(); touch(); var el = $("#tm-now"); if (el) el.textContent = L.session.time.minutes != null ? L.session.time.minutes : "—"; tick(); }
+function timeEdited() { L.session.time.editAt = now(); touch(); var el = $("#tm-now"); if (el) el.textContent = L.session.time.minutes != null ? L.session.time.minutes : "-"; tick(); }
 
 /* a normal lesson under 45 min (Ali, 6 Oct): on Finish the app asks whose doing it was.
    Ali's: the minutes short go on the make-up time (makeupSum reads session.short). The student's: nothing is added. */
@@ -748,37 +808,36 @@ document.addEventListener("click", function (e) { if (!(e.target.closest && e.ta
 function noteBox(v) { return '<textarea class="note fixnote" data-note rows="1" aria-label="Your note">' + esc(v) + '</textarea>'; }
 function afterView() {
   var x = L.session, fb = x.feedback || {}, s = L.script || {}, sc = score(x);
-  var h = '<div class="phase-top"><h2>After the lesson</h2><span class="hint">Claude reads this before the next script</span></div>';
-  h += '<div class="stats"><button class="card stat" type="button" data-phase="_time" style="text-align:left;cursor:pointer"><div class="v2">' + (x.time.minutes != null ? x.time.minutes : "—") + '</div><div class="l">minutes taught' + (x.time.started ? " · " + hhmm(x.time.started) + "–" + (x.time.ended ? hhmm(x.time.ended) : "now") : "") + ' · tap to edit</div></button>' +
-    '<div class="card stat"><div class="v2">' + (sc.n ? sc.r + "/" + sc.n : "—") + '</div><div class="l">answers right</div></div><div class="card stat"><div class="v2">' + x.work.filter(function (w) { return !w.removed; }).length + '</div><div class="l">photos uploaded</div></div></div>';
   var cov = [], covTxt = [];
   phases().filter(function (p) { return !p.sys; }).forEach(function (p) { var its = phaseItems(p), mods = its.filter(function (i) { return i.kind === "module" && isDone(i.k); }).map(function (i) { return i.label; });
     var steps = its.filter(function (i) { return (i.kind === "step" || i.kind === "text") && isDone(i.k); }).length, qs = its.filter(function (i) { return i.kind === "q"; }), used = qs.filter(usedOrDone), right = used.filter(function (i) { return x.answers[i.k].v === "right"; });
     if (!mods.length && !steps && !used.length) return;
-    var line = esc(p.name) + ": " + [mods.length ? mods.map(esc).join(", ") : "", steps ? steps + " step" + (steps > 1 ? "s" : "") + " taught" : "", used.length ? used.length + " question" + (used.length > 1 ? "s" : "") + " used, " + right.length + " right" : ""].filter(Boolean).join(" \u00b7 ");
-    cov.push('<li>' + line + '</li>'); covTxt.push(line.replace(/&amp;/g, "&")); });
-  if (cov.length) h += '<div class="card" style="padding:16px 18px"><div class="label" style="margin-bottom:8px">What you covered (from your ticks)</div><ul class="list-plain" style="gap:4px">' + cov.join("") + '</ul>' + (fb.covered != null ? '<button class="btn small" type="button" id="usecov" data-cov="' + esc(covTxt.join("\n")) + '" style="margin-top:10px">Put this in \u201cWhat you actually covered\u201d</button>' : "") + '</div>';
-  var wrong = [], stuckTxt = [];
-  Object.keys(x.answers).forEach(function (k) { var a = x.answers[k]; if (a.parts) return; if (asked(a.v) && a.v !== "right" && a.v !== "skipped") stuckTxt.push(labelOf(k) + " (" + VHELP[a.v] + ")" + (a.note ? ": " + a.note : ""));
-    if (asked(a.v) && a.v !== "right" && a.v !== "skipped") wrong.push('<li class="mistake ' + esc(a.v) + '"><div><b>' + esc(labelOf(k)) + '</b> <span class="pill">' + esc(VHELP[a.v]) + '</span></div>' + (a.note ? '<div class="fix">' + esc(a.note) + '</div>' : "") + '</li>'); });
-  x.extra.forEach(function (e) { if (asked(e.v) && e.v !== "right" && e.v !== "skipped") stuckTxt.push(e.q + " (" + VHELP[e.v] + ")" + (e.note ? ": " + e.note : ""));
-    if (asked(e.v) && e.v !== "right" && e.v !== "skipped") wrong.push('<li class="mistake ' + esc(e.v) + '"><div><b>' + esc(e.q) + '</b> <span class="pill">' + esc(VHELP[e.v]) + '</span></div>' + (e.note ? '<div class="fix">' + esc(e.note) + '</div>' : "") + '</li>'); });
-  if (wrong.length) h += '<div><div class="label" style="margin-bottom:8px">Going into his mistakes log</div><ul class="list-plain">' + wrong.join("") + '</ul></div>';
-  /* every note you typed or said in the lesson, right answers included, so nothing said with the mic is lost (Ali, 5 Oct) */
+    var k = kindOf(p.name) || p.name, bits = [used.length ? used.length + " of " + qs.length + " asked" : "", steps ? steps + " point" + (steps > 1 ? "s" : "") + " ticked" : "", mods.length ? mods.length + " section" + (mods.length > 1 ? "s" : "") : ""].filter(Boolean);
+    cov.push(tag(esc(k + (bits.length ? " · " + bits[0] : "")), "line"));
+    covTxt.push(p.name + ": " + [mods.join(", "), steps ? steps + " points taught" : "", used.length ? used.length + " questions, " + right.length + " right" : ""].filter(Boolean).join(" · ")); });
+  var wrong = [], stuckTxt = [], addW = function (lab, v, note) { if (!(asked(v) && v !== "right" && v !== "skipped")) return; var vt = VTAG[v] || [v, ""];
+    stuckTxt.push(lab + " (" + VHELP[v] + ")" + (note ? ": " + note : ""));
+    wrong.push('<div class="stack s2 newmk ' + esc(v) + '"><div class="tags">' + tag(vt[0], vt[1]) + '</div><span style="font-size:14px"><b>' + esc(lab) + '</b>' + (note ? ": " + esc(note) : "") + '</span></div>'); };
+  Object.keys(x.answers).forEach(function (k) { var a = x.answers[k]; if (!a.parts) addW(labelOf(k), a.v, a.note); });
+  x.extra.forEach(function (e) { addW(e.q, e.v, e.note); });
+  var st = function (b, l, c) { return '<div class="stat" style="padding:var(--s4) 20px"><b style="font-size:24px' + (c ? ";color:" + c : "") + '">' + b + '</b><span class="hint">' + l + '</span></div>'; };
+  var h = pageHead("After the lesson", "Claude reads this before the next script.", '<div class="row s2">' + st(x.time.minutes != null ? Math.round(x.time.minutes) + " min" : "-", "Taught") + st(sc.n ? sc.r + "/" + sc.n : "-", "Right") + st(wrong.length, "New mistakes", wrong.length ? "var(--wrong)" : "") + '</div>');
   var notes = Object.keys(x.answers).filter(function (k) { return x.answers[k].note; }).map(function (k) { var a = x.answers[k];
-    return '<li data-item="' + esc(k) + '"><b>' + esc(labelOf(k)) + '</b>' + (a.v ? ' <span class="pill">' + esc(VHELP[a.v] || a.v) + '</span>' : "") + noteBox(a.note) + '</li>'; })
+    return '<li data-item="' + esc(k) + '"><div class="tags"><b>' + esc(labelOf(k)) + '</b>' + (a.v && VTAG[a.v] ? tag(VTAG[a.v][0], VTAG[a.v][1]) : "") + '</div>' + noteBox(a.note) + '</li>'; })
     .concat(x.extra.filter(function (e) { return e.note; }).map(function (e) { return '<li data-item="x:' + esc(e.id) + '"><b>' + esc(e.q) + '</b>' + noteBox(e.note) + '</li>'; }));
-  /* the mic mishears: each note is a box you can correct here (Ali, 6 Oct) */
-  if (notes.length) h += '<div id="lessonnotes"><div class="label" style="margin-bottom:8px">Your notes from the lesson (' + notes.length + ')</div><ul class="list-plain notes-list">' + notes.join("") + '</ul><p class="hint" style="margin:6px 0 0">Tap a note to correct it; it saves as you type. Saved with the lesson in GitHub (session.json), where the tutoring chat can read them.</p></div>';
-  function fld(id, label, key, ph, area, def) { var v = fb[key] != null ? fb[key] : (def || ""); return '<div class="field"><label for="' + id + '">' + esc(label) + '</label>' + (area ? '<textarea id="' + id + '" data-fb="' + key + '" placeholder="' + esc(ph || "") + '">' + esc(v) + '</textarea>' : '<input type="text" id="' + id + '" data-fb="' + key + '" value="' + esc(v) + '" placeholder="' + esc(ph || "") + '">') + '</div>'; }
-  h += '<form class="form" id="fbform"><div class="field"><span class="lab">How did it go?</span><div style="display:flex;gap:6px;flex-wrap:wrap">' + [1, 2, 3, 4, 5].map(function (n) { return '<button class="chip" type="button" data-rate="' + n + '" aria-pressed="' + (fb.rating === n) + '">' + n + '</button>'; }).join("") + '</div><span class="hint">1 rough · 5 went really well</span></div>' +
-    (fb.at ? "" : '<p class="hint prefill">Filled in from your ticks and the notes you made during the lesson. Check it, add anything missing, then Finish.</p>') +
-    fld("fb-cov", "What you actually covered", "covered", "e.g. got to 3c, skipped the NaBH₄ drill", true, covTxt.join("\n")) + fld("fb-stuck", "Where he got stuck", "stuck", "", true, stuckTxt.join("\n")) + fld("fb-worked", "What worked", "worked", "", true) +
-    fld("fb-change", "What to change next time (for Claude)", "change", "This shapes the next script", true) + fld("fb-hw", "Homework given", "hw", "", false, s.homeworkSummary) + fld("fb-pages", "Book pages set to memorise", "pages", "e.g. CGP 172–173 (Claude adds these to the next quiz)", false, s.pagesSet) +
-    (!(+x.time.minutes > 0) && !(x.time.log || []).length ? '<div class="field"><label for="fb-min">Minutes taught</label><input type="number" id="fb-min" min="1" step="1" inputmode="numeric" required><span class="hint">The clock didn\u2019t run for this lesson. Without minutes it doesn\u2019t count as taught.</span></div>' : "") +
-    '<label class="mkchk"><input type="checkbox" id="fb-makeup"' + (x.makeup ? " checked" : "") + '> Make-up lesson <span class="hint">(all ' + (x.time && x.time.minutes ? esc(x.time.minutes) + " " : "its ") + 'minutes come off the make-up time; otherwise only minutes over ' + LESSON_MIN + ')</span></label>' +
-    (shortBy(x) ? '<p class="hint" style="margin:0">' + shortMin(x) + ' min short of ' + LESSON_MIN + ': ' + (shortBy(x) === "ali" ? "you cut it short, so " + shortMin(x) + " min went on the make-up time." : "he cut it short, so nothing was added.") + ' <button class="linkbtn" type="button" data-shortredo>Change</button></p>' : "") +
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="submit">' + (x.status === "finished" ? "Save changes" : "Finish and save the lesson") + '</button>' + (x.status === "finished" ? '<button class="btn" type="button" id="reopen">Reopen the lesson</button>' : "") + (fb.at ? '<span class="pill ok">Saved ' + esc(hhmm(fb.at)) + '</span>' : "") + '</div></form>';
+  function fld(id, label, key, ph, area, def, extra) { var v = fb[key] != null ? fb[key] : (def || ""); return '<div class="field"><label for="' + id + '">' + esc(label) + '</label>' + (extra || "") + (area ? '<textarea class="input" style="min-height:72px" id="' + id + '" data-fb="' + key + '" placeholder="' + esc(ph || "") + '">' + esc(v) + '</textarea>' : '<input class="input" type="text" id="' + id + '" data-fb="' + key + '" value="' + esc(v) + '" placeholder="' + esc(ph || "") + '">') + '</div>'; }
+  h += '<div class="split"><form class="grow card pad-l stack s5" id="fbform">' +
+    fld("fb-cov", "What you actually covered", "covered", "e.g. Got to 3c, skipped the NaBH₄ drill", true, covTxt.join("\n"), cov.length ? '<div class="tags">' + cov.join("") + '</div>' : "") +
+    (fb.at ? "" : '<span class="hint" style="margin-top:-12px">Filled in from your ticks. Change anything.</span>') +
+    fld("fb-stuck", "Where he got stuck", "stuck", "", true, stuckTxt.join("\n")) +
+    '<div class="cols2">' + fld("fb-worked", "What worked", "worked", "", true) + fld("fb-change", "What to change next time", "change", "This shapes the next script", true) + fld("fb-hw", "Homework given", "hw", "", false, s.homeworkSummary) + fld("fb-pages", "Book pages to memorise", "pages", "e.g. CGP 172 to 173", false, s.pagesSet) + '</div>' +
+    '<div class="field"><span class="fl">How did it go?</span><div class="row s2" role="group" aria-label="How did it go, 1 rough to 5 went really well">' + [1, 2, 3, 4, 5].map(function (n) { return '<button class="rate" type="button" data-rate="' + n + '" aria-pressed="' + (fb.rating === n) + '">' + n + '</button>'; }).join("") + '<span class="hint" style="margin-left:var(--s2)">1 rough · 5 went really well</span></div></div>' +
+    '<div style="height:1px;background:var(--line)"></div><div class="stack"><span class="fl">Times</span>' + timeFields(x, false) +
+    '<label class="check"><input type="checkbox" id="fb-makeup"' + (x.makeup ? " checked" : "") + '>Make-up lesson <span class="hint">All its minutes come off make-up owed</span></label>' +
+    (shortBy(x) ? '<span class="hint">' + shortMin(x) + ' min short of ' + LESSON_MIN + ': ' + (shortBy(x) === "ali" ? "you cut it short, so " + shortMin(x) + " min went on make-up owed." : "he cut it short, so nothing was added.") + ' <button class="linkbtn" type="button" data-shortredo>Change</button></span>' : "") + '</div>' +
+    '<div class="row"><button class="btn pri" type="submit">' + (x.status === "finished" ? "Save changes" : "Finish and save the lesson") + '</button><button class="btn quiet" type="button" data-phase="_time">Edit part times</button>' + (x.status === "finished" ? '<button class="btn" type="button" id="reopen">Reopen the lesson</button>' : "") + (fb.at ? tag("Saved " + esc(hhmm(fb.at)), "ok") : "") + '</div></form>' +
+    '<aside class="side-col stack"><div class="card pad stack"><div class="row"><span class="lab">New mistakes</span>' + tag(wrong.length, wrong.length ? "bad push" : "push") + '</div>' + (wrong.length ? wrong.slice(0, 6).join("") + (wrong.length > 6 ? '<a class="link" href="#/record">See all (' + wrong.length + ')</a>' : "") : '<span class="hint">None. Every answer was right or not asked.</span>') + '</div>' +
+    (notes.length ? '<div class="card pad stack s3" id="lessonnotes"><div class="row"><span class="lab">Your notes from the lesson</span>' + tag(notes.length, "push") + '</div><ul class="list-plain notes-list">' + notes.join("") + '</ul><span class="hint">Tap a note to correct it. It saves as you type.</span></div>' : "") + '</aside></div>';
   return h;
 }
 
@@ -836,7 +895,7 @@ document.addEventListener("click", function (ev) {
     if (v === "right" && box.classList.contains("vrail") && BOARD.jumped && Date.now() - BOARD.jumped < 450) return;   // a double tap on ✓ must not mark the question that just opened
     if (a.v === v) { var vw = VHELP[v] || v; toast(vw.charAt(0).toUpperCase() + vw.slice(1) + ": removed"); }
     a.v = a.v === v ? null : v; a.at = now(); a.d = CFG.device; if (box.getAttribute("data-q")) a.q = box.getAttribute("data-q"); save(iid, a); railCount();
-    $$(".v", box).forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-v") === a.v)); }); var row = box.closest(".item, tr[data-row]"); if (row) row.setAttribute("data-v", a.v || ""); drawTally();
+    $$(".v", box).forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-v") === a.v)); }); var row = box.closest(".item, .qmark, tr[data-row]"); if (row) row.setAttribute("data-v", a.v || ""); drawTally();
     if (box.classList.contains("vrail")) { box.classList.toggle("has", asked_(a.v)); var vm = $(".vr-more", box); if (vm) vm.setAttribute("aria-pressed", String(a.v === "wording" || a.v === "terminology" || a.v === "skipped")); }
     if (MODE === "teach" && box.closest(".slider")) slMarked(iid, a);
     else if (MODE === "teach" && (box.closest(".board") || (box.classList.contains("vrail") && box.closest(".t-board")))) { if (a.v === "wrong" || a.v === "partly" || a.v === "terminology" || a.v === "wording") BOARD.near = iid; else if (a.v === "right") BOARD.open = BOARD.open === iid ? boardJump(iid) : BOARD.open; setTimeout(redrawBoard, a.v === "right" ? 350 : 0); if (a.v === "right") BOARD.jumped = Date.now() + 350; }
@@ -869,14 +928,14 @@ document.addEventListener("submit", function (ev) {
   ev.preventDefault(); var f = ev.target;
   if (f.id === "setform") { ls("tutor.token", $("#s-token").value.trim()); ls("tutor.repo", $("#s-repo").value.trim() || "alimuqaddasm/tutoring"); ls("tutor.device", $("#s-dev").value.trim() || "tablet"); ls("tutor.student", $("#s-stu").value.trim() || "UK-1");
     ls("tutor.examApi", $("#s-xapi").value.trim().replace(/\/+$/, "") || null); ls("tutor.examPw", $("#s-xpw").value || null);
-    var nf = $("#s-font").value; if (nf !== (ls("tutor.font") || "jakarta")) { ls("tutor.font", nf); location.reload(); return; } TREE = null; nav(route()); testConnection(); return; }
+    var nf = $("#s-font").value; if (nf !== (ls("tutor.font") || "jakarta")) { ls("tutor.font", nf); location.reload(); return; } TREE = null; nav(route()); testConnection().then(function () { if ($("#s-msg") && /\bok\b/.test($("#s-msg").className)) setTimeout(function () { location.hash = "#/"; }, 900); }); return; }
   if (f.id === "newform") { var id = $("#n-date").value + "-" + $("#n-subj").value;
     /* a lesson (with a script) already lives under this date and subject: open it, or log a separate one beside it */
     var taken = function (k) { return ls(localKey(k)) || (TREE && TREE.some(function (t) { return t.path.indexOf(lessonBase(k)) === 0; })); };
     if (taken(id)) { if (confirm("There is already a " + ($("#n-subj").value === "chem" ? "chemistry" : "maths") + " lesson on this date.\n\nOK: open that lesson.\nCancel: log a separate lesson.")) { location.hash = "#/lesson/" + encodeURIComponent(id); return; }
       for (var n = 2; taken(id + "-" + n); n++) {} id = id + "-" + n; }
     var sess = newSession(id, null); sess.title = $("#n-title").value.trim(); sess.subject = $("#n-subj").value; sess.date = $("#n-date").value; if ($("#n-makeup").checked) { sess.makeup = true; sess.makeupAt = now(); }
-    ls(localKey(id), JSON.stringify({ session: sess, sha: null, dirty: true })); location.hash = "#/lesson/" + encodeURIComponent(id); return; }
+    ls(localKey(id), JSON.stringify({ session: sess, sha: null, dirty: true })); STARTCLOCK = NEWCLOCK ? id : null; location.hash = "#/lesson/" + encodeURIComponent(id); return; }
   if (f.id === "tsform") return saveTest();
   if (!L) return; var x = L.session;
   if (f.id === "exform") { var q = $("#ex-q").value.trim(); if (!q) return; var sel = $("[data-exv][aria-pressed='true']");
@@ -936,38 +995,62 @@ function uploadWork() {
 
 /* ---------------- record ---------------- */
 function recordView() {
-  var sb = studentBase();
+  var sb = studentBase(), REC = { sj: "all", all: false };
+  function head() { return '<header class="stack s2"><h1 class="t-page">' + esc(CFG.student) + '’s record</h1><div class="tags">' + tag('<span class="dot"></span>Edexcel 9MA0 · Pure', "maths") + tag('<span class="dot"></span>AQA 7405 · Organic', "chem") + '</div></header>'; }
   function draw(tree) {
     var ids = lessonIds(tree).filter(function (i) { return i.session; });
-    return Promise.all([fileText(sb + "mistakes.jsonl"), fileText(sb + "tests.jsonl"), fileText(sb + "profile.md")].concat(ids.map(function (i) { return fileJSON(lessonBase(i.id) + "session.json").then(function (d) { i.x = d && norm(d.data); return i; }, function () { return i; }); })))
+    return Promise.all([fileText(sb + "mistakes.jsonl"), fileText(sb + "tests.jsonl"), fileText(sb + "profile.md"), loadMakeup()].concat(ids.map(function (i) {
+      return Promise.all([fileJSON(lessonBase(i.id) + "session.json"), i.script ? fileJSON(lessonBase(i.id) + "script.json").catch(function () { return null; }) : null]).then(function (d) { i.x = d[0] && norm(d[0].data); i.s = d[1] && d[1].data; return i; }, function () { return i; }); })))
       .then(function (v) {
         if (route().indexOf("/record") !== 0) return;
         function jl(r) { return r ? r.text.split(/\n/).filter(function (l) { return l.trim(); }).map(function (l) { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean) : []; }
         var mistakes = jl(v[0]).reverse(), tests = jl(v[1]), prof = v[2] ? v[2].text : "";
-        var mins = 0, n = 0, r = 0; ids.forEach(function (i) { var x = i.x || {}; mins += (x.time && x.time.minutes) || 0; var s = score(x); n += s.n; r += s.r; });
-        var h = phead([[CFG.student, ""], ["Record", ""]], CFG.student + "\u2019s record", "Time taught, answers, mistakes and tests.");
-        h += '<div class="stats"><div class="card stat"><div class="v2">' + ids.length + '</div><div class="l">lessons logged</div></div><div class="card stat"><div class="v2">' + r1(mins / 60) + '</div><div class="l">hours taught</div></div><div class="card stat"><div class="v2">' + (n ? Math.round(100 * r / n) + "%" : "—") + '</div><div class="l">answers right</div></div><div class="card stat"><div class="v2">' + mistakes.filter(function (m) { return !m.fixed; }).length + '</div><div class="l">open mistakes</div></div></div>';
-        h += '<div class="section-h"><h2 style="font-size:var(--fs-lg)">Time log</h2><span class="hint">Tap a row to open or correct it</span></div>';
-        h += ids.length ? '<div class="card tablewrap"><table class="t"><thead><tr><th>Date</th><th>Subject</th><th>Lesson</th><th>Start</th><th>End</th><th>Minutes</th><th>Right</th></tr></thead><tbody>' + ids.map(function (i) { var x = i.x || {}, p = parseId(i.id), s = score(x); return '<tr data-href="#/lesson/' + encodeURIComponent(i.id) + '"><td class="num">' + esc(fmtDate(x.date || p.date)) + '</td><td><span class="pill ' + esc(x.subject || p.subject) + '">' + esc(SUBJ[x.subject || p.subject] || "") + '</span></td><td><b>' + esc(x.title || i.id) + '</b></td><td class="num">' + esc(hhmm(x.time && x.time.started)) + '</td><td class="num">' + esc(hhmm(x.time && x.time.ended)) + '</td><td class="num">' + esc(x.time && x.time.minutes != null ? x.time.minutes : "") + '</td><td class="num">' + (s.n ? s.r + "/" + s.n : "") + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="empty"><h3>No lessons logged yet</h3></div>';
-        h += '<div class="section-h"><h2 style="font-size:var(--fs-lg)">Mistakes</h2><span class="hint">Kept by Claude from your verdicts and his marked work</span></div>';
-        h += mistakes.length ? '<ul class="list-plain">' + mistakes.slice(0, 150).map(function (m) { return '<li class="mistake ' + esc(m.type || "") + '"' + (m.fixed ? ' style="opacity:.55"' : "") + '><div><span class="pill ' + esc(m.subject || "") + '">' + esc(SUBJ[m.subject] || m.subject || "") + '</span> ' + (m.type ? '<span class="pill">' + esc(VHELP[m.type] || m.type) + '</span> ' : "") + clean(m.text || m.what || "") + '</div>' + (m.fix ? '<div class="fix">Fix: ' + clean(m.fix) + '</div>' : "") + '<div class="fix">' + esc([m.topic, m.source, m.date, m.fixed ? "fixed" : ""].filter(Boolean).join(" · ")) + '</div></li>'; }).join("") + '</ul>' : '<div class="empty"><h3>No mistakes logged yet</h3></div>';
-        h += '<div class="section-h"><h2 style="font-size:var(--fs-lg)">Tests</h2></div><form class="card form" id="tsform" style="padding:18px 20px"><div class="row2"><div class="field"><label for="t-date">Date</label><input type="date" id="t-date" value="' + todayIso() + '" required></div><div class="field"><label for="t-subj">Subject</label><select id="t-subj"><option value="maths">Maths</option><option value="chem">Chemistry</option></select></div><div class="field"><label for="t-sc">Score</label><input type="number" id="t-sc" step="0.5" min="0" required></div><div class="field"><label for="t-max">Out of</label><input type="number" id="t-max" step="0.5" min="1" required></div></div><div class="field"><label for="t-ti">Which test?</label><input type="text" id="t-ti" required placeholder="e.g. School mock Paper 1"></div><div class="field"><label for="t-no">Notes</label><input type="text" id="t-no"></div><div><button class="btn primary" type="submit">Add test result</button></div></form>';
-        if (tests.length) h += '<div class="card tablewrap" style="margin-top:12px"><table class="t"><thead><tr><th>Date</th><th>Subject</th><th>Test</th><th>Score</th><th>%</th><th>Notes</th></tr></thead><tbody>' + tests.slice().reverse().map(function (t) { return '<tr><td class="num">' + esc(fmtDate(t.date)) + '</td><td><span class="pill ' + esc(t.subject) + '">' + esc(SUBJ[t.subject] || t.subject) + '</span></td><td><b>' + esc(t.title) + '</b></td><td class="num">' + esc(t.score) + '/' + esc(t.max) + '</td><td class="num">' + (t.max ? Math.round(100 * t.score / t.max) + "%" : "") + '</td><td>' + esc(t.notes || "") + '</td></tr>'; }).join("") + '</tbody></table></div>';
-        if (prof) h += '<div class="section-h"><h2 style="font-size:var(--fs-lg)">Profile</h2></div><div class="card prose" style="padding:18px 22px;max-width:none">' + md(prof) + '</div>';
-        app.innerHTML = h;
+        var mins = 0, n = 0, r = 0; ids.forEach(function (i) { var x = i.x || {}; mins += +(x.time && x.time.minutes) || 0; var s = score(x); n += s.n; r += s.r; });
+        var open = mistakes.filter(function (m) { return !m.fixed; }), mko = makeupSum(ids);
+        var stat = function (b, l, c) { return '<div class="stat" style="flex:1 1 160px"><b' + (c ? ' style="color:' + c + '"' : "") + '>' + b + '</b><span class="hint">' + l + '</span></div>'; };
+        var h = '<div class="wrap record" style="gap:40px">' + head() + '<div class="row" style="gap:var(--s4);align-items:stretch">' + stat(ids.length, "Lessons logged") + stat(hmin(mins), "Taught") + stat(n ? Math.round(100 * r / n) + "%" : "-", "Answers right") +
+          stat(open.length, "Mistakes still open", "var(--wrong)") + (mko ? stat(Math.max(0, mko.owed) + " min", "Make-up owed", "var(--live-ink)") : "") + '</div>' +
+          '<nav class="jump seg" aria-label="On this page"><a href="#tl" data-jump="tl" aria-current="true">Time log</a><a href="#mi" data-jump="mi">Mistakes</a>' + (mko ? '<a href="#mu" data-jump="mu">Make-up</a>' : "") + '<a href="#ex" data-jump="ex">Exam results</a></nav>';
+        h += '<section id="tl" class="stack"><div class="head" style="align-items:baseline"><h2 class="t-sec">Time log</h2><span class="hint">Tap a row to open or correct it</span></div>' +
+          (ids.length ? '<div class="card" style="overflow-x:auto"><table class="tbl"><thead><tr><th>Date</th><th>Lesson</th><th>Parts</th><th class="n">Start</th><th class="n">Time</th><th class="n">Right</th></tr></thead><tbody>' + ids.map(function (i) {
+            var x = i.x || {}, p = parseId(i.id), s = score(x), sj = x.subject || p.subject, m = x.time && x.time.minutes;
+            return '<tr data-href="#/lesson/' + encodeURIComponent(i.id) + '"><td class="num" style="white-space:nowrap">' + esc(fmtDate(x.date || p.date)) + '</td><td><span class="row s2" style="flex-wrap:nowrap"><span class="dot ' + esc(sj) + '"></span>' + esc(lessonTitle(i.s, x)) + '</span></td><td>' + kindsHTML(i.s) + '</td>' +
+              '<td class="n">' + esc(hhmm(x.time && x.time.started)) + '</td><td class="n">' + (m != null ? (m < LESSON_MIN - 5 ? tag(Math.round(m) + " min", "live") : Math.round(m) + " min") : "") + '</td><td class="n">' + (s.n ? s.r + "/" + s.n : '<span class="hint">None</span>') + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="empty"><b class="t-card">No lessons logged yet</b></div>') + '</section>';
+        h += '<section id="mi" class="stack"><div class="head" style="align-items:center"><h2 class="t-sec">Mistakes</h2><div class="row s2"><div class="seg" role="group" aria-label="Subject">' +
+          [["all", "Both"], ["chem", "Chemistry"], ["maths", "Maths"]].map(function (o) { return '<button type="button" data-recsj="' + o[0] + '" aria-pressed="' + (o[0] === "all") + '">' + o[1] + '</button>'; }).join("") + '</div>' + tag(open.length + " still open", "bad") + '</div></div><div class="list" id="reclist"></div></section>';
+        if (mko) h += '<section id="mu" class="stack"><div class="head" style="align-items:baseline"><h2 class="t-sec">Make-up</h2>' + tag(Math.max(0, mko.owed) + " min owed", "live") + '</div><div class="card" style="overflow-x:auto"><table class="tbl"><tbody>' +
+          [["Owed before " + fmtDate(MK.data.start.date), "+" + mko.start], ["Missed lessons", "+" + Math.round(mko.missed)], ["Cut short by you", "+" + mko.short], ["Taught over " + LESSON_MIN + " min", "−" + Math.round(mko.over)], ["Make-up lessons", "−" + Math.round(mko.made)]]
+            .map(function (l) { return '<tr><td>' + esc(l[0]) + '</td><td class="n">' + esc(l[1]) + ' min</td></tr>'; }).join("") + '</tbody></table></div></section>';
+        h += '<section id="ex" class="stack"><div class="head" style="align-items:baseline"><h2 class="t-sec">Exam results</h2><button class="btn sm" type="button" data-addtest>Add an outside result</button></div>' +
+          '<form class="card pad stack s4" id="tsform" hidden><div class="cols3"><div class="field"><label for="t-date">Date</label><input class="input" type="date" id="t-date" value="' + todayIso() + '" required></div><div class="field"><label for="t-subj">Subject</label><select class="input" id="t-subj"><option value="maths">Maths</option><option value="chem">Chemistry</option></select></div><div class="field"><label for="t-ti">Exam</label><input class="input" type="text" id="t-ti" required placeholder="e.g. School mock Paper 1"></div></div>' +
+          '<div class="cols3"><div class="field"><label for="t-sc">Marks</label><input class="input" type="number" id="t-sc" step="0.5" min="0" required></div><div class="field"><label for="t-max">Out of</label><input class="input" type="number" id="t-max" step="0.5" min="1" required></div><div class="field"><label for="t-no">Notes</label><input class="input" type="text" id="t-no"></div></div><div><button class="btn pri" type="submit">Add the result</button></div></form>' +
+          (tests.length ? '<div class="card" style="overflow-x:auto"><table class="tbl"><thead><tr><th>Date</th><th>Exam</th><th>Where</th><th class="n">Marks</th><th class="n">%</th></tr></thead><tbody>' + tests.slice().reverse().map(function (x) {
+            return '<tr><td class="num" style="white-space:nowrap">' + esc(fmtDate(x.date)) + '</td><td><span class="row s2" style="flex-wrap:nowrap"><span class="dot ' + esc(x.subject) + '"></span>' + esc(cap(x.title || (x.topics ? "Chapters " + x.topics.map(function (s) { return String(s).split(" ")[0]; }).join(", ") : "Exam"))) + '</span>' + (x.notes ? '<div class="hint">' + esc(x.notes) + '</div>' : "") + '</td><td>' + tag(x.exam ? "In the app" : "Outside") + '</td><td class="n">' + esc(x.score) + '/' + esc(x.max) + '</td><td class="n"><b>' + (x.max ? Math.round(100 * x.score / x.max) + "%" : "") + '</b></td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="empty"><b class="t-card">No results yet</b></div>') + '</section>';
+        if (prof) h += '<section class="stack"><details class="fold"><summary>His profile</summary><div class="prose" style="max-width:none">' + md(prof) + '</div></details></section>';
+        app.innerHTML = h + '</div>';
+        var list = function () { var ms = mistakes.filter(function (m) { return REC.sj === "all" || m.subject === REC.sj; }), shown = REC.all ? ms : ms.slice(0, 8);
+          $("#reclist").innerHTML = shown.map(function (m) { var vt = VTAG[m.type] || [cap(m.type || ""), ""];
+            return '<div class="mrow"' + (m.fixed ? ' style="opacity:.55"' : "") + '><span class="edge" style="background:' + (VCOL[m.type] || "var(--line-strong)") + '"></span><div class="tags">' + (m.subject ? subjTag(m.subject) : "") + (m.type ? tag(vt[0], vt[1]) : "") + topicStrTag(m.topic) + refTag(m.source) + (m.date ? tag(esc(fmtDate(m.date))) : "") + (m.fixed ? tag("Fixed", "ok") : "") + '</div>' +
+              '<p style="padding-top:var(--s2);font-weight:500">' + clean(m.text || m.what || "") + '</p>' + (m.fix ? '<p class="fix"><b>Fix</b> · ' + clean(m.fix) + '</p>' : "") + '</div>'; }).join("") +
+            (!REC.all && ms.length > shown.length ? '<button class="loadmore" type="button" data-recall>See all (' + ms.length + ')</button>' : "") || '<div class="empty"><b class="t-card">No mistakes</b></div>'; maths($("#reclist")); };
+        REC.list = list; list();
+        recordView.REC = REC;
       });
   }
-  /* show the new page at once, so the previous page never sits under the Record tab while this loads */
-  app.innerHTML = phead([[CFG.student, ""], ["Record", ""]], CFG.student + "’s record", "Time taught, answers, mistakes and tests.") + '<div class="empty"><h3>Loading his record</h3></div>';
+  app.innerHTML = '<div class="wrap record">' + head() + '<div class="empty"><b class="t-card">Loading his record</b></div></div>';
   if (TREE && TREE.length) draw(TREE).catch(function (e) { if (route().indexOf("/record") === 0) fail(e); });
   loadTree(true).then(draw).catch(function (e) { if (!TREE || !TREE.length) fail(e); });
 }
-document.addEventListener("click", function (ev) { var tr = ev.target.closest("tr[data-href]"); if (tr) location.hash = tr.getAttribute("data-href"); });
+document.addEventListener("click", function (e) { var R = recordView.REC; if (!R || !e.target.closest) return;
+  var b = e.target.closest("[data-recsj]"); if (b) { R.sj = b.getAttribute("data-recsj"); $$("[data-recsj]").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); }); R.list(); return; }
+  if (e.target.closest("[data-recall]")) { R.all = true; R.list(); return; }
+  if (e.target.closest("[data-addtest]")) { var f = $("#tsform"); f.hidden = !f.hidden; return; }
+  var j = e.target.closest("[data-jump]"); if (j) { e.preventDefault(); var s = document.getElementById(j.getAttribute("data-jump")); if (s) s.scrollIntoView({ behavior: "smooth" }); $$("[data-jump]").forEach(function (x) { if (x === j) x.setAttribute("aria-current", "true"); else x.removeAttribute("aria-current"); }); } });
 function saveTest() { var sb = studentBase() + "tests.jsonl";
   var t = { date: $("#t-date").value, subject: $("#t-subj").value, score: +$("#t-sc").value, max: +$("#t-max").value, title: $("#t-ti").value.trim(), notes: $("#t-no").value.trim(), device: CFG.device, at: now() };
   setSave("Saving…");
   loadTree(true).then(function () { return fileText(sb); }).then(function (r) { var body = (r ? r.text.replace(/\s*$/, "\n") : "") + JSON.stringify(t) + "\n"; return putB64(sb, b64enc(body), CFG.student + ": test result " + t.date + " (" + CFG.device + ")", r && r.sha); })
-    .then(function () { setSave("Saved " + hhmm(now())); toast("Test result saved"); recordView(); }).catch(function (e) { setSave("Not saved", true); toast("Couldn’t save: " + e.message); }); }
+    .then(function () { setSave("Saved " + hhmm(now())); toast("Result saved"); recordView(); }).catch(function (e) { setSave("Not saved", true); toast("Couldn’t save: " + e.message); }); }
 function md(s) {
   var out = [], list = false;
   String(s).split(/\n/).forEach(function (line) {
@@ -1041,26 +1124,33 @@ function saveRevise() { if (TRY || !REV || !REV.dirty || !navigator.onLine) retu
 window.addEventListener("online", saveRevise);
 var revState = { i: 0, open: false, subj: null, box: null };
 function reviseInto(box, subject) {
-  box.innerHTML = '<div class="empty"><h3>Loading his mistakes</h3></div>';
+  box.innerHTML = '<div class="empty"><b class="t-card">Loading his mistakes</b></div>';
   loadRevise().then(function () { revState = { i: 0, open: false, subj: subject || null, box: box }; drawRevise(); })
-    .catch(function (e) { box.innerHTML = '<div class="empty"><h3>Couldn’t load his mistakes</h3><p>' + esc(e.message) + '</p></div>'; });
+    .catch(function (e) { box.innerHTML = '<div class="empty"><b class="t-card">Couldn’t load his mistakes</b><span class="hint">' + esc(e.message) + '</span></div>'; });
 }
 function drawRevise() {
   var box = revState.box; if (!box || !box.isConnected) return; var due = dueList(revState.subj), all = REV.ms.length;
-  var chips = '<div class="qbar" style="margin-bottom:12px">' + [[null, "All subjects"], ["chem", "Chemistry"], ["maths", "Maths"]].map(function (c) { return '<button class="chip" type="button" data-rsub="' + (c[0] || "") + '" aria-pressed="' + (revState.subj === c[0]) + '">' + c[1] + '</button>'; }).join("") + '</div>';
-  if (!due.length) { box.innerHTML = chips + '<div class="empty"><h3>Nothing due</h3><p>' + (all ? "Every mistake is either mastered or scheduled for a later day." : "No mistakes logged yet. They arrive when Claude closes a lesson.") + '</p></div>'; return; }
+  var seg = '<div class="seg" role="group" aria-label="Subject">' + [[null, "Both"], ["chem", "Chemistry"], ["maths", "Maths"]].map(function (c) { return '<button type="button" data-rsub="' + (c[0] || "") + '" aria-pressed="' + (revState.subj === c[0]) + '">' + c[1] + '</button>'; }).join("") + '</div>';
+  var tg = $("#revtags"); if (tg) tg.innerHTML = tag(due.length + " due today", "live") + tag("5 min · about 8 cards") + tag("Day 1, 3, 7, 14, 30");
+  var segbox = $("#revseg"); if (segbox) segbox.innerHTML = seg; else seg = '<div class="row">' + seg + '</div>';
+  if (segbox) seg = "";
+  if (!due.length) { box.innerHTML = seg + '<div class="empty"><b class="t-card">Nothing due today</b><span class="hint">' + (all ? "Every mistake is either mastered or comes back on a later day." : "No mistakes logged yet. They arrive when Claude closes a lesson.") + '</span></div>'; return; }
   if (revState.i >= due.length) revState.i = 0;
-  var m = due[revState.i], r = REV.rv[m.key];
-  box.innerHTML = chips + '<div class="rev card"><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pill ' + esc(m.subject || "") + '">' + esc(SUBJ[m.subject] || m.subject || "") + '</span>' + (m.topic ? '<span class="pill">' + esc(m.topic) + '</span>' : "") + (m.type ? '<span class="pill">' + esc(VHELP[m.type] || m.type) + '</span>' : "") + '<span class="pill num">' + (revState.i + 1) + ' of ' + due.length + ' due</span>' + (r ? '<span class="pill">round ' + (r.box + 1) + '</span>' : '<span class="pill warn">first time</span>') + '</div>' +
-    '<div class="label" style="margin-top:16px">Ask him</div><div class="rev-q">' + clean(m.ask || ("What’s the correct version of this? “" + (m.text || m.what || "") + "”")) + '</div>' +
-    (revState.open ? '<div class="qa prose"><b>Answer:</b> ' + clean(m.fix || "") + '<div class="hint" style="margin-top:8px">His mistake (' + esc(m.date || "") + '): ' + clean(m.text || m.what || "") + '</div></div>' : '<div><button class="btn" type="button" data-rev="open">Show answer</button></div>') +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="v" type="button" data-v="right" data-rev="ok" aria-pressed="false">✓ Got it</button><button class="v" type="button" data-v="wrong" data-rev="no" aria-pressed="false">✗ Still wrong</button><button class="btn small" type="button" data-rev="skip">Skip for now</button></div></div>';
+  var m = due[revState.i], r = REV.rv[m.key], bx = r ? r.box : 0, vt = VTAG[m.type];
+  box.innerHTML = seg + '<div class="row"><b class="num" style="font-size:15px">Card ' + (revState.i + 1) + ' of ' + due.length + '</b><div class="bar live" style="flex:1"><i style="width:' + Math.max(2, Math.round(100 * (revState.i + 1) / due.length)) + '%"></i></div></div>' +
+    '<article class="card raised stack s6 revcard"><div class="row"><div class="tags">' + (m.subject ? subjTag(m.subject) : "") + topicStrTag(m.topic) + (vt ? tag(vt[0], vt[1]) : "") + '</div>' +
+    '<div class="row s2 push" aria-label="Review ' + (bx + 1) + ' of ' + GAPS.length + ', day ' + GAPS[Math.min(bx, GAPS.length - 1)] + '">' + GAPS.map(function (g, k) { return '<span class="box' + (k < bx ? " done" : k === bx ? " on" : "") + '"><i></i>' + g + '</span>'; }).join("") + '</div></div>' +
+    '<div class="stack s3"><span class="lab">Ask him</span><div class="rev-q ' + (m.subject === "maths" ? "q-edexcel" : "q-aqa") + '">' + clean(m.ask || ("What’s the correct version of this? “" + (m.text || m.what || "") + "”")) + '</div></div>' +
+    '<details class="fold"' + (revState.open ? " open" : "") + '><summary data-rev="open">Show the answer</summary><div class="stack s2"><div class="prose">' + clean(m.fix || "") + '</div><span class="hint">His mistake' + (m.date ? ", " + esc(fmtDate(m.date)) : "") + ': ' + clean(m.text || m.what || "") + '</span></div></details></article>' +
+    '<div class="row" style="gap:var(--s4)"><button class="bigv ok" type="button" data-rev="ok"><span>✓</span>Got it</button><button class="bigv bad" type="button" data-rev="no"><span>✕</span>Still wrong</button><button class="bigv skip" type="button" data-rev="skip">Skip for now</button></div>' +
+    '<div class="tags" style="justify-content:center">' + tag("Got it: back on day " + GAPS[Math.min(bx + 1, GAPS.length - 1)]) + tag("Still wrong: day 1 again") + tag("Done after day 30") + '</div>';
+  maths(box);
 }
-function reviseView() { app.innerHTML = phead([[CFG.student, ""], ["Warm-up", ""]], "Mistakes warm-up", "Five minutes at the start of a lesson. Each one comes back on day 1, 3, 7, 14 and 30 until he gets it right every time.") + '<div id="revbox"></div>'; reviseInto($("#revbox"), subjPick() === "all" ? null : subjPick()); }
-document.addEventListener("click", function (e) { var t = e.target.closest("button"); if (!t || !REV || !revState.box || !revState.box.isConnected) return;
+function reviseView() { app.innerHTML = '<div class="wrap narrow" style="max-width:840px"><header class="head"><div class="stack s2"><h1 class="t-title">Mistakes warm-up</h1><div class="tags" id="revtags"></div></div><div id="revseg"></div></header><div id="revbox" class="stack s5"></div></div>'; reviseInto($("#revbox"), subjPick() === "all" ? null : subjPick()); }
+document.addEventListener("click", function (e) { var t = e.target.closest("button, summary[data-rev]"); if (!t || !REV || !revState.box || !revState.box.isConnected) return;
   if (t.hasAttribute("data-rsub")) { revState.subj = t.getAttribute("data-rsub") || null; revState.i = 0; revState.open = false; drawRevise(); return; }
   var a = t.getAttribute("data-rev"); if (!a) return; e.stopPropagation(); var due = dueList(revState.subj), m = due[revState.i];
-  if (a === "open") { revState.open = true; drawRevise(); return; }
+  if (a === "open") { e.preventDefault(); revState.open = !revState.open; drawRevise(); return; }
   if (a === "skip") { revState.i = (revState.i + 1) % Math.max(1, due.length); revState.open = false; drawRevise(); return; }
   if (m) { markRevise(m.key, a === "ok"); var nd = REV.rv[m.key].due; toast(a === "ok" ? (nd === "done" ? "Mastered" : "Back on " + fmtDate(nd)) : "Back tomorrow"); }
   revState.open = false; drawRevise(); }, true);
@@ -1076,44 +1166,53 @@ document.addEventListener("click", function (e) { var t = e.target.closest && e.
 /* ---------------- videos: every relevant lecture, by topic, played here ---------------- */
 var VID = { subj: ls("tutor.vsubj") || "chem", q: "", cur: null };
 function durTxt(s) { s = +s || 0; return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+var PLAYIC = '<svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"></path></svg>';
 function videosView() {
   if (subjPick() !== "all") VID.subj = subjPick();
-  app.innerHTML = phead([[CFG.student, ""], ["Videos", ""]], "Videos", "Chemistry Tutor (organic) and Maths Genie (Pure), in topic order. Tap one to play it here.") + '<div id="vwrap"><div class="empty"><h3>Loading the video list</h3></div></div>';
+  VID.more = VID.more || {};
+  app.innerHTML = '<div class="wrap videos"><header class="head"><div class="stack s2"><h1 class="t-page">Videos</h1><div class="tags">' + tag('<span class="dot"></span>Chemistry Tutor · Organic', "chem") + tag('<span class="dot"></span>Maths Genie · Pure', "maths") + tag("Topic order") + '</div></div>' +
+    '<div class="seg" role="group" aria-label="Subject">' + [["all", "Both"], ["chem", "Chemistry"], ["maths", "Maths"]].map(function (c) { return '<button type="button" data-vsub="' + c[0] + '" aria-pressed="' + (VID.subj === c[0]) + '">' + c[1] + '</button>'; }).join("") + '</div></header>' +
+    '<label class="search"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg><span class="sr">Search videos</span><input type="search" id="vq" placeholder="Search, e.g. chain rule, NMR" value="' + esc(VID.q) + '"></label>' +
+    '<div id="vplayer"></div><div id="vwrap" class="stack s6"><div class="empty"><b class="t-card">Loading the video list</b></div></div></div>';
   loadTree().then(function () { return fileJSON("videos.json"); }).then(function (r) {
     if (route().indexOf("/videos") !== 0) return;
-    if (!r) { $("#vwrap").innerHTML = '<div class="empty"><h3>No video list yet</h3><p>Ask Claude to run tools/build_video_catalogue.py.</p></div>'; return; }
+    if (!r) { $("#vwrap").innerHTML = '<div class="empty"><b class="t-card">No video list yet</b><span class="hint">Ask Claude to run tools/build_video_catalogue.py.</span></div>'; return; }
     var tr = {}; (TREE || []).forEach(function (t) { var m = /^transcripts\/youtube\/[a-z]+\/([A-Za-z0-9_-]{11}) .*\.txt$/.exec(t.path); if (m) tr[m[1]] = t.path; });
     VID.all = r.data.videos.map(function (v) { v.transcript = tr[v.id] || v.transcript || null; return v; }); drawVideos();
   }).catch(fail);
 }
 function drawVideos() {
-  var q = VID.q.toLowerCase(), list = VID.all.filter(function (v) { return v.subject === VID.subj && (!q || v.title.toLowerCase().indexOf(q) >= 0 || v.group.toLowerCase().indexOf(q) >= 0); });
+  var q = VID.q.toLowerCase(), list = VID.all.filter(function (v) { return (VID.subj === "all" || v.subject === VID.subj) && (!q || v.title.toLowerCase().indexOf(q) >= 0 || v.group.toLowerCase().indexOf(q) >= 0); });
   var groups = [], by = {}; list.forEach(function (v) { if (!by[v.group]) { by[v.group] = []; groups.push(v.group); } by[v.group].push(v); });
-  var h = '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px"><div class="qbar">' + [["chem", "Chemistry"], ["maths", "Maths"]].map(function (c) { return '<button class="chip" type="button" data-vsub="' + c[0] + '" aria-pressed="' + (VID.subj === c[0]) + '">' + c[1] + '</button>'; }).join("") + '</div>' +
-    '<input type="search" id="vq" placeholder="Search, e.g. chain rule, NMR" value="' + esc(VID.q) + '" style="flex:1 1 240px;min-height:44px;border-radius:12px;border:1px solid var(--line-strong);background:var(--surface);padding:0 14px" aria-label="Search videos"></div>';
-  h += '<div id="vplayer"></div>';
-  h += groups.length ? groups.map(function (g) { return '<div class="section-h" style="margin-top:22px"><h2 style="font-size:var(--fs-lg)">' + esc(g) + '</h2><span class="hint">' + by[g].length + '</span></div><div class="items">' + by[g].map(function (v) {
-      return '<button type="button" class="item vrow" data-vid="' + esc(v.id) + '" style="text-align:left;border:0;background:transparent;cursor:pointer;width:100%"><span class="qn">▶</span><span style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><b>' + esc(v.title) + '</b><span class="pill num">' + durTxt(v.duration) + '</span>' + (v.kind === "exam questions" ? '<span class="pill warn">exam questions</span>' : "") + (v.transcript ? '<span class="pill ok">transcript</span>' : "") + '</span></button>'; }).join("") + '</div>'; }).join("")
-    : '<div class="empty"><h3>No videos match</h3><p>Try a shorter search.</p></div>';
-  $("#vwrap").innerHTML = h; if (VID.cur) playVideo(VID.cur, false);
+  var row = function (v) { var tg = (v.kind === "exam questions" ? tag("Exam questions", "live") : "") + (v.transcript ? "" : tag("No transcript", "dash"));
+    return '<button class="li vr" type="button" data-vid="' + esc(v.id) + '"' + (VID.cur === v.id ? ' aria-current="true"' : "") + '><span class="pl">' + PLAYIC + '</span><b>' + esc(v.title) + '</b><span class="tags">' + tg + '</span><span class="hint num" style="text-align:right">' + durTxt(v.duration) + '</span></button>'; };
+  $("#vwrap").innerHTML = groups.length ? groups.map(function (g, gi) { var vs = by[g], open = VID.more[g] || q || vs.length <= 4, shown = open ? vs : vs.slice(0, 3);
+      return '<section class="stack s3"><div class="row"><h2 class="tags">' + topicStrTag(g).replace('class="tag topic"', 'class="tag topic lg"') + '</h2><span class="hint push">' + vs.length + (vs.length === 1 ? " video" : " videos") + '</span></div><div class="list">' + shown.map(row).join("") +
+        (open ? "" : '<button class="loadmore" type="button" data-vgmore="' + esc(g) + '">Show ' + (vs.length - 3) + ' more</button>') + '</div></section>'; }).join("")
+    : '<div class="empty"><b class="t-card">No videos match</b><span class="hint">Try a shorter search.</span></div>';
+  if (VID.cur) playVideo(VID.cur, false);
 }
 function playVideo(id, scroll) {
   var v = (VID.all || []).filter(function (x) { return x.id === id; })[0]; if (!v) return; VID.cur = id;
+  $$(".vr[data-vid]").forEach(function (b) { if (b.getAttribute("data-vid") === id) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current"); });
   var box = $("#vplayer"); if (!box) return;
-  box.innerHTML = '<div class="vid" style="margin-bottom:8px"><div class="label" style="margin-bottom:6px">' + esc(v.channel) + ' · ' + esc(v.group) + '</div><h3 style="font-size:var(--fs-lg);margin-bottom:10px">' + esc(v.title) + '</h3><div class="vframe"><iframe data-vid="' + esc(v.id) + '" src="' + vsrc(v.id, 0, true) + '" title="' + esc(v.title) + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>' +
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px"><a class="btn small" href="https://www.youtube.com/watch?v=' + esc(v.id) + '" target="_blank" rel="noopener">Open on YouTube</a>' + (v.transcript ? '<button class="btn small" type="button" data-vtr="' + esc(v.id) + '">Show transcript</button>' : '<span class="hint">Transcript not downloaded yet</span>') + '<button class="btn small" type="button" data-vclose>Close</button></div><div id="vtr"></div></div>';
+  box.innerHTML = '<section class="card pad split" style="gap:var(--s5)"><div class="vframe" style="flex:3 1 420px"><iframe data-vid="' + esc(v.id) + '" src="' + vsrc(v.id, 0, true) + '" title="' + esc(v.title) + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>' +
+    '<div class="stack s3" style="flex:2 1 280px;min-width:0"><div class="tags">' + topicStrTag(v.group) + tag(durTxt(v.duration)) + tag("Now playing", esc(v.subject)) + '</div><h2 class="t-card">' + esc(v.title) + '</h2>' +
+    '<div id="vtr" class="sunk" style="flex:1;min-height:120px;max-height:320px;overflow:auto;padding:var(--s4)">' + (v.transcript ? '<span class="hint">Loading the transcript…</span>' : '<span class="hint">No transcript downloaded yet.</span>') + '</div>' +
+    '<div class="row s2"><a class="btn sm quiet" href="https://www.youtube.com/watch?v=' + esc(v.id) + '" target="_blank" rel="noopener">Open on YouTube</a><button class="btn sm quiet push" type="button" data-vclose>Close</button></div></div></section>';
+  if (v.transcript) showTranscript(v.id);
   if (scroll !== false) box.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 function showTranscript(id) {
   var v = VID.all.filter(function (x) { return x.id === id; })[0], box = $("#vtr"); if (!v || !box) return; box.innerHTML = '<p class="hint">Loading transcript…</p>';
   fileText(v.transcript).then(function (r) { if (!r) { box.innerHTML = '<p class="hint">Transcript not found.</p>'; return; }
     var lines = r.text.split(/\n/).filter(function (l) { return /^\[/.test(l); });
-    box.innerHTML = '<div class="prose vtr">' + lines.map(function (l) { var m = /^\[([0-9:]+)\]\s*(.*)$/.exec(l); return m ? '<p><button class="linkbtn num" type="button" data-seek="' + esc(v.id) + '" data-t="' + esc(m[1]) + '">' + esc(m[1]) + '</button> ' + esc(m[2]) + '</p>' : ""; }).join("") + '</div>'; });
+    box.innerHTML = '<div class="prose vtr" style="max-height:none;border:0;margin:0;padding:0">' + lines.map(function (l) { var m = /^\[([0-9:]+)\]\s*(.*)$/.exec(l); return m ? '<p><button class="linkbtn num" type="button" data-seek="' + esc(v.id) + '" data-t="' + esc(m[1]) + '">' + esc(m[1]) + '</button> ' + esc(m[2]) + '</p>' : ""; }).join("") + '</div>'; });
 }
 document.addEventListener("click", function (e) { if (route().indexOf("/videos") !== 0) return; var t = e.target.closest("button"); if (!t) return;
-  if (t.hasAttribute("data-vsub")) { VID.subj = t.getAttribute("data-vsub"); ls("tutor.vsubj", VID.subj); VID.cur = null; drawVideos(); return; }
-  if (t.hasAttribute("data-vid") && t.classList.contains("vrow")) { playVideo(t.getAttribute("data-vid")); return; }
-  if (t.hasAttribute("data-vtr")) { showTranscript(t.getAttribute("data-vtr")); t.remove(); return; }
+  if (t.hasAttribute("data-vsub")) { VID.subj = t.getAttribute("data-vsub"); ls("tutor.vsubj", VID.subj); VID.cur = null; $$("[data-vsub]").forEach(function (b) { b.setAttribute("aria-pressed", String(b === t)); }); $("#vplayer").innerHTML = ""; drawVideos(); return; }
+  if (t.hasAttribute("data-vgmore")) { VID.more[t.getAttribute("data-vgmore")] = 1; drawVideos(); return; }
+  if (t.hasAttribute("data-vid") && t.classList.contains("vr")) { playVideo(t.getAttribute("data-vid")); return; }
   if (t.hasAttribute("data-vclose")) { VID.cur = null; $("#vplayer").innerHTML = ""; return; }
 });
 document.addEventListener("input", function (e) { if (e.target.id === "vq") { VID.q = e.target.value; clearTimeout(timers.vq); timers.vq = setTimeout(function () { var pos = e.target.selectionStart; drawVideos(); var i = $("#vq"); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (x) {} } }, 250); } });
@@ -1249,7 +1348,7 @@ function boardHTML(c) {
   items.forEach(function (it, i) { var k = boardKey(it), a = L.session.answers[k] || {}, open = BOARD.open === k, star = it.it && it.it.star;
     h += '<li class="brow' + (open ? " open" : "") + (it.rel ? " rel" : "") + (star ? " star" : "") + '" data-v="' + esc(a.v || "") + '">' +
       '<button type="button" class="bq" data-bopen="' + esc(k) + '" aria-expanded="' + open + '"><span class="bn num">' + (i + 1) + '</span><span class="bt">' + (star ? '<i aria-hidden="true">★</i> ' : "") + clean(String(boardQ(it)).replace(/<br\s*\/?>/gi, " \u00b7 ")) + '</span>' +
-      (it.it && it.it.page ? '<span class="bpg">' + esc(it.it.page) + '</span>' : it.title && /\(([^)]+)\)/.test(it.title) ? '<span class="bpg">' + esc(/\(([^)]+)\)/.exec(it.title)[1]) + '</span>' : "") + '<span class="bv" aria-hidden="true">' + ({ right: "✓", wrong: "✗", partly: "½", wording: "W", terminology: "T", skipped: "–", tskip: "⏭" }[a.v] || "") + '</span></button>' +
+      (it.it && it.it.page ? '<span class="bpg">' + esc(it.it.page) + '</span>' : it.title && /\(([^)]+)\)/.test(it.title) ? '<span class="bpg">' + esc(/\(([^)]+)\)/.exec(it.title)[1]) + '</span>' : "") + '<span class="bv" aria-hidden="true">' + ({ right: "✓", wrong: "✗", partly: "½", wording: "W", terminology: "T", skipped: "-", tskip: "⏭" }[a.v] || "") + '</span></button>' +
       (open ? '<div class="bbody"><div class="qtext prose">' + paperHTML(boardQ(it), subjNow()) + '</div><div class="bans prose">' + clean(boardA(it)) + '</div>' + (a.note ? '<div class="bnote"><b>Note:</b> ' + esc(a.note) + '</div>' : "") + boardNext(items, it) + '</div>' : "") + '</li>'; });
   var oi = items.filter(function (it) { return boardKey(it) === BOARD.open; })[0];
   return h + '</ol>' + vrail(oi ? boardKey(oi) : null, oi ? L.session.answers[boardKey(oi)] : null, oi ? plain(boardQ(oi)) : ""); }
@@ -1264,16 +1363,19 @@ var VIC = { right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
   partly: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>',
   mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18.5" cy="12" r="2"/></svg>' };
-function vrail(id, a, q, o) { a = a || {}; o = o || {}; var off = id ? "" : " disabled", lab = { right: "Right", wrong: "Wrong", partly: "Partly" }, other = a.v === "wording" || a.v === "terminology" || a.v === "skipped";
-  return '<div class="ctl big vrail' + (id ? "" : " idle") + (asked_(a.v) ? " has" : "") + '"' + (id ? ' data-item="' + esc(id) + '" data-q="' + esc(String(q || "").slice(0, 160)) + '"' : "") + ' role="toolbar" aria-label="Mark the open question">' +
-    (o.flip ? '<button class="vr vr-flip" type="button" ' + o.flip + ' aria-pressed="' + !!o.flipped + '" title="Mark scheme (A)" aria-label="Mark scheme"' + (o.flipHidden ? " hidden" : "") + '><span class="vd">A</span><kbd>A</kbd></button><span class="vrsep" aria-hidden="true"></span>' : "") +
-    VBIG.map(function (v, i) { return '<button class="v vr vr-' + v[0] + '" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '" title="' + lab[v[0]] + ' (' + (i + 1) + ')" aria-label="' + lab[v[0]] + '"' + off + '><span class="vd">' + VIC[v[0]] + '</span><kbd>' + (i + 1) + '</kbd></button>'; }).join("") +
+/* the verdicts as round buttons down the right edge, in the design's order; the keys stay as Ali learned them */
+var KEYV = { 1: "right", 2: "wrong", 3: "partly", 4: "wording", 5: "terminology", 6: "skipped" }, VKEY = { right: 1, wrong: 2, partly: 3, wording: 4, terminology: 5, skipped: 6 };
+var VRAIL = [["right", "Right"], ["partly", "Partly"], ["wording", "Wording"], ["terminology", "Terminology"], ["wrong", "Wrong"], ["skipped", "No answer"]];
+VIC.wording = '<b aria-hidden="true">≈</b>'; VIC.terminology = '<b aria-hidden="true">Aa</b>'; VIC.skipped = '<b aria-hidden="true">−</b>';
+function vrail(id, a, q, o) { a = a || {}; o = o || {}; var off = id ? "" : " disabled";
+  return '<div class="ctl big vrail' + (id ? "" : " idle") + (asked_(a.v) ? " has" : "") + '"' + (id ? ' data-item="' + esc(id) + '" data-q="' + esc(String(q || "").slice(0, 160)) + '"' : "") + ' role="toolbar" aria-label="How he did">' +
+    (o.flip ? '<button class="vr vr-flip" type="button" ' + o.flip + ' aria-pressed="' + !!o.flipped + '" title="Answer side (A)" aria-label="Answer side"' + (o.flipHidden ? " hidden" : "") + '><span class="vd">A</span><kbd>A</kbd></button><span class="vrsep" aria-hidden="true"></span>' : "") +
+    VRAIL.map(function (v) { return '<button class="v vr vr-' + v[0] + '" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '" title="' + v[1] + ' (' + VKEY[v[0]] + ')" aria-label="' + v[1] + '"' + off + '><span class="vd">' + VIC[v[0]] + '</span><kbd>' + VKEY[v[0]] + '</kbd></button>'; }).join("") +
+    '<span class="vrsep" aria-hidden="true"></span>' +
     (SR ? '<button class="vr vr-mic" type="button" data-mic title="Say what he said: tap, speak, it stops by itself (or hold M)" aria-label="Say what he said"' + off + '><span class="vd">' + VIC.mic + '</span><span class="vt">Say it</span><kbd>M</kbd></button>' : "") +
-    '<button class="vr vr-more" type="button" data-vrmore aria-expanded="false" aria-pressed="' + other + '" title="Wording, terminology, no answer, note" aria-label="More"' + off + '><span class="vd">' + VIC.more + '</span><kbd>4-6</kbd></button>' +
-    (id ? '<div class="vrmenu" hidden><span class="hint">Right idea, wrong words:</span>' + VSMALL.map(function (v, i) { return '<button class="v vs" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '">' + v[1] + '<kbd>' + (i + 4) + '</kbd></button>'; }).join("") +
-      '<button class="v vs" type="button" data-v="skipped" title="He did not attempt it" aria-pressed="' + (a.v === "skipped") + '">No answer<kbd>6</kbd></button>' +
-      (o.marks ? '<label class="mkin">Marks <input class="mk" type="number" min="0" step="0.5" inputmode="decimal" aria-label="Marks out of ' + esc(o.marks) + '" data-mk value="' + (a.m != null ? esc(a.m) : "") + '"><span class="hint num">/ ' + esc(o.marks) + '</span></label>' : "") +
-      '<input class="note" type="text" data-note aria-label="What he said" placeholder="What he said or got wrong" value="' + esc(a.note || "") + '"></div>' : "") + '</div>'; }
+    '<button class="vr vr-more" type="button" data-vrmore aria-expanded="false" aria-pressed="' + !!(a.note || a.m != null) + '" title="' + (o.marks ? "Marks and what he said" : "What he said") + '" aria-label="' + (o.marks ? "Marks and note" : "Note") + '"' + off + '><span class="vd">' + VIC.more + '</span></button>' +
+    (id ? '<div class="vrmenu" hidden>' + (o.marks ? '<label class="mkin">Marks <input class="input mk" type="number" min="0" step="0.5" inputmode="decimal" aria-label="Marks out of ' + esc(o.marks) + '" data-mk value="' + (a.m != null ? esc(a.m) : "") + '"><span class="hint num">/ ' + esc(o.marks) + '</span></label>' : "") +
+      '<input class="input note" type="text" data-note aria-label="What he said or got wrong" placeholder="What he said or got wrong" value="' + esc(a.note || "") + '"></div>' : "") + '</div>'; }
 function boardJump(iid) { var c = TCH.seq[TCH.pos]; if (!c || c.t !== "board") return null;
   var keys = $$(".chunk.cur .brow .bq").map(function (b) { return b.getAttribute("data-bopen"); }), byk = {};
   c.items.forEach(function (it) { byk[boardKey(it)] = it; });
@@ -1314,7 +1416,7 @@ function slDraw() { var c = TCH.seq[TCH.pos], cur = $(".chunk.cur"); if (!c || !
 function sliderHTML(c) { var q = c.b;
   if (SL.q !== q) { SL = { q: q, i: 0, back: false }; for (var j = 0; j < q.parts.length; j++) if (!asked_((L.session.answers[slKey(q, j)] || {}).v)) { SL.i = j; break; } }
   var i = SL.i, p = q.parts[i], k = slKey(q, i), a = L.session.answers[k] || {}, hasBack = !!(p.answer || (p.ms || []).length);
-  var sym = { right: "\u2713", wrong: "\u2717", partly: "\u00bd", wording: "W", terminology: "T", skipped: "\u2013" };
+  var sym = { right: "\u2713", wrong: "\u2717", partly: "\u00bd", wording: "W", terminology: "T", skipped: "-" };
   var pills = q.parts.map(function (x, j) { var b = L.session.answers[slKey(q, j)] || {};
     return '<button type="button" class="sl-pill' + (j === i ? " cur" : "") + (asked_(b.v) ? " v-" + b.v : "") + '" data-slgo="' + j + '">' + esc(x.lab || String(j + 1)) + (asked_(b.v) ? " " + (b.m != null ? esc(b.m) : sym[b.v] || "") : "") + '</button>'; }).join("");
   function peek(j, cls) { var x = q.parts[j], b = L.session.answers[slKey(q, j)] || {};
@@ -1428,7 +1530,8 @@ function tposKey() { return "tutor.tpos." + CFG.student + "." + L.id; }
 function live() { return replay(L.session.time.log).running; }
 /* Teach before the clock has ever started: rehearsing, so verdict taps are not recorded */
 function previewing() { return MODE === "teach" && L && !(L.session.time.log || []).length && L.session.status !== "finished"; }
-function tlabel(kind, ic, text) { return '<div class="tlabel k-' + kind + '"><span class="ic">' + ic + '</span>' + esc(text) + '</div>'; }
+var TLTAG = { q: "ask", ask: "ask", check: "ok", draw: "bad", say: "chem", show: "maths", core: "line", deep: "dash", "do": "line" };
+function tlabel(kind, ic, text) { return '<div class="tlabel k-' + kind + '"><span class="tag lg ' + (TLTAG[kind] || "line") + '">' + esc(cap(text)) + '</span></div>'; }
 var KIC = { say: "S", draw: "D", ask: "?", show: "▣", check: "✓" };
 function chunkKey(c) { return c.t === "quiz" ? c.it.id : c.t === "drill" ? c.key : c.t === "question" ? c.b.id : c.key || null; }
 /* what one chunk is, in a few words: for the outline, the greyed lines and "up next" */
@@ -1448,8 +1551,8 @@ function iconOf(c) { return c.t === "step" ? (KIC[c.it.kind] || "→") : c.t ===
 function chunkHTML(c) {
   var k = chunkKey(c), tk = k && { step: 1, text: 1, mod: 1 }[c.t] ? '<span class="ctick">' + tick_(k, shortOf(c)) + '</span>' : "";
   switch (c.t) {
-    case "phase": return '<div class="tphase"><div class="label">Part ' + (phases().indexOf(c.p) + 1) + (c.p.start != null ? ' · ' + c.p.start + '–' + c.p.end + ' min' : "") + '</div><h2>' + esc(c.p.name) + '</h2>' + (c.p.show ? '<div class="screen" style="margin-top:16px"><span class="label">On screen</span><div>' + clean(c.p.show) + '</div></div>' : "") + (L.script && L.script.focus && phases()[0] === c.p ? focusTable(L.script.focus) : "") + phasePages(c.p) + '</div>';
-    case "mod": return tk + tlabel(c.b.level === "deep" ? "deep" : "core", c.b.level === "deep" ? "D" : "C", (c.b.level === "deep" ? "Deep dive, optional" : "Core") + (c.b.minutes ? " · " + c.b.minutes + " min" : "")) + '<h2 style="font-size:var(--fs-xl)">' + esc(c.b.name) + '</h2>';
+    case "phase": var pk = kindOf(c.p.name); return '<div class="tphase stack s4"><div class="tags">' + tag("Part " + (phases().indexOf(c.p) + 1)) + (pk ? tag(esc(pk), pk === "If time" ? "dash" : "line") : "") + (c.p.start != null ? tag(c.p.start + " to " + c.p.end + " min", "num") : "") + '</div><h2>' + esc(pk ? partTitle(c.p.name) : c.p.name) + '</h2>' + (c.p.show ? '<div class="screen"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg><div class="stack" style="gap:2px"><span class="lab">On his screen</span><div>' + clean(c.p.show) + '</div></div></div>' : "") + (L.script && L.script.focus && phases()[0] === c.p ? focusTable(L.script.focus) : "") + phasePages(c.p) + '</div>';
+    case "mod": return tk + tlabel(c.b.level === "deep" ? "deep" : "core", c.b.level === "deep" ? "D" : "C", (c.b.level === "deep" ? "If time" : "Core") + (c.b.minutes ? " · " + c.b.minutes + " min" : "")) + '<h2 style="font-size:var(--fs-xl)">' + esc(c.b.name) + '</h2>';
     case "step": var kd = c.it.kind || "do"; return tk + tlabel(kd, KIC[kd] || "\u2192", KIND[kd] || kd) + '<div class="big prose">' + clean(c.it.html) + '</div>' + warmBtn(c);
     case "text": var g2 = gradeRows(clean(c.b.html)); return tk + (g2.rows.length ? tlabel("q", "?", "Ask him row by row · " + g2.rows.filter(function (r) { var a = L.session.answers[r.k]; return a && asked(a.v); }).length + " of " + g2.rows.length + " asked") : "") + '<div class="prose big">' + g2.html + '</div>';
     case "fig": return '<figure class="tfig">' + img(c.b.img, plain(c.b.caption) || "Picture") + (c.b.caption ? '<figcaption>' + clean(c.b.caption) + '</figcaption>' : "") + '</figure>';
@@ -1462,10 +1565,10 @@ function chunkHTML(c) {
         qtags(c.it) + '<div class="qtext prose">' + paperHTML(c.it.q, subjNow()) + '</div>' + answerBox(c.it.a, c.it.book ? c.it.page : null) + hintsHTML(c) + ctlBig(c.it.id, a, plain(c.it.q));
     case "drill": var a2 = L.session.answers[c.key] || {};
       return '<div class="qhead">' + tlabel("q", "?", (c.title || "Drill") + (c.of > 1 ? " \u00b7 " + c.n + " of " + c.of : "")) + '</div><div class="qtext prose">' + paperHTML(c.d[0], subjNow()) + '</div>' + answerBox(c.d[1]) + hintsHTML(c) + ctlBig(c.key, a2, plain(c.d[0]));
-    case "question": return (c.b.parts || []).length ? sliderHTML(c) + hintsHTML(c) : tlabel("q", "Q", "Exam question") + questionBlock(c.b, true) + hintsHTML(c);
+    case "question": return (c.b.parts || []).length ? sliderHTML(c) + hintsHTML(c) : questionBlock(c.b, true) + hintsHTML(c);
     case "board": return boardHTML(c);
     case "concept": return conceptHTML(c);
-    case "end": return '<div class="tphase"><div class="label">Done</div><h2>End of the script</h2><p class="hint">Log times, notes and what to change next time.</p><button class="btn next" type="button" data-tgo="after">After the lesson →</button></div>';
+    case "end": return '<div class="tphase stack s4"><div class="tags">' + tag("Done", "ok") + '</div><h2>End of the script</h2><span class="hint">Log times, notes and what to change next time.</span><div><button class="btn next" type="button" data-tgo="after">After the lesson</button></div></div>';
     default: return block(c.b || {});
   }
 }
@@ -1474,7 +1577,7 @@ function phasePages(p) { var its = []; (function walk(bs) { (bs || []).forEach(f
 /* steps that mention the warm-up get a button that opens it here */
 function warmBtn(c) { return c.t === "step" && /warm-up/i.test(plain(c.it.html)) ? '<button class="btn small" type="button" data-warmup style="margin-top:12px">Open the mistakes warm-up</button>' : ""; }
 function pastLine(c, i) { var st = stateOf(c);
-  return '<button type="button" class="pastline ' + st + '" data-tjump="' + i + '"><span class="ic">' + iconOf(c) + '</span><span class="tx">' + esc(shortOf(c, 120)) + '</span>' + (st === "done" ? '<span class="mk">✓ taught</span>' : st === "s-skip" ? '<span class="mk">skipped</span>' : st === "v-tskip" ? '<span class="mk">you skipped it</span>' : st === "v-skipped" ? '<span class="mk">no answer</span>' : st ? '<span class="mk">' + esc(st.slice(2)) + '</span>' : "") + '</button>'; }
+  return '<button type="button" class="pastline ' + st + '" data-tjump="' + i + '"><span class="ic">' + iconOf(c) + '</span><span class="tx">' + esc(shortOf(c, 120)) + '</span>' + (st === "done" ? '<span class="mk">✓ Taught</span>' : st === "s-skip" ? '<span class="mk">Skipped</span>' : st === "v-tskip" ? '<span class="mk">You skipped it</span>' : st === "v-skipped" ? '<span class="mk">No answer</span>' : st ? '<span class="mk">' + esc(cap(st.slice(2))) + '</span>' : "") + '</button>'; }
 function drawTeach() {
   var s = L.script || {}, x = L.session, subj = s.subject || x.subject; document.body.setAttribute("data-subject", subj); document.body.classList.add("teaching");
   var keepRef = TCH.id === L.id && TCH.seq[TCH.pos], ae = document.activeElement, fgo = ae && ae.closest && ae.closest(".tfoot") && ae.getAttribute("data-tgo");
@@ -1483,16 +1586,19 @@ function drawTeach() {
   if (TCH.pos >= TCH.seq.length) TCH.pos = TCH.seq.length - 1;
   var c = TCH.seq[TCH.pos], pct = Math.round(100 * TCH.pos / Math.max(1, TCH.seq.length - 1)), lv = live();
   if (c.p) L.phase = c.p.id;
+  var pk = c.p ? kindOf(c.p.name) : "", reals = phases().filter(function (p) { return !p.sys && kindOf(p.name) !== "Bank" && kindOf(p.name) !== "Recycle"; });
+  var inPart = c.p ? TCH.seq.filter(function (q) { return q.p === c.p; }) : [], pf = inPart.length ? Math.round(100 * (inPart.indexOf(c) + 1) / inPart.length) : 0;
   var h = '<div class="teach3">' + runwayHTML(c) + '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
-    '<button class="btn small outl" type="button" id="toc" aria-label="Outline">☰ Outline</button><a class="back" style="margin:0" href="#/lesson/' + encodeURIComponent(L.id) + '">← Plan</a><span aria-hidden="true">·</span><b>' + esc((c.p && c.p.name) || "End") + '</b>' + (c.mod ? '<span aria-hidden="true">›</span><span>' + esc(c.mod) + '</span>' : "") + '</div>' +
-    /* one slim row (5 Oct): Warm-up, Suggest and Try-out behind ⋯; Preview / Clock stopped as a small label by the clock */
-    '<div class="tmini"><span class="tmore"><button class="btn small" type="button" data-tmore aria-expanded="false" aria-label="More: warm-up, suggest a change, try-out">\u22ef<span class="tdot" id="wudot" hidden></span></button>' +
-      '<div class="tmenu" hidden><button class="btn small" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn small" type="button" data-suggest>Suggest a change</button><button class="btn small trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button></div></span>' +
-      '<a class="btn small" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a>' +
-      (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a chunk by hand.">Preview</button>'
+    '<button class="btn sm outl" type="button" id="toc" aria-label="Outline">☰<span class="olab"> Outline</span></button><a class="btn sm quiet back" href="#/lesson/' + encodeURIComponent(L.id) + '" title="Back to Plan">Plan</a>' + (pk ? tag(esc(pk), pk === "If time" ? "dash" : "line") : "") + '<b>' + esc(c.p ? (pk ? partTitle(c.p.name) : c.p.name) : "End") + '</b>' + (c.mod ? '<span class="hint">· ' + esc(c.mod) + '</span>' : "") + '</div>' +
+    '<div class="tmini"><span class="tmore"><button class="btn sm" type="button" data-tmore aria-expanded="false" aria-label="More: warm-up, suggest a change, try-out">⋯<span class="tdot" id="wudot" hidden></span></button>' +
+      '<div class="tmenu" hidden><button class="btn sm" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn sm" type="button" data-suggest>Suggest a change</button><button class="btn sm trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button></div></span>' +
+      '<a class="btn sm" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"></path></svg></a>' +
+      '<span class="tag num"><span class="olab">Step </span>' + (TCH.pos + 1) + ' of ' + TCH.seq.length + '</span>' +
+      (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a step by hand.">Preview</button>'
         : '<button type="button" class="preview stopped" data-pvhelp title="The clock is stopped. Taught, Skip and verdicts still count.">Clock stopped</button>') +
-      '<span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
-    '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>' +
+      '<span class="clockpill' + (lv ? " live" : "") + '"><span class="dot"></span><span class="t" id="clk">0:00</span></span><button class="btn sm' + (lv ? "" : " pri") + '" id="clkgo" type="button"></button></div></div>' +
+    (reals.length > 1 ? '<div class="flow ' + esc(subj) + ' tflow" aria-hidden="true">' + reals.map(function (p) { var on = p === c.p, past = c.p && reals.indexOf(p) < reals.indexOf(c.p);
+      return '<span style="flex:' + pw(p) + '"' + (on ? ' class="on"' : "") + '><i' + (on ? ' style="background:linear-gradient(90deg,var(--accent) ' + pf + '%,var(--line) ' + pf + '%)"' : past ? ' style="background:var(--accent);opacity:.45"' : "") + '></i></span>'; }).join("") + '</div>' : '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>') +
     '</div><div class="tstage">';
   /* the last two chunks of the same section as short grey lines, then the current one */
   var keep = window.innerWidth < 900 ? 1 : 2, start = TCH.pos;
@@ -1501,7 +1607,7 @@ function drawTeach() {
   if (!flowQuick()) for (var i = start; i < TCH.pos; i++) h += pastLine(TCH.seq[i], i);
   h += '<div class="chunk cur t-' + c.t + (stateOf(c) === "done" ? " done" : "") + '" data-tk="' + esc(chunkKey(c) || "") + '">' + stripHTML(c) + chunkHTML(c) + '</div>';
   var nx = TCH.seq[TCH.pos + 1];
-  h += '</div>' + (nx ? '<button type="button" class="upnext" data-tjump="' + (TCH.pos + 1) + '"><b>UP NEXT</b><span>' + esc(shortOf(nx, 130)) + '</span></button>' : "") + '</div>' + footHTML(c, lv) + '</section></div>';
+  h += '</div>' + (nx ? '<button type="button" class="upnext" data-tjump="' + (TCH.pos + 1) + '"><b class="lab">Up next</b><span>' + esc(shortOf(nx, 130)) + '</span></button>' : "") + '</div>' + footHTML(c, lv) + '</section></div>';
   app.innerHTML = h; fillRows(app); loadImages(app); maths(app); tick();
   window.scrollTo(0, 0); fitBoards(); fitBoard(); applyFit(); warmCount(); prefetchLesson(); prefetchAhead(TCH.seq.slice(TCH.pos + 1, TCH.pos + 5));
   if (fgo) { var fb = $('.tfoot [data-tgo="' + fgo + '"]') || $(".tfoot .btn.next") || $(".tfoot .btn"); if (fb && !fb.disabled) fb.focus({ preventScroll: true }); }
@@ -1512,17 +1618,17 @@ function drawTeach() {
 }
 function footHTML(c, lv) {
   var taughtable = { step: 1, mod: 1, concept: 1, board: 1 }[c.t] || (c.t === "text" && c.key), mid = "";
-  if (c.t === "question" && (c.b.img || []).length) mid += '<button class="btn small" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
-  if (c.t === "mod") mid += '<button class="btn small" type="button" data-tskip="mod">Skip this section</button>';
-  if (c.t === "phase") mid += '<button class="btn small" type="button" data-tskip="phase">Skip this part</button>';
+  if (c.t === "question" && (c.b.img || []).length) mid += '<button class="btn accent-soft" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
+  if (c.t === "mod") mid += '<button class="btn quiet" type="button" data-tskip="mod">Skip this section</button>';
+  if (c.t === "phase") mid += '<button class="btn quiet" type="button" data-tskip="phase">Skip this part</button>';
   // Taught / Skip / Next once the lesson has started (clock running, paused or ended); before that only Next
   var three = !previewing() && taughtable && c.t !== "mod", qk = { quiz: 1, drill: 1, question: 1 }[c.t] && chunkKey(c), qa = qk && L.session.answers[qk];
-  var iskip = qk ? '<button class="btn iskip" type="button" data-tiskip aria-pressed="' + !!(qa && qa.v === "tskip") + '" title="You chose not to ask it: not a verdict, never a mistake">Not asked <kbd>0</kbd></button>' : "";
+  var iskip = qk ? '<button class="btn dash iskip" type="button" data-tiskip aria-pressed="' + !!(qa && qa.v === "tskip") + '" title="You chose not to ask it: not a verdict, never a mistake">Not asked <kbd>0</kbd></button>' : "";
   var lab = c.t === "phase" ? "Start this part" : c.t === "mod" ? "Teach this" : "Next";
-  return '<div class="tfoot' + (three ? " three" : "") + '"><button class="btn" type="button" data-tgo="-1"' + (TCH.pos === 0 ? " disabled" : "") + '>← Back</button><div class="mid">' + mid + '</div>' +
+  return '<div class="tfoot' + (three ? " three" : "") + '"><button class="btn" type="button" data-tgo="-1"' + (TCH.pos === 0 ? " disabled" : "") + '><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>Back</button><div class="mid">' + mid + '</div>' +
     (c.t === "end" ? "" : three
-      ? '<button class="btn skip" type="button" data-tgo="skip" title="You skipped this on purpose (recorded, not ticked)">Skip <kbd>S</kbd></button><button class="btn look" type="button" data-tgo="next" title="Move on without ticking, to look ahead">Next <kbd>→</kbd></button><button class="btn next" type="button" data-tgo="+1"><span class="ck" aria-hidden="true">✓</span>Taught <kbd>T</kbd></button>'
-      : iskip + '<button class="btn next" type="button" data-tgo="+1">' + lab + ' <kbd>→</kbd></button>') + '</div>';
+      ? '<button class="btn dash skip" type="button" data-tgo="skip" title="You skipped this on purpose: recorded, not ticked">Skip <kbd>S</kbd></button><button class="btn quiet look" type="button" data-tgo="next" title="Move on without ticking">Look ahead <kbd>\u2192</kbd></button><button class="btn next" type="button" data-tgo="+1">Taught, next <kbd>T</kbd><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>'
+      : iskip + '<button class="btn next" type="button" data-tgo="+1">' + lab + ' <kbd>\u2192</kbd><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>') + '</div>';
 }
 /* outline: every part, section and chunk, so any point can be reached; the clock as a pin on a time bar */
 function pw(p) { return p.start != null && p.end != null ? Math.max(2, p.end - p.start) : 4; }
@@ -1534,10 +1640,10 @@ function runwayHTML(c) {
   var parts = ps.map(function (p, i) {
     var its = phaseItems(p), qs = its.filter(function (q) { return q.kind === "q"; }), used = qs.filter(usedOrDone), right = used.filter(function (q) { return x.answers[q.k] && x.answers[q.k].v === "right"; });
     var pm = x.time.phaseMinutes && x.time.phaseMinutes[p.id];
-    var sub = [p.start != null ? p.start + "–" + p.end + " min" : "", pm ? "took " + pm : "", used.length ? right.length + "/" + used.length + " right" : ""].filter(Boolean).join(" · ");
+    var sub = [p.start != null ? p.start + " to " + p.end + " min" : "", pm ? "Took " + pm : "", used.length ? right.length + "/" + used.length + " right" : ""].filter(Boolean).join(" · ");
     var rows = "", lastMod = null;
     TCH.seq.forEach(function (q, j) { if (q.p !== p || q.t === "phase") return;
-      if (q.t === "mod") { rows += '<button type="button" class="om' + (j === TCH.pos ? " cur" : "") + (isDone(q.key) ? " done" : "") + '" data-tjump="' + j + '">' + esc(q.b.name) + (q.b.level === "deep" ? ' <small>if time</small>' : "") + '</button>'; lastMod = q.b.name; return; }
+      if (q.t === "mod") { rows += '<button type="button" class="om' + (j === TCH.pos ? " cur" : "") + (isDone(q.key) ? " done" : "") + '" data-tjump="' + j + '">' + esc(q.b.name) + (q.b.level === "deep" ? ' <small>If time</small>' : "") + '</button>'; lastMod = q.b.name; return; }
       rows += '<button type="button" class="oc ' + stateOf(q) + (j === TCH.pos ? " cur" : "") + (q.mod ? " in" : "") + '" data-tjump="' + j + '"><span class="ic">' + iconOf(q) + '</span><span class="tx">' + esc(shortOf(q, 70)) + '</span></button>'; });
     var open = TCH.open[p.id] != null ? TCH.open[p.id] : i === ci;
     var pj = flowQuick() ? seqIndex(function (q) { return q.p === p; }) : seqIndex(function (q) { return q.t === "phase" && q.p === p; });
@@ -1546,7 +1652,7 @@ function runwayHTML(c) {
   }).join("");
   var subj = s.subject || x.subject, pd = parseId(L.id);
   return '<aside class="runway" aria-label="Lesson outline"><div class="rhead"><a class="back" href="#/lesson/' + encodeURIComponent(L.id) + '">← Back to Plan</a><button class="btn small outl" type="button" id="tocx">Close</button></div>' +
-    '<div class="tags">' + subjTag(subj) + tag(esc(fmtDate(s.date || x.date || pd.date))) + '</div><div class="ttl">' + esc(lessonTitle(s, x)) + '</div>' +
+    '<div class="tags">' + subjTag(subj) + tag(esc(fmtDate(s.date || x.date || pd.date))) + lessonTags(s, x) + '</div><div class="ttl">' + esc(lessonTitle(s, x)) + '</div>' +
     bar + '<div class="onclock" id="onclock" hidden><span id="onclockt"></span></div><nav class="outline">' + parts + '</nav></aside>';
 }
 /* a board or picture fills the space between the top bar and the buttons: no scrolling to see the bottom */
@@ -1657,7 +1763,7 @@ function runwayTick(r) {
   var m = r.secs / 60; pin.style.left = Math.min(100, 100 * m / Math.max(1, TCH.rw.total)) + "%"; pin.hidden = !r.secs;
   var p = TCH.rw.cur; if (!oc) return;
   if (!r.secs || !p || p.start == null) { oc.hidden = true; return; }
-  $("#onclockt").innerHTML = "Minute <b>" + Math.floor(m) + "</b> · this part is planned for " + p.start + "–" + p.end + ". " + (m < p.start ? "<b>" + Math.max(1, Math.round(p.start - m)) + " min ahead</b>" : m > p.end ? "<b>" + Math.max(1, Math.round(m - p.end)) + " min behind</b>" : "<b>On time</b>");
+  $("#onclockt").innerHTML = "Minute <b>" + Math.floor(m) + "</b> · this part is planned for " + p.start + " to " + p.end + ". " + (m < p.start ? "<b>" + Math.max(1, Math.round(p.start - m)) + " min ahead</b>" : m > p.end ? "<b>" + Math.max(1, Math.round(m - p.end)) + " min behind</b>" : "<b>On time</b>");
   oc.hidden = false;
 }
 function setDone(key, label, on, skip) { var x = L.session; x.done = x.done || {}; x.done[key] = on ? { at: now(), d: CFG.device, label: String(label || "").slice(0, 90) } : skip ? { off: true, skip: true, at: now(), d: CFG.device, label: String(label || "").slice(0, 90) } : { off: true, at: now() }; }
@@ -1703,7 +1809,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "teach" || SH |
   if (e.key === "0") { iskipIt(); return; }
   if ((e.key === "a" || e.key === "A") && ($(".chunk.cur.flip") || $(".chunk.cur .slider"))) { flipIt(); return; }
   if ((e.key === "ArrowDown" || e.key === "ArrowUp") && $(".chunk.cur .slider")) { e.preventDefault(); slGo(SL.i + (e.key === "ArrowDown" ? 1 : -1)); return; }
-  if (/^[1-6]$/.test(e.key)) { var bs = $$(".chunk.cur .vrail [data-v]"); if (!bs.length) bs = $$(".chunk.cur .ctl.big [data-v]"); if (bs[+e.key - 1]) bs[+e.key - 1].click(); return; }
+  if (/^[1-6]$/.test(e.key)) { var vb = $('.chunk.cur .vrail [data-v="' + KEYV[e.key] + '"]') || $('.chunk.cur .ctl.big [data-v="' + KEYV[e.key] + '"]'); if (vb) vb.click(); return; }
   var three = !!$(".tfoot.three");
   if (e.key === "ArrowRight") tmove(1, three ? "next" : "taught"); else if (e.key === "ArrowLeft") tmove(-1, "jump");
   else if (three && (e.key === "t" || e.key === "T")) tmove(1, "taught"); else if (three && (e.key === "s" || e.key === "S")) tmove(1, "skip"); });
@@ -1735,15 +1841,21 @@ function drawStudent() {
   var list = STU.items.map(function (q, i) { q.i = i; return q; }).filter(function (q) { return q.kind === STU.tab; });
   if (STU.i < 0 || !STU.items[STU.i] || STU.items[STU.i].kind !== STU.tab) STU.i = list.length ? list[0].i : -1;
   var cnt = function (k) { return STU.items.filter(function (q) { return q.kind === k; }).length; }, ne = cnt("exam"), nq = cnt("quick"), nv = cnt("video"), cur = STU.items[STU.i], pos = list.indexOf(cur);
-  var view = !cur ? '<div class="empty"><h3>No questions here</h3></div>' : cur.kind === "video" ? '<div class="stu-vid">' + localVideo(cur.v, true) + '<div class="stu-vt">' + esc(cur.v.title || "") + '</div></div>' : cur.kind === "exam"
+  var view = !cur ? '<div class="empty"><b class="t-card">No questions here</b></div>' : cur.kind === "video" ? '<div class="stu-vid">' + localVideo(cur.v, true) + '<div class="stu-vt">' + esc(cur.v.title || "") + '</div></div>' : cur.kind === "exam"
     ? cur.twin ? '<div class="stu-twin">' + twinHTML(cur.twin) + '</div>' : '<div class="stu-fit ' + (cur.img.length > 1 ? "many" : "one") + '">' + cur.img.map(function (i) { return '<img data-src="' + esc(i) + '" alt="Question" hidden>'; }).join("") + '</div>'
-    : '<div class="stu-q">' + paperHTML(cur.text, subjNow()) + '</div>';
+    : '<div class="stu-card"><div class="stu-q">' + paperHTML(cur.text, subjNow()) + '</div></div>';
   var drawer = '<aside class="stu-drawer"' + (STU.drawer ? "" : " hidden") + ' aria-label="Questions"><div class="stu-dh"><div class="modes"><button type="button" data-stab="exam" aria-pressed="' + (STU.tab === "exam") + '">Exam ' + ne + '</button><button type="button" data-stab="quick" aria-pressed="' + (STU.tab === "quick") + '">Quick ' + nq + '</button>' + (nv ? '<button type="button" data-stab="video" aria-pressed="' + (STU.tab === "video") + '">Video ' + nv + '</button>' : "") + '</div><button class="btn small" type="button" id="stufs">Full screen</button><button class="btn small" type="button" id="stux">Close</button></div>' +
     '<p class="hint">Only the question or video shows on his screen. Move with the arrow keys, a swipe, or the faint \u2039 \u203a at the edges; \u201cShow him\u201d in Teach sends a question here.</p><nav class="stu-list">' +
     list.map(function (q, k) { return '<button type="button" class="stu-item' + (q === cur ? " cur" : "") + '" data-si="' + q.i + '"><span class="n num">' + (k + 1) + '</span>' + (q.kind === "exam" && q.img.length ? '<img data-src="' + esc(q.img[0]) + '" alt="" hidden><span class="ph"></span>' : '<span class="tx">' + (q.kind === "video" ? "\u25b6 " : "") + esc(plain(q.text).slice(0, 80)) + '</span>') + '</button>'; }).join("") + '</nav></aside>';
   var at = STU.items.indexOf(cur);
-  app.innerHTML = '<div class="stu clean"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question">\u2630</button><main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
-    '<button class="stu-edge prev" type="button" data-sgo="-1" aria-label="Previous question"' + (at <= 0 ? " disabled" : "") + '>\u2039</button><button class="stu-edge next" type="button" data-sgo="1" aria-label="Next question"' + (at < 0 || at >= STU.items.length - 1 ? " disabled" : "") + '>\u203a</button>' + drawer + '</div>';
+  /* his screen (canvas Student board): a faint menu and "2 of 9" at the top, the question in a white card, round arrows at the edges, the items as chips below */
+  var short = function (q) { var m = /Q\d+\w*(\s?\([a-z]+\))?/.exec(q.id && q.twin ? (q.twin.label || "") : q.kind === "exam" ? String(q.lab || "") : ""); return q.kind === "video" ? "Video" : q.kind === "quick" ? "Quick" : m ? m[0].replace(/\s/g, "") : "Question"; };
+  STU.items.forEach(function (q) { if (q.kind === "exam" && !q.lab) { var b0 = null; (function find(bs) { (bs || []).forEach(function (b) { if (b.id === q.id) b0 = b; if (b.blocks) find(b.blocks); }); })(q.p.blocks); q.lab = b0 && (b0.label || b0.source) || ""; } });
+  var from = Math.max(0, Math.min(at - 2, STU.items.length - 6)), chips = STU.items.slice(from, from + 6);
+  var CHEV = function (d) { return '<svg class="icon lg" viewBox="0 0 24 24" aria-hidden="true"><path d="' + (d < 0 ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6") + '"></path></svg>'; };
+  app.innerHTML = '<div class="stu clean"><header class="stu-top"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button><span class="push"></span>' + (cur ? tag((at + 1) + " of " + STU.items.length, "num") : "") + '</header><main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
+    '<button class="stu-edge prev" type="button" data-sgo="-1" aria-label="Previous question"' + (at <= 0 ? " disabled" : "") + '>' + CHEV(-1) + '</button><button class="stu-edge next" type="button" data-sgo="1" aria-label="Next question"' + (at < 0 || at >= STU.items.length - 1 ? " disabled" : "") + '>' + CHEV(1) + '</button>' +
+    (STU.items.length > 1 ? '<nav class="stu-chips" aria-label="Questions">' + chips.map(function (q) { return '<button type="button" class="it" data-si="' + q.i + '"' + (q === cur ? ' aria-current="true"' : "") + '>' + (q.kind === "video" ? '<svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"></path></svg>' : "") + (STU.items.indexOf(q) + 1) + ' \u00b7 ' + esc(short(q)) + '</button>'; }).join("") + (STU.items.length > 6 ? '<button type="button" class="it" id="stumore">More</button>' : "") + '</nav>' : "") + drawer + '</div>';
   $$(".stu-view img").forEach(showImg); loadImages(app); maths(app); prefetchLesson();
   var ci = $(".stu-item.cur"); if (ci && STU.drawer) ci.scrollIntoView({ block: "nearest" });
   if (BC) BC.postMessage({ type: "alive", lesson: L.id });
@@ -1758,7 +1870,7 @@ document.addEventListener("click", function (e) { if (MODE !== "student" || !STU
   if (t.hasAttribute("data-stab")) { STU.tab = t.getAttribute("data-stab"); STU.i = -1; drawStudent(); }
   else if (t.hasAttribute("data-si")) { STU.i = +t.getAttribute("data-si"); STU.drawer = false; drawStudent(); }
   else if (t.hasAttribute("data-sgo")) stuGo(+t.getAttribute("data-sgo"));
-  else if (t.id === "stumenu") { STU.drawer = !STU.drawer; drawStudent(); }
+  else if (t.id === "stumenu" || t.id === "stumore") { STU.drawer = !STU.drawer; drawStudent(); }
   else if (t.id === "stux") { STU.drawer = false; drawStudent(); }
   else if (t.id === "stufs") { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (x) {} } });
 document.addEventListener("keydown", function (e) { if (MODE !== "student" || !STU || e.ctrlKey || e.altKey || e.metaKey || !$("#zoom").hidden) return; if (e.key === "Escape" && STU.drawer) { STU.drawer = false; drawStudent(); return; } if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); stuGo(1); } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); stuGo(-1); } });
@@ -1782,13 +1894,12 @@ function whereAmI() {
 function sugPanel() {
   var old = $("#sug"); if (old) old.remove();
   var el = document.createElement("div"); el.id = "sug"; el.className = "sug"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Suggest a change");
-  el.innerHTML = '<div class="sug-card"><div class="sug-head"><h3>Suggest a change</h3><button class="btn small" type="button" id="sug-x" aria-label="Close">×</button></div>' +
-    '<div class="sug-where"><span class="label">Where</span><span id="sug-w">' + esc(whereAmI()) + '</span>' + (SUG.target ? '<span class="sug-t">You pointed at: ' + esc(SUG.target) + '</span>' : "") + '</div>' +
-    '<button class="btn small" type="button" id="sug-point">' + (SUG.target ? "Point at something else" : "Point at it on the screen") + '</button>' +
-    '<div class="qbar" role="group" aria-label="Kind">' + ["Layout", "Wording", "Hard to find", "Too slow", "Bug", "Missing", "Teaching flow"].map(function (t) { return '<button class="chip" type="button" data-sugtag="' + t + '" aria-pressed="' + !!SUG.tags[t] + '">' + t + '</button>'; }).join("") + '</div>' +
-    '<textarea id="sug-text" rows="4" placeholder="What should change, and why? e.g. “the Skip button is too far from my thumb on the tablet”"></textarea>' +
-    '<div class="sug-foot"><span class="hint" id="sug-st">' + (TRY ? "Try-out mode: this note is the only thing that gets saved." : "Saved as a note for Claude, not into the lesson.") + '</span><button class="btn primary" type="button" id="sug-save">Save suggestion</button></div>' +
-    '<details class="sug-list" id="sug-list"><summary>Your suggestions</summary><div id="sug-items" class="hint">Loading…</div></details></div>';
+  el.innerHTML = '<div class="sug-card stack s5"><div class="row top"><div class="stack s2"><h2 class="t-sec" style="font-size:22px">Suggest a change</h2><div class="tags"><span class="lab">Page</span><span class="tag" id="sug-w">' + esc(cap(whereAmI())) + '</span>' + (SUG.target ? '<span class="tag line sug-t">' + esc(SUG.target) + '</span>' : "") + '</div></div><button class="icon-btn push" type="button" id="sug-x" aria-label="Close" style="border:0;background:var(--sunk)"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div>' +
+    '<div class="field"><label for="sug-text">What should change, and why?</label><textarea id="sug-text" class="input" style="min-height:140px" placeholder="e.g. The Skip button is too far from my thumb on the tablet"></textarea></div>' +
+    '<div class="tags" role="group" aria-label="Kind">' + ["Layout", "Wording", "Hard to find", "Too slow", "Bug", "Missing", "Teaching flow"].map(function (t) { return '<button class="chip" type="button" data-sugtag="' + t + '" aria-pressed="' + !!SUG.tags[t] + '">' + t + '</button>'; }).join("") + '</div>' +
+    '<button class="btn dash" type="button" id="sug-point" style="justify-content:flex-start"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path><circle cx="12" cy="12" r="3"></circle></svg>' + (SUG.target ? "Point at something else" : "Point at it on the screen") + '</button>' +
+    '<button class="btn pri" type="button" id="sug-save">Save suggestion</button><span class="hint" id="sug-st">' + (TRY ? "Try-out: this note is the only thing that gets saved." : "Saved as a note for Claude, not into the lesson.") + '</span>' +
+    '<div class="stack s2 sug-list" id="sug-list"><span class="lab">Your earlier suggestions</span><div id="sug-items" class="sunk hint" style="padding:var(--s4)">Loading…</div></div></div>';
   document.body.appendChild(el); SUG.open = true; var ta = $("#sug-text"); ta.value = SUG.draft || ""; ta.focus();
   ta.addEventListener("input", function () { SUG.draft = ta.value; });
   loadSugs().then(drawSugs).catch(function () { $("#sug-items").textContent = "Couldn’t load them."; });
@@ -1854,7 +1965,7 @@ if (TRY) { document.body.classList.add("tryout");
 flowPressed();
 
 /* the Exams tab (exams.js) works through these */
-window.TD = { app: app, $: $, $$: $$, esc: esc, clean: clean, ls: ls, toast: toast, maths: maths, CFG: CFG, gh: gh, putB64: putB64, b64enc: b64enc, loadTree: loadTree, shaOf: shaOf, blobBytes: blobBytes, fileJSON: fileJSON, fileURL: fileURL, studentBase: studentBase, isTry: TRY, render: render };
+window.TD = { tag: tag, subjTag: subjTag, topicStrTag: topicStrTag, refTag: refTag, cap: cap, fmtDate: fmtDate, hmin: hmin, app: app, $: $, $$: $$, esc: esc, clean: clean, ls: ls, toast: toast, maths: maths, CFG: CFG, gh: gh, putB64: putB64, b64enc: b64enc, loadTree: loadTree, shaOf: shaOf, blobBytes: blobBytes, fileJSON: fileJSON, fileURL: fileURL, studentBase: studentBase, isTry: TRY, render: render };
 
 render();
 })();

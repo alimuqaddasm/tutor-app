@@ -223,3 +223,93 @@ body.a-body .ex-main{max-width:none;padding:0}
 .a-shoot{font-weight:700;font-size:20px;padding:22px;border-radius:20px;text-align:center;color:#fff;background:var(--maths);cursor:pointer}
 .a-shoot.chem{background:var(--chem)}
 @media (max-width:760px){.a-top{padding:12px 16px}.a-home,.a-work,.a-revwrap{padding:16px}.a-hero h1{font-size:30px}.a-qnav{position:static;flex-basis:100%}.a-qlist{flex-direction:row;flex-wrap:wrap}.a-two,.a-choices{grid-template-columns:1fr}.a-scan{max-width:none}.a-qcard{padding:18px}}
+
+/* His exam page (canvas StudentExam board): top bar, centred question numbers, one card, bottom bar */
+.ex-main:has(> .ex-top){max-width:none;padding:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
+.ex-top.topbar{padding:var(--s3) 40px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap;gap:var(--s4)}
+.ex-tbox{gap:2px;flex:1 1 240px;min-width:0}
+.ex-top .ex-title{font-size:18px;font-weight:600;flex:none}
+.ex-top .ex-save{min-width:0;text-align:right;font-size:var(--fs-sm)}
+.ex-top .clockpill.ex-timer{font-size:22px;min-height:48px;padding:0 var(--s4);border:0;border-radius:999px;background:var(--sunk)}
+.ex-top .clockpill.ex-timer small{font-size:var(--fs-sm);font-weight:500}
+.ex-top .clockpill.ex-timer.soon{background:var(--live-soft);color:var(--live-ink)}
+.ex-top .clockpill.ex-timer.up{background:var(--wrong-wash);color:var(--wrong);font-size:var(--fs-md)}
+.ex-main > .ex-preview{margin:var(--s3) 40px 0}
+.ex-dots{justify-content:center;margin:0;padding:var(--s4) 40px}
+.ex-dot{width:48px;min-width:48px;height:48px;font-size:15px;font-weight:600;color:var(--text-2);border-color:var(--line-strong);position:relative}
+.ex-dot.done{background:var(--surface);border-color:var(--line-strong)}
+.ex-dot.done::after{content:"";position:absolute;right:-3px;top:-3px;width:12px;height:12px;border-radius:50%;background:var(--right);border:2px solid var(--surface)}
+.ex-dot[aria-current="true"]{background:var(--slate);border-color:var(--slate);color:var(--surface)}
+.ex-page{flex:1;padding:0 40px var(--s6)}
+.ex-page .ex-q{max-width:1000px;margin:0 auto;padding:40px 48px;display:flex;flex-direction:column;gap:var(--s5)}
+.ex-q .ex-qhead{margin:0;align-items:center}
+.ex-q .ex-qtext{font-size:23px;line-height:1.5}
+.ex-work{padding:var(--s5);gap:var(--s3)}
+.ex-work .ex-attach{margin:0}
+.ex-work .ex-pics:empty{display:none}
+.ex-q .ex-answer{margin:0}
+.ex-q .ex-answer label{font-weight:600}
+.ex-q .ex-answer label .hint{font-weight:400}
+.ex-q .ex-answer textarea{min-height:120px}
+.ex-more{margin:0}
+.ex-nav.botbar{position:sticky;left:auto;right:auto;padding:var(--s4) 40px calc(var(--s4) + env(safe-area-inset-bottom,0px))}
+.ex-nav [data-handin]{margin-left:auto}
+@media (max-width:760px){
+  .ex-top.topbar,.ex-dots,.ex-page,.ex-nav.botbar{padding-inline:var(--s3)}
+  .ex-top .ex-save{flex-basis:auto;order:0;text-align:right}
+  .ex-tbox .tags{display:none}
+  .ex-dots{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto}
+  .ex-page .ex-q{padding:var(--s5)}
+  .ex-q .ex-qtext{font-size:19px}
+  .ex-work .ex-attach .btn{flex:1 1 100%}
+}
+/* his phone page (canvas StudentPhone board) */
+.ex-main:has(> .ex-phone){max-width:520px;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;padding:32px 20px calc(24px + env(safe-area-inset-bottom,0px))}
+.ex-phone{flex:1;width:100%;padding-top:0;display:flex}
+.ex-phone h1{font-size:26px;font-weight:600;letter-spacing:-.01em;line-height:1.25;margin:0}
+.ex-phone .ex-shoot{min-height:64px;font-size:17px}
+.ex-phone .ex-choose{min-height:56px}
+.ex-sentrow{grid-template-columns:48px minmax(0,1fr) auto;padding:var(--s3) var(--s4)}
+.ex-sentrow + .ex-sentrow{border-top:1px solid var(--line-soft)}
+.ex-sentrow img{width:48px;height:48px;object-fit:cover;border-radius:var(--r-sm);background:var(--sunk)}
+.ex-sentrow .icon.ok{color:var(--right);width:22px;height:22px}
+.ex-spin{width:18px;height:18px;border-radius:50%;border:2px solid var(--line-strong);border-top-color:var(--accent);animation:exspin 1s linear infinite}
+@keyframes exspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ex-spin{animation:none}}
+.ex-keep{margin-top:auto;text-align:center}
+@media (max-width:760px){
+  .ex-nav.botbar{flex-wrap:nowrap;gap:var(--s2)}
+  .ex-nav.botbar .btn{padding:0 var(--s3);font-size:var(--fs-sm);white-space:nowrap}
+  .ex-top .ex-title{font-size:var(--fs-md)}
+  .ex-q .ex-qhead .push{margin-left:0}
+}
+/* his assignment home (canvas StudentAssignment board): days down the side, the day's sections as cards */
+.a-hometop{position:sticky;top:0;z-index:5;padding:var(--s3) 40px}
+.a-htitle{font-size:var(--fs-lg);font-weight:600}
+.a-home2{flex:1;display:flex;gap:var(--s6);padding:32px 40px;align-items:flex-start}
+.a-days{flex:0 0 230px;display:flex;flex-direction:column;gap:var(--s1);position:sticky;top:96px}
+.a-dayb{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s4);border-radius:var(--r-md);border:0;background:transparent;text-align:left;cursor:pointer;width:100%;color:var(--text)}
+.a-dayb:hover:not(:disabled){background:var(--surface)}
+.a-dayb[aria-current]{background:var(--surface);box-shadow:0 0 0 1px var(--line)}
+.a-dayb:disabled{cursor:default;opacity:.6}
+.a-dayb .hint{font-size:var(--fs-xs)}
+.dot.faded{opacity:.35}
+.a-main2{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--s5)}
+.a-sec{overflow:hidden;padding:0}
+.a-sechead{align-items:center;padding:var(--s5);border-bottom:1px solid var(--line)}
+.a-qlist0{border:0;border-radius:0}
+.a-qrow{grid-template-columns:48px minmax(0,1fr) 84px 150px;width:100%;border:0;border-top:1px solid var(--line-soft);background:var(--surface);text-align:left;cursor:pointer;font:inherit}
+.a-qrow:first-child{border-top:0}
+.a-qrow:hover{background:var(--hover)}
+.a-qrow .tag.line{justify-content:center}
+.a-qlab{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.a-warn{padding:var(--s4) var(--s5);background:var(--live-soft);border-top:1px solid var(--live-line);color:var(--live-ink);font-size:var(--fs-sm);font-weight:600}
+.a-done{align-items:center}
+.a-main2 .a-scan{max-width:none;flex:none}
+@media (max-width:760px){
+  .a-hometop{padding:var(--s3) var(--s4)}
+  .a-home2{flex-direction:column;padding:var(--s4);gap:var(--s4)}
+  .a-days{position:static;flex:none;width:100%;flex-direction:row;overflow-x:auto}
+  .a-dayb{width:auto;flex:none}
+  .a-qrow{grid-template-columns:44px minmax(0,1fr)}.a-qrow > .tag:not(.line),.a-qrow > .status{grid-column:2}
+}

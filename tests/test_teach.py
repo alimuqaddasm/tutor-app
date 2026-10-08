@@ -18,7 +18,7 @@ def watch(p):
     p.on("console", lambda m: m.type == "error" and "ERR_FAILED" not in m.text and "429" not in m.text and errs.append(m.text[:200]))
 
 
-def pos(p): return p.locator(".tmini .num").inner_text()
+def pos(p): return "/".join(__import__("re").findall(r"\d+", p.locator(".tmini .num").inner_text()))   # "Step 21 of 144" reads as "21/144"
 def ticks(p): return p.evaluate("document.querySelectorAll('.outline .oc.done, .outline .om.done').length")
 def click_icon(p, ic): p.evaluate("ic => Array.from(document.querySelectorAll('.outline .oc')).find(b => b.querySelector('.ic').textContent == ic).click()", ic)
 
