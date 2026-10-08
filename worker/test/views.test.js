@@ -111,3 +111,27 @@ describe("loader key", () => {
     expect((await c(T0, "POST", "/api/t/exams", { json: body, headers: { "X-Loader-Key": "short" } })).status).toBe(401);
   });
 });
+
+describe("practice copy (Try-out)", () => {
+  it("copies an assignment with its pictures and sections, none of his work, marked practice", async () => {
+    const { png: mk } = await import("./helpers.js");
+    const r = await teacher(T0, "POST", "/api/t/exams", { json: { title: "Holiday", kind: "assignment", gap_hours: 14, source_path: "students/UK-1/assignments/x/assignment.json",
+      sections: [{ id: "d1", title: "Day 1", day: 1 }], questions: [{ id: "q1", marks: 2, section_id: "d1", study: { pages: [] } }] } });
+    const id = r.data.id;
+    await teacher(T0, "PUT", `/api/t/exams/${id}/questions/q1/image`, { bytes: mk(), headers: { "Content-Type": "image/png" } });
+    await teacher(T0, "PUT", `/api/t/exams/${id}/questions/q1/ms`, { bytes: mk(), headers: { "Content-Type": "image/png" } });
+    const link = await teacher(T0, "POST", `/api/t/exams/${id}/link`);
+    await call(T0, "PUT", "/api/s/answers/q1", { token: link.data.token, json: { text: "real answer", seq: 1 } });
+    const c = await teacher(T0, "POST", `/api/t/exams/${id}/practice-copy`);
+    expect(c.status).toBe(201);
+    const x = await teacher(T0, "GET", `/api/t/exams/${c.data.id}`);
+    expect(x.data).toMatchObject({ title: "Practice: Holiday", practice: true, kind: "assignment", gapHours: 14, token: null, status: "draft" });
+    expect(x.data.questions[0]).toMatchObject({ has_img: true, has_ms: true, section_id: "d1" });
+    const rev = await teacher(T0, "GET", `/api/t/exams/${c.data.id}/review`);
+    expect(rev.data.questions[0].final).toBe("");
+    // playing with the copy leaves the real one alone
+    const pl = await teacher(T0, "POST", `/api/t/exams/${c.data.id}/link`);
+    await call(T0 + 1, "PUT", "/api/s/answers/q1", { token: pl.data.token, json: { text: "practice answer", seq: 1 } });
+    expect((await teacher(T0 + 2, "GET", `/api/t/exams/${id}/review`)).data.questions[0].final).toBe("real answer");
+  });
+});

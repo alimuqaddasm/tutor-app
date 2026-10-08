@@ -621,6 +621,19 @@ async function route(request, env, now) {
           return json({ ok: true, width: img.width, height: img.height });
         }
       }
+      /* A practice copy for Try-out, made here on the server (no pictures through the browser): the questions with
+         their pictures, mark schemes and study pointers, the sections, nothing he did. Marked practice, so it never
+         goes to the tutoring repo. */
+      if (sub === "/practice-copy" && m === "POST") {
+        const id = randomToken(9);
+        await env.DB.batch([
+          env.DB.prepare("INSERT INTO exams (id, title, subject, source_path, ratio, base_minutes, practice, kind, gap_hours, created_at) SELECT ?, 'Practice: ' || title, subject, source_path, ratio, base_minutes, 1, kind, gap_hours, ? FROM exams WHERE id = ?").bind(id, now, exam.id),
+          env.DB.prepare("INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, img, img_mime, section_id, ms_img, ms_mime, study) SELECT id, ?, pos, label, text_html, marks, type, suggested_min, img, img_mime, section_id, ms_img, ms_mime, study FROM questions WHERE exam_id = ?").bind(id, exam.id),
+          env.DB.prepare("INSERT INTO sections (exam_id, id, pos, title, subject, day, date, suggest_min) SELECT ?, id, pos, title, subject, day, date, suggest_min FROM sections WHERE exam_id = ?").bind(id, exam.id),
+          env.DB.prepare("INSERT INTO events (exam_id, at, kind, detail) VALUES (?, ?, 'created', ?)").bind(id, now, "practice copy of " + exam.id)
+        ]);
+        return json({ id }, 201);
+      }
       if (sub === "/link" && m === "POST") {
         if (exam.status === "locked") fail(409, "This exam is locked.");
         const token = randomToken(32);

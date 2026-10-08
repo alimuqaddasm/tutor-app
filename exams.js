@@ -124,15 +124,16 @@ function drawList(repo, all) {
     repo = repo.slice().sort(function (a, b) { return b.path.localeCompare(a.path); });
     var server = all.filter(function (s) { return !s.practice; }), practice = all.filter(function (s) { return s.practice; });
     var loaded = {}; server.forEach(function (s) { if (s.sourcePath) loaded[s.sourcePath] = s; });
+    var pracOf = {}; practice.forEach(function (s) { if (s.sourcePath && !pracOf[s.sourcePath]) pracOf[s.sourcePath] = s; });
     var h = '<div class="section-h"><h2>Exams</h2></div>';
     if (T.isTry) {
       h += '<h3 class="xt-h3">Practice (Try-out)</h3><p class="hint">Do anything here: send the link to another device, start, add time, lock, mark. Practice exams stay out of the tutoring repo and only show in Try-out.</p>' +
         '<div class="xt-acts"><button class="btn accent" type="button" data-practice>Make a practice exam</button></div>';
       if (practice.length) h += '<div class="xt-list">' + practice.map(function (s) {
-        return '<div class="card xt-row"><a class="xt-grow xt-link" href="#/exams/' + esc(s.id) + '"><div class="xt-title">' + esc(s.title) + ' ' + chip(s.status) + '</div>' +
+        return '<div class="card xt-row"><a class="xt-grow xt-link" href="#/exams/' + esc(s.id) + '"><div class="xt-title">' + esc(s.title) + ' ' + chip(s.status, s.kind) + '</div>' +
           '<div class="hint">' + s.questions + ' questions · ' + s.totalMarks + ' marks</div></a><div class="xt-acts"><a class="btn small" href="#/exams/' + esc(s.id) + '">Open</a><button class="btn small" type="button" data-delprac="' + esc(s.id) + '" data-st="' + esc(s.status) + '">Delete</button></div></div>';
       }).join("") + '</div>';
-      h += '<h3 class="xt-h3">Real exams (look only in Try-out)</h3>';
+      h += '<h3 class="xt-h3">Real exams (look only in Try-out)</h3><p class="hint">“Practice copy” makes a copy of one to try out as him: link, answers, photos, marking. The real one does not change.</p>';
     }
     // assignments (take-home packs) get their own heading, above the exams
     var asgs = repo.filter(function (r) { return /\/assignment\.json$/.test(r.path); }), exs = repo.filter(function (r) { return !/\/assignment\.json$/.test(r.path); });
@@ -142,8 +143,11 @@ function drawList(repo, all) {
       return '<div class="card xt-row" data-subject="' + esc(e.subject || "") + '"><div class="xt-grow"><div class="xt-title">' + esc(e.title || r.path) + ' ' + chip(st, e.kind) + '</div>' +
         '<div class="hint">' + (e.sections ? e.sections.length + " sections · " : "") + qs.length + ' question' + (qs.length === 1 ? "" : "s") + ' · ' + marks + ' marks' + (e.date ? " · " + esc(e.date) : e.opens ? " · from " + esc(e.opens) : "") + '</div>' +
         (e.why ? '<p class="xt-why">' + esc(e.why) + '</p>' : "") + '</div><div class="xt-acts">' +
-        (waiting ? '<span class="hint">Checking the exam server…</span>' : on ? '<a class="btn small" href="#/exams/' + esc(on.id) + '">Open</a>'
-            : st === "ready" && T.isTry ? '<span class="hint">Ready. Leave Try-out to load it.</span>'
+        (waiting ? '<span class="hint">Checking the exam server…</span>'
+            : T.isTry && pracOf[r.path] ? '<a class="btn small accent" href="#/exams/' + esc(pracOf[r.path].id) + '">Open practice copy</a>' + (on ? '<a class="btn small" href="#/exams/' + esc(on.id) + '">Look at the real one</a>' : "")
+            : T.isTry && on ? '<button class="btn small accent" type="button" data-praccopy="' + esc(on.id) + '">Practice copy</button><a class="btn small" href="#/exams/' + esc(on.id) + '">Look at the real one</a>'
+            : on ? '<a class="btn small" href="#/exams/' + esc(on.id) + '">Open</a>'
+            : st === "ready" && T.isTry ? '<button class="btn small accent" type="button" data-pracload="' + esc(r.path) + '">Load a practice copy</button><span class="hint">or ask Claude: “load a practice copy”</span>'
             : st === "ready" ? '<button class="btn small accent" type="button" data-load="' + esc(r.path) + '">Load to exam server</button>'
             : '<span class="hint">Finish it with Claude first (status “ready”)</span>') +
         '</div></div>';
@@ -176,7 +180,7 @@ function stitch(urls) {
   });
 }
 
-function loadToServer(path, btn) {
+function loadToServer(path, btn, practice) {
   btn.disabled = true; btn.textContent = "Loading…";
   var folder = examFolder(path);
   T.fileJSON(path).then(function (j) {
@@ -186,13 +190,14 @@ function loadToServer(path, btn) {
     var base = Number(e.minutes) || (ratio ? Math.ceil(marks * ratio / 5) * 5 : 0);
     var body = { title: e.title, subject: e.subject || "", source_path: path, ratio: ratio, base_minutes: asg ? 0 : base || 0,
       questions: qs.map(function (q, i) { return { id: q.id || "q" + (i + 1), label: q.label || "", text_html: q.text || "", marks: Number(q.marks) || 0, type: q.type || "long", suggested_min: q.suggestMin == null ? null : q.suggestMin, section_id: q.section_id || null, study: q.study || null }; }) };
+    if (practice) { body.practice = true; body.title = "Practice: " + body.title; }
     if (asg) { body.kind = "assignment"; body.gap_hours = Number(e.gapHours) || 12; body.sections = e.sections.map(function (x) { return { id: x.id, title: x.title, subject: x.subject, day: x.day, date: x.date, suggest_min: x.suggestMin }; }); }
     var full = function (p) { return /^(students|books)\//.test(p) ? p : folder + p; };
     return call("POST", "/api/t/exams", body).then(function (made) {
       return sendPictures(made.id, e, path, null, function (t) { btn.textContent = t; })
         .then(function (left) { if (left) T.toast(left + " pictures did not load. Open the exam and press Finish loading pictures."); location.hash = "#/exams/" + made.id; });
     });
-  }).catch(function (e) { btn.disabled = false; btn.textContent = "Load to exam server"; T.toast(e.message); });
+  }).catch(function (e) { btn.disabled = false; btn.textContent = practice ? "Load a practice copy" : "Load to exam server"; T.toast(e.message); });
 }
 
 /* The pictures of an exam or assignment, six at a time: each question's picture and, for an assignment, its mark
@@ -265,7 +270,7 @@ function drawExam() {
   app.setAttribute("data-subject", X.subject || "");
   var asg = isAsg(X);
   var h = '<div class="section-h xt-head"><h2>' + esc(X.title) + '</h2><span id="xt-st">' + chip(st, X.kind) + '</span><span class="xt-grow"></span><a class="btn small" href="#/exams">All exams</a>' + svBtn(X.id) + '<a class="btn small" href="#/exams/' + esc(X.id) + '/mark">Mark</a>' + (X.practice ? '<button class="btn small" type="button" data-delprac="' + esc(X.id) + '" data-st="' + esc(st) + '">Delete</button>' : "") + '</div>';
-  if (readOnly(X)) h += RO_NOTE;
+  if (readOnly(X)) h += RO_NOTE.replace("Use a practice exam to try things.", 'Make a practice copy to try it as him.</div><div class="xt-acts"><button class="btn accent" type="button" data-praccopy="' + esc(X.id) + '">Practice copy</button>');
   else if (X.practice) h += '<p class="hint">Practice exam: nothing here goes to the tutoring repo.</p>';
 
   /* run it */
@@ -421,7 +426,7 @@ function markView(id) {
   app.innerHTML = '<div class="empty"><h3>Loading</h3></div>';
   call("GET", "/api/t/exams/" + encodeURIComponent(id) + "/review").then(function (r) {
     R = r; repoExam = null; claudeMarks = null;
-    if (r.practice) { repoExam = SAMPLE; return drawMark(); }
+    if (r.practice && !r.sourcePath) { repoExam = SAMPLE; return drawMark(); }
     // The mark scheme lives in the repo, next to the exam file Claude wrote; so do Claude's marks, once he has marked it.
     return T.loadTree().then(function () { return r.sourcePath ? Promise.all([T.fileJSON(r.sourcePath), T.fileJSON(examFolder(r.sourcePath) + "claude-marks.json").catch(function () { return null; })]) : [null, null]; })
       .then(function (j) { repoExam = j[0] && j[0].data; claudeMarks = j[1] && j[1].data; }, function () {}).then(drawMark);
@@ -699,6 +704,8 @@ document.addEventListener("click", function (e) {
   if (b.hasAttribute("data-tickv")) { var kv = b.getAttribute("data-tickv").split(":"); return setTick(Number(kv[0]), Number(kv[1])); }
   if (b.hasAttribute("data-practice")) return makePractice(b);
   if (b.hasAttribute("data-delprac")) return deletePractice(b.getAttribute("data-delprac"), b.getAttribute("data-st"));
+  if (b.hasAttribute("data-pracload")) return loadToServer(b.getAttribute("data-pracload"), b, true);
+  if (b.hasAttribute("data-praccopy")) { b.disabled = true; b.textContent = "Copying…"; return call("POST", "/api/t/exams/" + encodeURIComponent(b.getAttribute("data-praccopy")) + "/practice-copy").then(function (r) { T.toast("Practice copy made"); location.hash = "#/exams/" + r.id; }, function (e) { b.disabled = false; b.textContent = "Practice copy"; T.toast(e.message); }); }
   if (T.isTry && b.hasAttribute("data-load")) return;
   if (b.hasAttribute("data-load")) return loadToServer(b.getAttribute("data-load"), b);
   if (X && readOnly(X) && b.matches("[data-newlink],[data-start],[data-ext],[data-extc],[data-lock],[data-reopen],[data-savesetup],[data-usesugg]")) return;

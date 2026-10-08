@@ -131,7 +131,7 @@ with sync_playwright() as p:
     pg = context()
     pg.goto(APP + "?try#/exams")
     check("Try-out shows the Practice section", wait_for(lambda: "Practice (Try-out)" in pg.inner_text("#app"), 15) is not None, pg.inner_text("#app")[:300])
-    check("Claude's real exam has no Load button in Try-out", pg.locator("[data-load]").count() == 0 and "Leave Try-out to load it" in pg.inner_text("#app"))
+    check("Claude's real exam has no Load button in Try-out, only a practice copy", pg.locator("[data-load]").count() == 0 and pg.locator("[data-pracload]").count() >= 1)
     check("real exams on the server are listed", "Real exam (test" in pg.inner_text("#app"))
 
     # practice: the whole flow
