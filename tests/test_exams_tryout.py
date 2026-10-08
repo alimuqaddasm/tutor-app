@@ -185,7 +185,7 @@ with sync_playwright() as p:
     other = tapi("POST", "/api/t/exams", {"title": "Hidden practice", "subject": "maths", "practice": True, "questions": [{"id": "q1", "marks": 1}]})["id"]
     pg2 = context()
     pg2.goto(APP + "#/exams")
-    check("normal mode: practice exams are hidden", wait_for(lambda: "From Claude" in pg2.inner_text("#app"), 15) is not None and "Hidden practice" not in pg2.inner_text("#app") and "Practice (Try-out)" not in pg2.inner_text("#app"))
+    check("normal mode: practice exams are hidden", wait_for(lambda: "from Claude" in pg2.inner_text("#app"), 15) is not None and "Hidden practice" not in pg2.inner_text("#app") and "Practice (Try-out)" not in pg2.inner_text("#app"))
     check("normal mode: Load button is back", pg2.locator("[data-load]").count() >= 1)
     tapi("DELETE", "/api/t/exams/" + other)
     tapi("DELETE", "/api/t/exams/" + real)

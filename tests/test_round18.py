@@ -125,7 +125,7 @@ with sync_playwright() as p:
     pg.on("dialog", lambda d: d.accept())
 
     pg.goto(APP + "#/exams")
-    wait_for(lambda: "From Claude" in pg.inner_text("#app"), 15)
+    wait_for(lambda: "from Claude" in pg.inner_text("#app"), 15)
     pg.click('[data-load="%sexam.json"]' % FOLDER)
     wait_for(lambda: pg.locator("#xt-btns").count() == 1, 15)
     eid = pg.evaluate("location.hash").split("/")[2]

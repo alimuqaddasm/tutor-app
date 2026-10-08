@@ -134,9 +134,9 @@ function drawList(repo, all) {
       }).join("") + '</div>';
       h += '<h3 class="xt-h3">Real exams (look only in Try-out)</h3>';
     }
-    h += '<h3 class="xt-h3">From Claude</h3>';
-    if (!repo.length) h += '<div class="empty"><p>No exams yet. In the lesson chat, Claude proposes an exam when one is due, or ask: <i>“make a test on chapter 5”</i>.</p></div>';
-    else h += '<div class="xt-list">' + repo.map(function (r) {
+    // assignments (take-home packs) get their own heading, above the exams
+    var asgs = repo.filter(function (r) { return /\/assignment\.json$/.test(r.path); }), exs = repo.filter(function (r) { return !/\/assignment\.json$/.test(r.path); });
+    var row = function (r) {
       if (r.error) return '<div class="card xt-row"><div><b>' + esc(r.path) + '</b><p class="hint">' + esc(r.error) + '</p></div></div>';
       var e = r.exam || {}, qs = flatQs(e), marks = qs.reduce(function (s, q) { return s + (Number(q.marks) || 0); }, 0), st = e.status || "draft", on = loaded[r.path];
       return '<div class="card xt-row" data-subject="' + esc(e.subject || "") + '"><div class="xt-grow"><div class="xt-title">' + esc(e.title || r.path) + ' ' + chip(st, e.kind) + '</div>' +
@@ -147,7 +147,12 @@ function drawList(repo, all) {
             : st === "ready" ? '<button class="btn small accent" type="button" data-load="' + esc(r.path) + '">Load to exam server</button>'
             : '<span class="hint">Finish it with Claude first (status “ready”)</span>') +
         '</div></div>';
-    }).join("") + '</div>';
+    };
+    h += '<h3 class="xt-h3">Assignments</h3>';
+    h += asgs.length ? '<div class="xt-list">' + asgs.map(row).join("") + '</div>' : '<p class="hint">No take-home assignments yet.</p>';
+    h += '<h3 class="xt-h3">Exams from Claude</h3>';
+    if (!exs.length) h += '<div class="empty"><p>No exams yet. In the lesson chat, Claude proposes an exam when one is due, or ask: <i>“make a test on chapter 5”</i>.</p></div>';
+    else h += '<div class="xt-list">' + exs.map(row).join("") + '</div>';
     h += '<h3 class="xt-h3">On the exam server</h3>';
     if (waiting) h += '<p class="hint">Loading…</p>';
     else if (!server.length) h += '<p class="hint">Nothing loaded yet.</p>';

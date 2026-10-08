@@ -119,7 +119,7 @@ with sync_playwright() as p:
     pg.on("dialog", lambda d: d.accept())
 
     pg.goto(APP + "#/exams")
-    check("the assignment is listed from the repo", wait_for(lambda: "Holiday practice (test)" in pg.inner_text("#app"), 15) is not None)
+    check("the assignment is listed under Assignments", wait_for(lambda: "Holiday practice (test)" in pg.inner_text("#app") and "Assignments" in pg.inner_text("#app"), 15) is not None)
     check("  ...marked as an assignment, with its sections", "Assignment" in pg.inner_text("#app") and "2 sections" in pg.inner_text("#app"))
     pg.click('[data-load="%sassignment.json"]' % FOLDER)
     check("Load takes it to the exam server", wait_for(lambda: pg.locator("#xt-btns").count() == 1, 30) is not None)

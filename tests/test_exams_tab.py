@@ -120,7 +120,7 @@ with sync_playwright() as p:
 
     # 1. the tab lists Claude's exam with its reason
     pg.goto(APP + "#/exams")
-    check("Exams is in the menu and opens", wait_for(lambda: "From Claude" in pg.inner_text("#app"), 15) is not None, pg.inner_text("#app")[:200])
+    check("Exams is in the menu and opens", wait_for(lambda: "from Claude" in pg.inner_text("#app"), 15) is not None, pg.inner_text("#app")[:200])
     check("Claude's exam shows with why it is due", "Chapter 5 finished" in pg.inner_text("#app"))
     pg.screenshot(path=os.path.join(SHOTS, "exams-1-list.png"))
 
