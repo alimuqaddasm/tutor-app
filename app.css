@@ -1275,3 +1275,10 @@ body[data-subject="maths"] .tw{font-family:"Times New Roman",Tinos,Times,serif}
 .notes-list textarea.fixnote:focus{border-color:var(--text);background:var(--bg)}
 .shortask{display:grid;gap:8px;padding:12px 14px;border:2px solid var(--warn,#c80);border-radius:12px}
 .shortask .row{display:flex;gap:8px;flex-wrap:wrap}
+
+/* home: take-home assignments strip (8 Oct) */
+#homeasg{display:grid;gap:10px;margin:0 0 18px}
+.asgstrip{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 20px;border-radius:18px;background:var(--surface);border:2px solid var(--accent);color:var(--text);text-decoration:none}
+.asgstrip b{font-size:var(--s-lg)}
+.asgstrip .go{margin-left:auto;font-weight:800;color:var(--accent)}
+.asgstrip:hover{background:var(--accent-wash)}

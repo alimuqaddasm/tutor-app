@@ -253,7 +253,7 @@ function lessonsView() {
     })).then(function (items) {
       if (seq !== listSeq || route().indexOf("/lesson/") === 0 || route().indexOf("/record") === 0 || route().indexOf("/settings") === 0) return;
       HOMEALL = items; var sp = subjPick(); items = items.filter(function (it) { var sj = (it.s && it.s.subject) || (it.x && it.x.subject) || parseId(it.id).subject; return sp === "all" || sj === sp; });
-      app.innerHTML = homeHTML(items); fillHomeRevise(); warmUpNext(HOMEALL);
+      app.innerHTML = homeHTML(items); fillHomeRevise(); fillHomeAsg(); warmUpNext(HOMEALL);
     });
   }
   if (!$(".home")) app.innerHTML = '<div class="empty"><h3>Loading lessons</h3></div>';
@@ -385,7 +385,21 @@ function homeHTML(items) {
     '<div class="statcard"><span class="k">THIS WEEK</span><div style="display:flex;align-items:baseline;gap:8px"><span class="big">' + Math.floor(mins / 60) + ':' + pad2(Math.round(mins % 60)) + '</span><span class="hint">hours taught</span></div>' +
     '<div class="statline"><span>Lessons logged</span><b>' + logged + '</b></div><div class="statline"><span>Answers right</span><b>' + (n ? r + " / " + n : "–") + '</b></div></div>';
   side += makeupCard(HOMEALL.length ? HOMEALL : items);
-  return h + askHTML(items) + '<div class="home"><div><div class="tiles">' + tiles + '</div>' + (rows ? '<h2 class="sec">Recent lessons</h2><div class="rows">' + rows + '</div>' : "") + '</div><div>' + side + '</div></div>';
+  return h + askHTML(items) + '<div id="homeasg"></div><div class="home"><div><div class="tiles">' + tiles + '</div>' + (rows ? '<h2 class="sec">Recent lessons</h2><div class="rows">' + rows + '</div>' : "") + '</div><div>' + side + '</div></div>';
+}
+/* take-home assignments (Ali, 8 Oct: "I don't see the assignment"): a strip on the home page that leads to them in Exams */
+function fillHomeAsg() {
+  var box = $("#homeasg"); if (!box || !TREE) return;
+  var base = studentBase() + "assignments/";
+  var paths = TREE.filter(function (t) { return t.path.indexOf(base) === 0 && /\/assignment\.json$/.test(t.path) && t.path.slice(base.length).split("/").length === 2; }).map(function (t) { return t.path; });
+  if (!paths.length) return;
+  Promise.all(paths.map(function (pth) { return fileJSON(pth).then(function (j) { return j && j.data; }, function () { return null; }); })).then(function (list) {
+    list = list.filter(function (a) { return a && a.status !== "done"; }); if (!list.length || !$("#homeasg")) return;
+    $("#homeasg").innerHTML = list.map(function (a) {
+      var secs = a.sections || [], days = secs.reduce(function (m, x) { m[x.day] = 1; return m; }, {});
+      return '<a class="asgstrip" href="#/exams"><span class="tag">Assignment</span><b>' + esc(a.title || "Assignment") + '</b><span class="hint">' + Object.keys(days).length + ' days · ' + secs.length + ' parts' + (a.status === "ready" ? " · ready to load" : a.status ? " · " + esc(a.status) : "") + '</span><span class="go">Open in Exams</span></a>';
+    }).join("");
+  });
 }
 function fillHomeRevise() {
   var sp = subjPick();
@@ -1751,7 +1765,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v43", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v44", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
