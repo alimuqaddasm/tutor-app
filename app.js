@@ -286,7 +286,8 @@ function doneOf(x, k, kind) { if (!x) return false; if (kind === "q") { var a = 
 function partsOf(s, x) { if (!s || !s.phases) return [];
   return s.phases.map(function (p) { var its = phaseItems(p).filter(function (i) { return i.kind !== "module"; }), d = its.filter(function (i) { return doneOf(x, i.k, i.kind); }).length; return { name: p.name, w: pw(p), f: its.length ? d / its.length : 0 }; }); }
 /* tags (Clear Desk: repeated facts are tags, not sentences) */
-function tag(txt, cls) { return '<span class="tag' + (cls ? " " + cls : "") + '">' + txt + '</span>'; }
+/* a tag starts with a capital (Ali, 8 Oct), whatever the data says; "pH" and the like stay as they are */
+function tag(txt, cls) { txt = String(txt); if (/^[a-z][a-z]/.test(txt)) txt = txt.charAt(0).toUpperCase() + txt.slice(1); return '<span class="tag' + (cls ? " " + cls : "") + '">' + txt + '</span>'; }
 function subjTag(sj) { return tag('<span class="dot"></span>' + esc(SUBJ[sj] || sj), esc(sj)); }
 function topicTag(s) { var tp = s && s.topic; if (!tp || !(tp.code || tp.name)) return ""; return tag((tp.code ? '<b>' + esc(tp.code) + '</b>' : "") + esc(tp.name || ""), "topic"); }
 /* first letter upper case on every label (Ali, 8 Oct) */
@@ -308,13 +309,20 @@ var KINDS = [["Quiz", /^(hard )?(oral )?quiz/i], ["Starter", /^starter/i], ["Re-
   ["Exam", /^(exam|test)\b/i], ["Video", /^video/i], ["Keep it fresh", /^keep it fresh/i], ["Check", /^(exit check|check|last topic)/i], ["Homework", /^(homework|set the)/i], ["If time", /^(if time|extra material)/i],
   ["Bank", /^question bank/i], ["Recycle", /^recycle/i]];
 function kindOf(name) { name = String(name || "").trim(); for (var i = 0; i < KINDS.length; i++) if (KINDS[i][1].test(name)) return KINDS[i][0]; var c = /^([^:]{2,16}):/.exec(name); return c ? c[1] : ""; }
-function partKinds(s) { var seen = {}; return ((s && s.phases) || []).map(function (p) { return kindOf(p.name); }).filter(function (k) { if (!k || k === "Bank" || k === "Recycle" || k === "Homework" || seen[k]) return false; seen[k] = 1; return true; }); }
+function partKinds(s) { var seen = {}; return ((s && s.phases) || []).map(function (p) { return kindOf(p.name); }).filter(function (k) { if (!k || k === "If time" || k === "Bank" || k === "Recycle" || k === "Homework" || seen[k]) return false; seen[k] = 1; return true; }); }
 function kindsHTML(s) { var ks = partKinds(s); return ks.length ? '<span class="kinds">' + ks.map(function (k) { return '<span class="k' + (k === "If time" ? " opt" : "") + '">' + esc(k) + '</span>'; }).join("") + '</span>' : ""; }
 /* a part's name without its kind ("Practice: Set 6, Q15 to Q18" shows as "Set 6, Q15 to Q18" under a Practice tag) */
 function partTitle(name) { var k = kindOf(name), m = /^[^:]{2,24}:\s*(.+)$/.exec(String(name || "")); return k && m ? m[1].charAt(0).toUpperCase() + m[1].slice(1) : name; }
 /* the lesson's title is its main topic. Older titles list the parts ("Hard quiz, then Tollens'"): show the part after "then" */
-function lessonTitle(s, x) { var t = (s && s.title) || (x && x.title) || "Lesson"; if (s && s.topic) return t;
-  var m = /,\s*then\s+(?:the\s+)?(.+)$/i.exec(t); if (m) t = m[1]; t = t.replace(/,\s*after\s+.+$/i, ""); return t.charAt(0).toUpperCase() + t.slice(1); }
+function lessonTitle(s, x) { return lessonParts(s, x).name; }
+/* "7.1 Addition formulae" splits into a topic tag (7.1) and the name; "the chapters 1 to 6 test" into an Exam tag and "Chapters 1 to 6" (Ali, 8 Oct) */
+function lessonParts(s, x) { var t = (s && s.title) || (x && x.title) || "Lesson";
+  if (!(s && s.topic)) { var m = /,\s*then\s+(?:the\s+)?(.+)$/i.exec(t); if (m) t = m[1]; t = t.replace(/,\s*after\s+.+$/i, ""); }
+  var c = /^(\d+(?:\.\d+)+)\s+(.+)$/.exec(t), code = c ? c[1] : ""; if (c) t = c[2];
+  var e = /^(.+?)\s+(test|exam|mock)$/i.exec(t), exam = !!e; if (e) t = e[1];
+  return { name: cap(t), code: code, exam: exam }; }
+/* the tags a lesson title carries: its section number (when the topic tag doesn't show it already) and Exam */
+function lessonTags(s, x) { var p = lessonParts(s, x), tp = s && s.topic; return (p.code && !(tp && tp.code) ? tag('<b>' + esc(p.code) + '</b>', "topic") : "") + (p.exam ? tag("Exam", "live") : ""); }
 /* ---------------- missed lessons and make-up time ----------------
    students/<s>/makeup.json = {"start": {"date", "owed", "note"}, "entries": [{"id", "at", "date", "lesson", "subject", "kind": "miss", "by": "ali|student", "minutes", "note", "d"}]}
    A lesson counts as taught when it is finished, has minutes and has feedback. Once its day has passed without that, the
@@ -382,7 +390,7 @@ function homeHTML(items) {
     if (d < t) (byDay[d] = byDay[d] || []).push({ s: sj, k: "miss", tip: SUBJ[sj] + ": not taught" });
     var due = dueOf(it); if (due >= t) (byDay[due] = byDay[due] || []).push({ s: sj, k: "plan", tip: SUBJ[sj] + ": planned" + (due !== d ? " (moved from " + fmtDate(d) + ")" : "") }); });
   var week = '<div class="week" aria-label="This week">' + wk.map(function (d) { var dd = pdate(d), off = OFFDAYS.indexOf(dd.getDay()) >= 0;
-    return '<div class="wd' + (d === t ? " today" : off ? " off" : "") + '"><span>' + DAY[dd.getDay()] + '</span><span class="n">' + dd.getDate() + '</span><span class="dots">' + (d === t ? "today" : off ? "off" : (byDay[d] || []).map(function (o) { return '<i class="' + esc(o.s) + ' ' + o.k + '" title="' + esc(o.tip) + '"></i>'; }).join("")) + '</span></div>'; }).join("") + '</div>';
+    return '<div class="wd' + (d === t ? " today" : off ? " off" : "") + '"><span>' + DAY[dd.getDay()] + '</span><span class="n">' + dd.getDate() + '</span><span class="dots">' + (d === t ? "Today" : off ? "Off" : (byDay[d] || []).map(function (o) { return '<i class="' + esc(o.s) + ' ' + o.k + '" title="' + esc(o.tip) + '"></i>'; }).join("")) + '</span></div>'; }).join("") + '</div>';
   var mko = makeupSum(HOMEALL.length ? HOMEALL : items); mkSide(mko);
   var h = '<header class="phead"><div class="phead-row"><div class="stack s3" style="min-width:0"><h1>' + esc(DAYL[pdate(t).getDay()] + " " + pdate(t).getDate() + " " + MONL[pdate(t).getMonth()]) + '</h1><div class="tags">' +
     (sp !== "all" ? subjTag(sp) : "") + tag(OFFDAYS.length ? [1, 2, 3, 4, 5, 6, 0].filter(function (d) { return OFFDAYS.indexOf(d) < 0; }).map(function (d) { return DAY[d]; }).join(" · ") : "Every day") + tag(LESSON_MIN + " min a subject") +
@@ -397,9 +405,9 @@ function homeHTML(items) {
       var when = dateOf(up) < t ? (dueOf(up) < t ? tag("Was it taught? See above", "live") : tag("Moved to " + esc(fmtDate(dueOf(up))), "live")) : dateOf(up) > t ? tag(esc(fmtDate(dateOf(up))), "day") : "";
       var ps = partsOf(s, x), mins = ((s.phases || []).reduce(function (m, p) { return Math.max(m, +p.end || 0); }, 0)) || LESSON_MIN;
       var cur = ps.findIndex(function (p) { return p.f < 1; });
-      var flow = ps.length ? '<div class="flow ' + esc(sj) + '">' + ps.filter(function (p) { var k = kindOf(p.name); return k !== "Bank" && k !== "Recycle"; }).map(function (p, i) { var k = kindOf(p.name) || p.name;
+      var flow = ps.length ? '<div class="flow ' + esc(sj) + '">' + ps.filter(function (p) { var k = kindOf(p.name); return k !== "Bank" && k !== "Recycle" && k !== "If time"; }).map(function (p, i) { var k = kindOf(p.name) || p.name; if (k === "Keep it fresh") k = "Fresh";
         return '<span style="flex:' + p.w + '"' + (i === cur ? ' class="on"' : k === "If time" ? ' class="opt"' : "") + ' title="' + esc(p.name) + '"><i></i><em>' + esc(k) + '</em></span>'; }).join("") + '</div>' : "";
-      return '<article class="tile" data-subject="' + sj + '"><div class="tags">' + subjTag(sj) + topicTag(s) + st + when + '</div><h2>' + esc(lessonTitle(s, x)) + '</h2>' + flow +
+      return '<article class="tile" data-subject="' + sj + '"><div class="tags">' + subjTag(sj) + topicTag(s) + lessonTags(s, x) + st + when + '</div><h2>' + esc(lessonTitle(s, x)) + '</h2>' + flow +
         '<div class="acts"><a class="btn go" href="#/lesson/' + encodeURIComponent(up.id) + '/teach">Teach ▶</a><a class="btn" href="#/lesson/' + encodeURIComponent(up.id) + '">Open the plan</a>' + tag(mins + " min") + '</div></article>'; }
     return '<article class="tile none" data-subject="' + sj + '"><div class="tags">' + subjTag(sj) + tag("No script yet", "dash") + '</div><h2>Next ' + esc(SUBJ[sj].toLowerCase()) + ' lesson</h2>' +
       (last ? '<div class="tags"><span class="hint">Last</span>' + tag(esc(fmtDate(dateOf(last)))) + tag(esc(lessonTitle(last.s, last.x)), "line") + '</div>' : '<p>Ask Claude to draft the first script.</p>') +
@@ -410,14 +418,14 @@ function homeHTML(items) {
     var s = it.s || {}, x = it.x, sj = subjOf(it), d = pdate(dateOf(it)), sc = x ? score(x) : { n: 0 }, m = x && x.time && x.time.minutes;
     var st = x && x.status === "finished" ? "" : x && x.status === "in-progress" ? tag("In progress", "live") : s.status === "draft" ? tag("Draft script") : it.script ? tag("Script ready") : "";
     var extra = st + (it.marking ? tag("Marked", "ok") : it.work ? tag(it.work + " photo" + (it.work > 1 ? "s" : "")) : "");
-    return '<a class="lrow" data-subject="' + esc(sj) + '" href="#/lesson/' + encodeURIComponent(it.id) + '"><span class="dblock">' + DAY[d.getDay()] + '<b>' + d.getDate() + '</b></span><span class="lt"><b>' + esc(lessonTitle(s, x)) + '</b>' + (kindsHTML(s) || extra ? '<span class="tags">' + kindsHTML(s) + extra + '</span>' : "") + '</span>' +
+    return '<a class="lrow" data-subject="' + esc(sj) + '" href="#/lesson/' + encodeURIComponent(it.id) + '"><span class="dblock">' + DAY[d.getDay()] + '<b>' + d.getDate() + '</b></span><span class="lt"><b>' + esc(lessonTitle(s, x)) + '</b>' + (kindsHTML(s) || extra || lessonTags(s, x) ? '<span class="tags">' + lessonTags(s, x) + kindsHTML(s) + extra + '</span>' : "") + '</span>' +
       '<span class="score">' + (sc.n ? '<span>' + sc.r + '/' + sc.n + ' right</span><span class="bar"><i style="width:' + Math.round(sc.r / sc.n * 100) + '%"></i></span>' : '<span class="hint">' + (x && x.status === "finished" ? "No verdicts" : "") + '</span>') + '</span>' +
       '<span class="mins' + (m && x.status === "finished" && m < LESSON_MIN - 5 ? " short" : "") + '">' + (m ? esc(Math.round(m)) + '<small> min</small>' : "") + '</span></a>'; }).join("");
   /* this week's numbers */
   var mins = 0, r = 0, n = 0, logged = 0;
   items.forEach(function (it) { if (wk.indexOf(dateOf(it)) < 0 || !it.x) return; if (it.x.time && it.x.time.minutes) mins += +it.x.time.minutes; if (it.x.status === "finished") logged++; var sc = score(it.x); r += sc.r; n += sc.n; });
   var side = '<div class="inkcard" id="homerev"><div class="k">Mistakes warm-up</div><div class="tags"><span class="tag live num" id="homerevn">…</span></div><div class="q" id="homerevq">Loading his mistakes…</div><div class="tags" id="homerevm"></div><a class="btn" href="#/revise">Start warm-up · 5 min</a></div>' +
-    '<div class="statcard"><span class="k">This week</span><div class="row base" style="gap:var(--s5)"><span><span class="big">' + Math.floor(mins / 60) + ' h ' + Math.round(mins % 60) + '</span> <span class="hint">taught</span></span><span><span class="big">' + (n ? r + "/" + n : "–") + '</span> <span class="hint">right</span></span></div>' +
+    '<div class="statcard"><span class="k">This week</span><div class="row base" style="gap:var(--s5)"><span><span class="big">' + Math.floor(mins / 60) + ' h ' + Math.round(mins % 60) + '</span> <span class="hint">taught</span></span><span><span class="big">' + (n ? r + "/" + n : "-") + '</span> <span class="hint">right</span></span></div>' +
     '<div class="statline"><span>Lessons logged</span><b>' + logged + '</b></div></div>';
   side += makeupCard(HOMEALL.length ? HOMEALL : items);
   return h + askHTML(items) + '<div id="homeasg"></div><div class="home"><div><h2 class="sec" style="margin-top:0">Today</h2><div class="tiles">' + tiles + '</div>' + (rows ? '<div class="sech"><h2 class="sec">Recent lessons</h2><a class="link" href="#/record">See all in Record</a></div><div class="rows">' + rows + '</div>' : "") + '</div><div>' + side + '</div></div>';
@@ -523,14 +531,14 @@ function drawLesson() {
   if (/^_/.test(L.phase)) { document.body.classList.add("focus"); app.innerHTML = '<div class="wrap lpage">' + sysPage(L.phase) + '</div>'; var pg = $(".lpage"); fillRows(pg); loadImages(pg); maths(pg); if (L.phase === "_revise") reviseInto($("#revbox"), x.subject); tick(); return; }
   document.body.classList.add("focus");
   var mins = (s.phases || []).reduce(function (m, p) { return Math.max(m, +p.end || 0); }, 0);
-  var tags = subjTag(subj) + tag(esc(fmtDate(x.date || s.date))) + topicTag(s) + (s.status === "draft" ? tag("Draft script") : "") + (x.status === "finished" ? tag("Logged", "ok") : x.status === "in-progress" ? tag("In progress", "live") : "") + (x.makeup ? tag("Make-up", "live") : "") + (mins ? tag(mins + " min") : "");
+  var tags = subjTag(subj) + tag(esc(fmtDate(x.date || s.date))) + topicTag(s) + lessonTags(s, x) + (s.status === "draft" ? tag("Draft script") : "") + (x.status === "finished" ? tag("Logged", "ok") : x.status === "in-progress" ? tag("In progress", "live") : "") + (x.makeup ? tag("Make-up", "live") : "") + (mins ? tag(mins + " min") : "");
   var focus = (s.focus || []).length ? '<div class="tags"><span class="lab">Focus</span>' + s.focus.map(function (f) { return '<button class="tag ask" type="button" data-focus>' + esc(plain(f.want)) + '</button>'; }).join("") + '</div>' : "";
   var real = ps.filter(function (p) { return !p.sys && kindOf(p.name) !== "Bank" && kindOf(p.name) !== "Recycle"; }), ci = real.indexOf(ps.filter(function (p) { return p.id === L.phase; })[0]);
   var flow = real.length > 1 ? '<div class="flow ' + esc(subj) + '" aria-label="Parts" style="padding-top:var(--s2)">' + real.map(function (p, k) { var kd = kindOf(p.name);
     return '<span style="flex:' + pw(p) + '"' + (k === ci ? ' class="on"' : kd === "If time" ? ' class="opt"' : "") + ' title="' + esc(p.name) + '"><i></i><em>' + esc(kd ? kd + (kd === "New" ? " · " + partTitle(p.name) : "") : p.name) + '</em></span>'; }).join("") + '</div>' : "";
   var h = '<header class="band stack lhead2"><div class="crumb"><a href="#/">Lessons</a><span aria-hidden="true">/</span><span>' + esc(SUBJ[subj] || subj) + '</span></div><div class="head"><div class="stack s3" style="min-width:0;flex:1 1 480px"><div class="tags">' + tags + '</div>' +
     '<h1 class="t-title" title="' + esc(s.title || x.title || "") + '">' + esc(lessonTitle(s, x)) + '</h1>' + focus + (!focus && s.summary ? '<span class="hint">' + esc(plain(s.summary)) + '</span>' : "") + '</div>' +
-    '<div class="stack s3" style="align-items:flex-end"><div class="seg" role="group" aria-label="Mode"><a href="#/lesson/' + encodeURIComponent(L.id) + '" aria-current="true">Plan</a><a href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach</a><a href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"></path></svg></a></div>' +
+    '<div class="stack s3" style="align-items:flex-end"><div class="seg modes" role="group" aria-label="Mode"><a href="#/lesson/' + encodeURIComponent(L.id) + '" aria-current="true">Plan</a><a href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach</a><a href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"></path></svg></a></div>' +
     '<div class="row"><span class="clockpill' + (r.running ? " live" : "") + '"><span class="dot"></span><span id="clk" class="num">0:00</span></span><button class="btn pri" id="clkgo" type="button"></button>' + (r.running ? '<button class="btn danger" id="clkend" type="button">End lesson</button>' : "") + '<button class="btn sm quiet" type="button" data-phase="_time">Edit part times</button></div></div></div>' + flow +
     (s.focus && s.focus.length ? '<div id="focusbox" hidden>' + focusTable(s.focus) + '</div>' : "") + '</header>';
   var ICO = { _revise: '<path d="M20 12a8 8 0 1 1-2.34-5.66"></path><path d="M20 4v5h-5"></path>', _extra: '<path d="M12 5v14M5 12h14"></path>', _work: '<rect x="3" y="5" width="18" height="15" rx="2"></rect><circle cx="12" cy="12.5" r="3.5"></circle>', _time: '<circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2 2M9 2h6"></path>', _after: '<path d="M5 12l5 5L20 7"></path>' };
@@ -672,7 +680,7 @@ function questionBlock(q, big) {
   var paper = q.source && /edexcel|solomon|maths genie|pearson/i.test(q.source) || (L.script || {}).subject === "maths" ? "q-edexcel" : "q-aqa";
   var h = '<div class="qcard"><div class="row">' + tag("Question", "line") + (q.source ? refTag(q.source) : tag(esc(q.label || ""), "line")) + ((q.img || []).length || (q.parts || []).length ? '<button class="btn sm push" type="button" data-show="' + esc(q.id) + '">Show him</button>' : "") + '</div>' +
     (q.html || (q.parts && !big) || (q.img || []).length ? '<div class="card qbody ' + paper + '">' + (q.html ? '<div class="prose">' + clean(q.html) + '</div>' : "") + (q.parts && !big ? twinHTML(q) : "") + (q.img || []).map(function (i) { return img(i, q.label); }).join("") + '</div>' : "");
-  if (q.answer || (q.answerImg || []).length) h += '<details class="fold"><summary>Mark scheme</summary><div class="prose">' + clean(q.answer || "") + (q.answerImg || []).map(function (i) { return img(i, "Mark scheme"); }).join("") + '</div></details>';
+  if (q.answer || (q.answerImg || []).length) h += '<details class="fold reveal"><summary>Mark scheme</summary><div class="prose">' + clean(q.answer || "") + (q.answerImg || []).map(function (i) { return img(i, "Mark scheme"); }).join("") + '</div></details>';
   var a = L.session.answers[q.id] || {};
   if (big) return h + ctlBig(q.id, a, q.label, q.marks) + '</div>';
   return h + '<div class="stack s3 qmark" data-v="' + esc(a.v || "") + '"><span class="lab">How he did</span>' + ctl(q.id, q.marks) + '</div></div>';
@@ -771,7 +779,7 @@ function timeFields(x, withDate) { var t = x.time, ed = t.edit || {}, a = t.auto
   return '<div class="cols3">' + (withDate ? '<div class="field"><label for="tm-date">Date</label><input class="input" type="date" id="tm-date" data-tm="date" value="' + esc(x.date || parseId(L.id).date) + '"></div>' : "") +
     '<div class="field"><label for="tm-s">Started</label><input class="input" type="time" id="tm-s" data-tm="started" value="' + esc(tval(ed.started || a.started)) + '"><span class="hint">' + (a.started ? "Clock: " + esc(tval(a.started)) : "Clock not started. Type a time.") + '</span></div>' +
     '<div class="field"><label for="tm-e">Ended</label><input class="input" type="time" id="tm-e" data-tm="ended" value="' + esc(tval(ed.ended || a.ended)) + '"><span class="hint">' + (a.ended ? "Clock: " + esc(tval(a.ended)) : r.running ? "Clock still running" : "Not ended. Type a time.") + '</span></div>' +
-    '<div class="field"><label for="tm-m">Minutes taught</label><input class="input" type="number" id="tm-m" data-tm="minutes" min="0" step="1" inputmode="numeric" value="' + esc(ed.minutes != null ? ed.minutes : t.minutes != null ? t.minutes : "") + '"><span class="hint">Counted: <b id="tm-now">' + esc(t.minutes != null ? t.minutes : "–") + '</b></span></div></div>'; }
+    '<div class="field"><label for="tm-m">Minutes taught</label><input class="input" type="number" id="tm-m" data-tm="minutes" min="0" step="1" inputmode="numeric" value="' + esc(ed.minutes != null ? ed.minutes : t.minutes != null ? t.minutes : "") + '"><span class="hint">Counted: <b id="tm-now">' + esc(t.minutes != null ? t.minutes : "-") + '</b></span></div></div>'; }
 function timeView() {
   var x = L.session, t = x.time, ed = t.edit || {}, a = t.auto || {}, ended = t.log.length && t.log[t.log.length - 1].e === "end";
   var h = pageHead("Part times", "Change anything. Leave a box empty to use the clock’s time.");
@@ -783,7 +791,7 @@ function timeView() {
     return '<div class="row" style="padding:var(--s2) var(--s4)"><span class="num" style="min-width:3.5em">' + esc(hhmm(e.t)) + '</span><span>' + esc({ start: "Started", pause: "Paused", resume: "Resumed", phase: "Moved to", end: "Ended" }[e.e] || cap(e.e)) + (pn ? " · " + esc(pn) : "") + '</span><span class="hint">' + esc(cap(e.d || "")) + '</span><button class="btn sm danger push" type="button" data-logdel="' + i + '">Delete</button></div>'; }).join("") + '</div></details>';
   return h;
 }
-function timeEdited() { L.session.time.editAt = now(); touch(); var el = $("#tm-now"); if (el) el.textContent = L.session.time.minutes != null ? L.session.time.minutes : "—"; tick(); }
+function timeEdited() { L.session.time.editAt = now(); touch(); var el = $("#tm-now"); if (el) el.textContent = L.session.time.minutes != null ? L.session.time.minutes : "-"; tick(); }
 
 /* a normal lesson under 45 min (Ali, 6 Oct): on Finish the app asks whose doing it was.
    Ali's: the minutes short go on the make-up time (makeupSum reads session.short). The student's: nothing is added. */
@@ -813,7 +821,7 @@ function afterView() {
   Object.keys(x.answers).forEach(function (k) { var a = x.answers[k]; if (!a.parts) addW(labelOf(k), a.v, a.note); });
   x.extra.forEach(function (e) { addW(e.q, e.v, e.note); });
   var st = function (b, l, c) { return '<div class="stat" style="padding:var(--s4) 20px"><b style="font-size:24px' + (c ? ";color:" + c : "") + '">' + b + '</b><span class="hint">' + l + '</span></div>'; };
-  var h = pageHead("After the lesson", "Claude reads this before the next script.", '<div class="row s2">' + st(x.time.minutes != null ? Math.round(x.time.minutes) + " min" : "–", "Taught") + st(sc.n ? sc.r + "/" + sc.n : "–", "Right") + st(wrong.length, "New mistakes", wrong.length ? "var(--wrong)" : "") + '</div>');
+  var h = pageHead("After the lesson", "Claude reads this before the next script.", '<div class="row s2">' + st(x.time.minutes != null ? Math.round(x.time.minutes) + " min" : "-", "Taught") + st(sc.n ? sc.r + "/" + sc.n : "-", "Right") + st(wrong.length, "New mistakes", wrong.length ? "var(--wrong)" : "") + '</div>');
   var notes = Object.keys(x.answers).filter(function (k) { return x.answers[k].note; }).map(function (k) { var a = x.answers[k];
     return '<li data-item="' + esc(k) + '"><div class="tags"><b>' + esc(labelOf(k)) + '</b>' + (a.v && VTAG[a.v] ? tag(VTAG[a.v][0], VTAG[a.v][1]) : "") + '</div>' + noteBox(a.note) + '</li>'; })
     .concat(x.extra.filter(function (e) { return e.note; }).map(function (e) { return '<li data-item="x:' + esc(e.id) + '"><b>' + esc(e.q) + '</b>' + noteBox(e.note) + '</li>'; }));
@@ -1000,7 +1008,7 @@ function recordView() {
         var mins = 0, n = 0, r = 0; ids.forEach(function (i) { var x = i.x || {}; mins += +(x.time && x.time.minutes) || 0; var s = score(x); n += s.n; r += s.r; });
         var open = mistakes.filter(function (m) { return !m.fixed; }), mko = makeupSum(ids);
         var stat = function (b, l, c) { return '<div class="stat" style="flex:1 1 160px"><b' + (c ? ' style="color:' + c + '"' : "") + '>' + b + '</b><span class="hint">' + l + '</span></div>'; };
-        var h = '<div class="wrap record" style="gap:40px">' + head() + '<div class="row" style="gap:var(--s4);align-items:stretch">' + stat(ids.length, "Lessons logged") + stat(hmin(mins), "Taught") + stat(n ? Math.round(100 * r / n) + "%" : "–", "Answers right") +
+        var h = '<div class="wrap record" style="gap:40px">' + head() + '<div class="row" style="gap:var(--s4);align-items:stretch">' + stat(ids.length, "Lessons logged") + stat(hmin(mins), "Taught") + stat(n ? Math.round(100 * r / n) + "%" : "-", "Answers right") +
           stat(open.length, "Mistakes still open", "var(--wrong)") + (mko ? stat(Math.max(0, mko.owed) + " min", "Make-up owed", "var(--live-ink)") : "") + '</div>' +
           '<nav class="jump seg" aria-label="On this page"><a href="#tl" data-jump="tl" aria-current="true">Time log</a><a href="#mi" data-jump="mi">Mistakes</a>' + (mko ? '<a href="#mu" data-jump="mu">Make-up</a>' : "") + '<a href="#ex" data-jump="ex">Exam results</a></nav>';
         h += '<section id="tl" class="stack"><div class="head" style="align-items:baseline"><h2 class="t-sec">Time log</h2><span class="hint">Tap a row to open or correct it</span></div>' +
@@ -1340,7 +1348,7 @@ function boardHTML(c) {
   items.forEach(function (it, i) { var k = boardKey(it), a = L.session.answers[k] || {}, open = BOARD.open === k, star = it.it && it.it.star;
     h += '<li class="brow' + (open ? " open" : "") + (it.rel ? " rel" : "") + (star ? " star" : "") + '" data-v="' + esc(a.v || "") + '">' +
       '<button type="button" class="bq" data-bopen="' + esc(k) + '" aria-expanded="' + open + '"><span class="bn num">' + (i + 1) + '</span><span class="bt">' + (star ? '<i aria-hidden="true">★</i> ' : "") + clean(String(boardQ(it)).replace(/<br\s*\/?>/gi, " \u00b7 ")) + '</span>' +
-      (it.it && it.it.page ? '<span class="bpg">' + esc(it.it.page) + '</span>' : it.title && /\(([^)]+)\)/.test(it.title) ? '<span class="bpg">' + esc(/\(([^)]+)\)/.exec(it.title)[1]) + '</span>' : "") + '<span class="bv" aria-hidden="true">' + ({ right: "✓", wrong: "✗", partly: "½", wording: "W", terminology: "T", skipped: "–", tskip: "⏭" }[a.v] || "") + '</span></button>' +
+      (it.it && it.it.page ? '<span class="bpg">' + esc(it.it.page) + '</span>' : it.title && /\(([^)]+)\)/.test(it.title) ? '<span class="bpg">' + esc(/\(([^)]+)\)/.exec(it.title)[1]) + '</span>' : "") + '<span class="bv" aria-hidden="true">' + ({ right: "✓", wrong: "✗", partly: "½", wording: "W", terminology: "T", skipped: "-", tskip: "⏭" }[a.v] || "") + '</span></button>' +
       (open ? '<div class="bbody"><div class="qtext prose">' + paperHTML(boardQ(it), subjNow()) + '</div><div class="bans prose">' + clean(boardA(it)) + '</div>' + (a.note ? '<div class="bnote"><b>Note:</b> ' + esc(a.note) + '</div>' : "") + boardNext(items, it) + '</div>' : "") + '</li>'; });
   var oi = items.filter(function (it) { return boardKey(it) === BOARD.open; })[0];
   return h + '</ol>' + vrail(oi ? boardKey(oi) : null, oi ? L.session.answers[boardKey(oi)] : null, oi ? plain(boardQ(oi)) : ""); }
@@ -1569,7 +1577,7 @@ function phasePages(p) { var its = []; (function walk(bs) { (bs || []).forEach(f
 /* steps that mention the warm-up get a button that opens it here */
 function warmBtn(c) { return c.t === "step" && /warm-up/i.test(plain(c.it.html)) ? '<button class="btn small" type="button" data-warmup style="margin-top:12px">Open the mistakes warm-up</button>' : ""; }
 function pastLine(c, i) { var st = stateOf(c);
-  return '<button type="button" class="pastline ' + st + '" data-tjump="' + i + '"><span class="ic">' + iconOf(c) + '</span><span class="tx">' + esc(shortOf(c, 120)) + '</span>' + (st === "done" ? '<span class="mk">✓ taught</span>' : st === "s-skip" ? '<span class="mk">skipped</span>' : st === "v-tskip" ? '<span class="mk">you skipped it</span>' : st === "v-skipped" ? '<span class="mk">no answer</span>' : st ? '<span class="mk">' + esc(st.slice(2)) + '</span>' : "") + '</button>'; }
+  return '<button type="button" class="pastline ' + st + '" data-tjump="' + i + '"><span class="ic">' + iconOf(c) + '</span><span class="tx">' + esc(shortOf(c, 120)) + '</span>' + (st === "done" ? '<span class="mk">✓ Taught</span>' : st === "s-skip" ? '<span class="mk">Skipped</span>' : st === "v-tskip" ? '<span class="mk">You skipped it</span>' : st === "v-skipped" ? '<span class="mk">No answer</span>' : st ? '<span class="mk">' + esc(cap(st.slice(2))) + '</span>' : "") + '</button>'; }
 function drawTeach() {
   var s = L.script || {}, x = L.session, subj = s.subject || x.subject; document.body.setAttribute("data-subject", subj); document.body.classList.add("teaching");
   var keepRef = TCH.id === L.id && TCH.seq[TCH.pos], ae = document.activeElement, fgo = ae && ae.closest && ae.closest(".tfoot") && ae.getAttribute("data-tgo");
@@ -1581,14 +1589,14 @@ function drawTeach() {
   var pk = c.p ? kindOf(c.p.name) : "", reals = phases().filter(function (p) { return !p.sys && kindOf(p.name) !== "Bank" && kindOf(p.name) !== "Recycle"; });
   var inPart = c.p ? TCH.seq.filter(function (q) { return q.p === c.p; }) : [], pf = inPart.length ? Math.round(100 * (inPart.indexOf(c) + 1) / inPart.length) : 0;
   var h = '<div class="teach3">' + runwayHTML(c) + '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
-    '<button class="btn sm outl" type="button" id="toc" aria-label="Outline">☰<span class="olab"> Outline</span></button><a class="btn sm quiet" href="#/lesson/' + encodeURIComponent(L.id) + '" title="Back to Plan">Plan</a>' + (pk ? tag(esc(pk), pk === "If time" ? "dash" : "line") : "") + '<b>' + esc(c.p ? (pk ? partTitle(c.p.name) : c.p.name) : "End") + '</b>' + (c.mod ? '<span class="hint">· ' + esc(c.mod) + '</span>' : "") + '</div>' +
+    '<button class="btn sm outl" type="button" id="toc" aria-label="Outline">☰<span class="olab"> Outline</span></button><a class="btn sm quiet back" href="#/lesson/' + encodeURIComponent(L.id) + '" title="Back to Plan">Plan</a>' + (pk ? tag(esc(pk), pk === "If time" ? "dash" : "line") : "") + '<b>' + esc(c.p ? (pk ? partTitle(c.p.name) : c.p.name) : "End") + '</b>' + (c.mod ? '<span class="hint">· ' + esc(c.mod) + '</span>' : "") + '</div>' +
     '<div class="tmini"><span class="tmore"><button class="btn sm" type="button" data-tmore aria-expanded="false" aria-label="More: warm-up, suggest a change, try-out">⋯<span class="tdot" id="wudot" hidden></span></button>' +
       '<div class="tmenu" hidden><button class="btn sm" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn sm" type="button" data-suggest>Suggest a change</button><button class="btn sm trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button></div></span>' +
       '<a class="btn sm" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"></path></svg></a>' +
       '<span class="tag num"><span class="olab">Step </span>' + (TCH.pos + 1) + ' of ' + TCH.seq.length + '</span>' +
       (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a step by hand.">Preview</button>'
         : '<button type="button" class="preview stopped" data-pvhelp title="The clock is stopped. Taught, Skip and verdicts still count.">Clock stopped</button>') +
-      '<span class="clockpill' + (lv ? " live" : "") + '"><span class="dot"></span><span class="t num" id="clk">0:00</span></span><button class="btn sm' + (lv ? "" : " pri") + '" id="clkgo" type="button"></button></div></div>' +
+      '<span class="clockpill' + (lv ? " live" : "") + '"><span class="dot"></span><span class="t" id="clk">0:00</span></span><button class="btn sm' + (lv ? "" : " pri") + '" id="clkgo" type="button"></button></div></div>' +
     (reals.length > 1 ? '<div class="flow ' + esc(subj) + ' tflow" aria-hidden="true">' + reals.map(function (p) { var on = p === c.p, past = c.p && reals.indexOf(p) < reals.indexOf(c.p);
       return '<span style="flex:' + pw(p) + '"' + (on ? ' class="on"' : "") + '><i' + (on ? ' style="background:linear-gradient(90deg,var(--accent) ' + pf + '%,var(--line) ' + pf + '%)"' : past ? ' style="background:var(--accent);opacity:.45"' : "") + '></i></span>'; }).join("") + '</div>' : '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>') +
     '</div><div class="tstage">';
@@ -1632,10 +1640,10 @@ function runwayHTML(c) {
   var parts = ps.map(function (p, i) {
     var its = phaseItems(p), qs = its.filter(function (q) { return q.kind === "q"; }), used = qs.filter(usedOrDone), right = used.filter(function (q) { return x.answers[q.k] && x.answers[q.k].v === "right"; });
     var pm = x.time.phaseMinutes && x.time.phaseMinutes[p.id];
-    var sub = [p.start != null ? p.start + "–" + p.end + " min" : "", pm ? "took " + pm : "", used.length ? right.length + "/" + used.length + " right" : ""].filter(Boolean).join(" · ");
+    var sub = [p.start != null ? p.start + " to " + p.end + " min" : "", pm ? "Took " + pm : "", used.length ? right.length + "/" + used.length + " right" : ""].filter(Boolean).join(" · ");
     var rows = "", lastMod = null;
     TCH.seq.forEach(function (q, j) { if (q.p !== p || q.t === "phase") return;
-      if (q.t === "mod") { rows += '<button type="button" class="om' + (j === TCH.pos ? " cur" : "") + (isDone(q.key) ? " done" : "") + '" data-tjump="' + j + '">' + esc(q.b.name) + (q.b.level === "deep" ? ' <small>if time</small>' : "") + '</button>'; lastMod = q.b.name; return; }
+      if (q.t === "mod") { rows += '<button type="button" class="om' + (j === TCH.pos ? " cur" : "") + (isDone(q.key) ? " done" : "") + '" data-tjump="' + j + '">' + esc(q.b.name) + (q.b.level === "deep" ? ' <small>If time</small>' : "") + '</button>'; lastMod = q.b.name; return; }
       rows += '<button type="button" class="oc ' + stateOf(q) + (j === TCH.pos ? " cur" : "") + (q.mod ? " in" : "") + '" data-tjump="' + j + '"><span class="ic">' + iconOf(q) + '</span><span class="tx">' + esc(shortOf(q, 70)) + '</span></button>'; });
     var open = TCH.open[p.id] != null ? TCH.open[p.id] : i === ci;
     var pj = flowQuick() ? seqIndex(function (q) { return q.p === p; }) : seqIndex(function (q) { return q.t === "phase" && q.p === p; });
@@ -1644,7 +1652,7 @@ function runwayHTML(c) {
   }).join("");
   var subj = s.subject || x.subject, pd = parseId(L.id);
   return '<aside class="runway" aria-label="Lesson outline"><div class="rhead"><a class="back" href="#/lesson/' + encodeURIComponent(L.id) + '">← Back to Plan</a><button class="btn small outl" type="button" id="tocx">Close</button></div>' +
-    '<div class="tags">' + subjTag(subj) + tag(esc(fmtDate(s.date || x.date || pd.date))) + '</div><div class="ttl">' + esc(lessonTitle(s, x)) + '</div>' +
+    '<div class="tags">' + subjTag(subj) + tag(esc(fmtDate(s.date || x.date || pd.date))) + lessonTags(s, x) + '</div><div class="ttl">' + esc(lessonTitle(s, x)) + '</div>' +
     bar + '<div class="onclock" id="onclock" hidden><span id="onclockt"></span></div><nav class="outline">' + parts + '</nav></aside>';
 }
 /* a board or picture fills the space between the top bar and the buttons: no scrolling to see the bottom */
@@ -1755,7 +1763,7 @@ function runwayTick(r) {
   var m = r.secs / 60; pin.style.left = Math.min(100, 100 * m / Math.max(1, TCH.rw.total)) + "%"; pin.hidden = !r.secs;
   var p = TCH.rw.cur; if (!oc) return;
   if (!r.secs || !p || p.start == null) { oc.hidden = true; return; }
-  $("#onclockt").innerHTML = "Minute <b>" + Math.floor(m) + "</b> · this part is planned for " + p.start + "–" + p.end + ". " + (m < p.start ? "<b>" + Math.max(1, Math.round(p.start - m)) + " min ahead</b>" : m > p.end ? "<b>" + Math.max(1, Math.round(m - p.end)) + " min behind</b>" : "<b>On time</b>");
+  $("#onclockt").innerHTML = "Minute <b>" + Math.floor(m) + "</b> · this part is planned for " + p.start + " to " + p.end + ". " + (m < p.start ? "<b>" + Math.max(1, Math.round(p.start - m)) + " min ahead</b>" : m > p.end ? "<b>" + Math.max(1, Math.round(m - p.end)) + " min behind</b>" : "<b>On time</b>");
   oc.hidden = false;
 }
 function setDone(key, label, on, skip) { var x = L.session; x.done = x.done || {}; x.done[key] = on ? { at: now(), d: CFG.device, label: String(label || "").slice(0, 90) } : skip ? { off: true, skip: true, at: now(), d: CFG.device, label: String(label || "").slice(0, 90) } : { off: true, at: now() }; }

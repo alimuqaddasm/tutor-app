@@ -102,7 +102,8 @@ In Teach the verdicts are round buttons down the right edge (`.vrail`; in the ap
 1. Short and plain. A button is a verb and a thing: "Start lesson", "Accept Claude's mark". Never a lone noun like "Open" or "Compare".
 2. Repeated facts are tags. A sentence only when it says something new.
 3. No em or en dashes. Use a colon, a full stop or a middle dot ( · ).
-4. Sentence case. Topic names keep the book's capitals.
+4. Sentence case: every label, tag, heading, button and status starts with a capital ("Holiday practice", "Today", "Not started"), and only the first word does. Topic names keep the book's capitals. `tag()` capitalises its text for you, so data written in lower case still shows right.
+4a. A lesson title is its name only ("Addition formulae"). The section number is a topic tag (7.1) and an exam lesson carries the Exam tag instead of the word "test" (`lessonParts()` in `app.js`).
 5. One name per thing. Use the glossary.
 6. Numbers carry a noun: "10/16 right", "7/10 marks", "47 due today", "45 min", "2 h 38 min", "18:40". A countdown says "left".
 7. Teacher screens call the student "he". His screens say "you" and "your teacher", and never show notes meant for Ali, Claude's names for parts, or "(revised)".
@@ -117,6 +118,7 @@ In Teach the verdicts are round buttons down the right edge (`.vrail`; in the ap
 - **List pages** (Lessons, Videos, Exams, Record, Settings): sidebar (`.side`) + `.main` + `.wrap`. Title `.t-page`, then a row of tags, then sections with `.t-sec` headings.
 - **Lesson and focus pages** (Plan, Teach, Warm-up, After the lesson, His work, Mark): the thin icon rail (`.iconrail`) instead of the sidebar, so the work gets the room.
 - **His screens** (Show him, Student view, his exam page, his phone, his assignment): no app chrome, white or ground, big exam-font text, round arrow buttons.
+- **Assignment cards** (Exams): the plan's `facts`, `scope`, `leftOut` and `todo` show as tags; the long `why` note folds under "Notes from Claude". Never a paragraph on the card.
 - **Bars:** `.topbar` and `.botbar`. The main action sits at the right end of the bottom bar.
 - **Phone** (under 760 px): the sidebar becomes a bottom bar of five tabs (Lessons, Warm-up, Exams, Record, More).
 

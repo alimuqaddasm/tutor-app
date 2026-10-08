@@ -1161,6 +1161,11 @@ body[data-subject="maths"] :is(.qtext,.stu-q) .katex{font-size:1.08em}
   .ctl.big.vrail .vrsep{width:1px;height:30px;margin:0}
   .ctl.big.vrail .vrmenu{right:0;left:0;top:auto;bottom:calc(100% + 8px);transform:none;width:auto}
   .teach3 .chunk.cur:has(.vrail){margin-right:0;margin-bottom:80px}
+  .tmini > .tag.num{display:none}
+  .tfoot kbd{display:none}.tfoot{gap:var(--s2)}.tfoot > .btn{padding:0 var(--s3);white-space:nowrap}.tfoot.three > .btn .icon{display:none}
+  .tflow{min-width:0;max-width:100%}.tflow > span{min-width:0;flex:1 1 0}
+  .qcard > .row,.qbody .row{flex-wrap:wrap;min-width:0}
+  .qcard .ref{max-width:100%;min-width:0;overflow:hidden}.qcard .ref > span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
 
 /* marking (canvas ExamMark board): question list on the left, one question at a time */

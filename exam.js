@@ -27,6 +27,8 @@ function parseHash() {
 }
 function $(s, r) { return (r || document).querySelector(s); }
 function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+/* his screens never show Claude's notes in the title: "Chapters 1 to 6 (revised, 45 min)" shows as "Chapters 1 to 6" */
+function himTitle(t) { return String(t || "").replace(/\s*\([^)]*\)\s*$/, "").trim(); }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
 function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
 function clockTime(ms) { return new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
@@ -355,10 +357,10 @@ function removePicture(id) {
 function render() {
   var m = $("#ex");
   clearInterval(tickTimer);
-  document.title = S.title ? S.title + " · Exam" : "Exam";
+  document.title = S.title ? himTitle(S.title) + " · Exam" : "Exam";
   if (S.subject) document.body.setAttribute("data-subject", S.subject === "chem" ? "chem" : S.subject === "maths" ? "maths" : "");
   if (!PREVIEW && (S.status === "waiting" || S.status === "draft")) {
-    m.innerHTML = '<div class="ex-center"><div><div class="ex-pulse"></div><h1>' + esc(S.title) + '</h1><p>Your teacher will start the exam. It will open here on its own; no need to refresh.</p>' +
+    m.innerHTML = '<div class="ex-center"><div><div class="ex-pulse"></div><h1>' + esc(himTitle(S.title)) + '</h1><p>Your teacher will start the exam. It will open here on its own; no need to refresh.</p>' +
       (S.baseMinutes ? '<p class="hint" style="margin-top:12px">Time: ' + esc(minutesText(S.baseMinutes)) + '</p>' : "") + '</div></div>';
     return;
   }
@@ -369,14 +371,14 @@ function render() {
       : '<p>Your answers are saved. Your teacher will go through them.</p>') + '</div></div>';
     return;
   }
-  if (!S.questions || !S.questions.length) { m.innerHTML = '<div class="ex-center"><div><h1>' + esc(S.title) + '</h1><p>No questions yet.</p></div></div>'; return; }
+  if (!S.questions || !S.questions.length) { m.innerHTML = '<div class="ex-center"><div><h1>' + esc(himTitle(S.title)) + '</h1><p>No questions yet.</p></div></div>'; return; }
   if (ASG()) return asgRender(m);
   cur = Math.min(cur, S.questions.length - 1);
   if (order().indexOf(cur) < 0) cur = order()[0] || 0;
   var done = S.status === "submitted";
   var sj = S.subject === "chem" ? "chem" : S.subject === "maths" ? "maths" : "", tot = S.questions.reduce(function (t, q) { return t + (Number(q.marks) || 0); }, 0);
   m.innerHTML =
-    '<header class="topbar ex-top"><div class="stack ex-tbox"><b class="ex-title">' + esc(S.title) + '</b><div class="tags">' + (sj ? '<span class="tag ' + sj + '"><span class="dot"></span>' + (sj === "chem" ? "Chemistry" : "Maths") + '</span>' : "") +
+    '<header class="topbar ex-top"><div class="stack ex-tbox"><b class="ex-title">' + esc(himTitle(S.title)) + '</b><div class="tags">' + (sj ? '<span class="tag ' + sj + '"><span class="dot"></span>' + (sj === "chem" ? "Chemistry" : "Maths") + '</span>' : "") +
       '<span class="tag">' + S.questions.length + ' question' + (S.questions.length === 1 ? "" : "s") + '</span><span class="tag">' + tot + ' marks</span>' + (S.practice ? '<span class="tag live">Practice</span>' : "") + '</div></div>' +
       '<div class="ex-save" aria-live="polite"></div><div class="clockpill ex-timer num" role="timer" aria-live="off"></div><div class="ex-bannerslot"></div></header>' +
     (PREVIEW ? '<div class="ex-preview" role="status"><b>Student view</b> <span class="ex-pvwhat"></span><label class="ex-follow"><input type="checkbox" data-follow' + (follow ? " checked" : "") + '> Follow his question</label></div>' : "") +
@@ -598,7 +600,7 @@ function asgHome(m) {
       '<div class="row a-warn"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 16H3z"></path><path d="M12 10v4M12 17h.01"></path></svg>After Done you can’t change your answers. The mark scheme opens.</div></section>';
   };
   m.innerHTML = '<div class="a-root">' +
-    '<header class="topbar a-hometop"><div class="stack" style="gap:2px;flex:1;min-width:0"><b class="a-htitle">' + esc(S.title) + '</b><div class="tags"><span class="tag">' + days.length + ' days</span><span class="tag">No clock</span><span class="tag">Saves as you go</span></div></div><div class="ex-save" aria-live="polite"></div></header>' + pvBar() +
+    '<header class="topbar a-hometop"><div class="stack" style="gap:2px;flex:1;min-width:0"><b class="a-htitle">' + esc(himTitle(S.title)) + '</b><div class="tags"><span class="tag">' + days.length + ' days</span><span class="tag">No clock</span><span class="tag">Saves as you go</span></div></div><div class="ex-save" aria-live="polite"></div></header>' + pvBar() +
     '<div class="a-home2"><nav class="a-days" aria-label="Days">' + days.map(dayBtn).join("") + '</nav>' +
       '<main class="a-main2">' + (ADAY != null && by[ADAY] && by[ADAY][0].open ? by[ADAY].map(secCard).join("") : '<div class="empty"><b class="t-card">Your first day opens soon.</b></div>') + qrAside(false) + '</main></div></div>';
 }
@@ -907,7 +909,7 @@ var phoneQueue = [];
 function phoneRender() {
   var open = P.status === "running" || P.status === "timeup", qn = P.number ? "Question " + P.number : "this question", sj = H.s === "chem" || H.s === "maths" ? H.s : "";
   if (sj) document.body.setAttribute("data-subject", sj);
-  $("#ex").innerHTML = '<div class="ex-phone stack s5"><header class="stack s2"><div class="tags">' + (sj ? '<span class="tag ' + sj + '"><span class="dot"></span>' + (sj === "chem" ? "Chemistry" : "Maths") + '</span>' : "") + '<span class="tag">' + esc(P.title) + '</span><span class="tag line">' + esc(cap(qn)) + (P.label ? " (" + esc(P.label) + ")" : "") + '</span></div>' +
+  $("#ex").innerHTML = '<div class="ex-phone stack s5"><header class="stack s2"><div class="tags">' + (sj ? '<span class="tag ' + sj + '"><span class="dot"></span>' + (sj === "chem" ? "Chemistry" : "Maths") + '</span>' : "") + '<span class="tag">' + esc(himTitle(P.title)) + '</span><span class="tag line">' + esc(cap(qn)) + (P.label ? " (" + esc(P.label) + ")" : "") + '</span></div>' +
     '<h1>Add a photo</h1><span class="hint">It shows under ' + esc(qn) + ' on the tablet.</span></header>' +
     (open ? '<div class="stack s3"><label class="btn accent full ex-shoot"><input type="file" accept="image/*" capture="environment" data-cam><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>Take a photo</label>' +
             '<label class="btn full ex-choose"><input type="file" accept="image/*" multiple data-gal>Choose a photo</label></div>'
@@ -962,7 +964,7 @@ function phoneAll() {
   var sq = qs.filter(function (q) { return q.section === PSEC; });
   if (!PQ || !sq.some(function (q) { return q.id === PQ; })) PQ = sq.length ? sq[0].id : null;
   var sec = secs.filter(function (x) { return x.id === PSEC; })[0], open = P.status === "running" || P.status === "timeup", n = sq.map(function (q) { return q.id; }).indexOf(PQ) + 1;
-  $("#ex").innerHTML = '<div class="a-phone"><div class="a-eyebrow">' + esc(P.title) + '</div><h1>' + esc(sec ? sec.title : "Nothing open yet") + '</h1>' +
+  $("#ex").innerHTML = '<div class="a-phone"><div class="a-eyebrow">' + esc(himTitle(P.title)) + '</div><h1>' + esc(sec ? sec.title : "Nothing open yet") + '</h1>' +
     '<div class="a-pchips">' + secs.slice().reverse().map(function (x) { return '<button type="button" class="a-chip' + (x.id === PSEC ? " on" : "") + '" data-p-sec="' + esc(x.id) + '">' + esc(x.title) + (x.doneAt != null ? " ✓" : "") + '</button>'; }).join("") + '</div>' +
     (sec ? '<div class="a-lab">Which question is this page for?</div><div class="a-pqs">' + sq.map(function (q, i) { return '<button type="button" class="a-pq' + (q.id === PQ ? " on" : "") + '" data-p-q="' + esc(q.id) + '">' + (i + 1) + '</button>'; }).join("") + '</div>' +
       (P.on === PQ ? '<p class="hint">Follows the laptop: it is on Q' + n + ' there too.</p>' : "") +

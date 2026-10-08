@@ -57,7 +57,7 @@ def page(c, url, sel=".teach3"):
 
 def jump_ic(p, ic, n=0): p.evaluate("([ic, n]) => Array.from(document.querySelectorAll('.outline .oc')).filter(b => b.querySelector('.ic').textContent == ic)[n].click()", [ic, n]); p.wait_for_timeout(500)
 def jump(p, f): p.evaluate("f => Array.from(document.querySelectorAll('.outline .oc')).find(x => x.querySelector('.tx').textContent.indexOf(f) >= 0).click()", f); p.wait_for_timeout(500)
-def pos(p): return p.locator(".tmini .num").inner_text()
+def pos(p): return "/".join(__import__("re").findall(r"\d+", p.locator(".tmini .num").inner_text()))   # "Step 21 of 144" reads as "21/144"
 def wide(p): return p.evaluate("document.documentElement.scrollWidth") - p.evaluate("document.documentElement.clientWidth")
 COVER = """() => Array.from(document.querySelectorAll('.tfoot button')).filter(b => { const r = b.getBoundingClientRect(); const h = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return h && h.closest('.trybar'); }).map(b => b.textContent.trim().slice(0, 12))"""
 
@@ -119,8 +119,8 @@ try:
         p.locator("#fbform button[type=submit]").dispatch_event("click"); p.wait_for_timeout(600)
         check("try-out Finish does not say 'saved to GitHub'", "GitHub" not in p.locator("#toast").inner_text(), p.locator("#toast").inner_text()); c.close()
         # 12. offline Finish says it is kept on the device; online Finish saves for real (to the pretend GitHub)
-        F = FakeGH(); c = ctx_(b, fake=F); p = page(c, "#/lesson/" + CH, ".rail"); p.wait_for_timeout(1500)
-        p.locator('.rail button[data-phase="_after"]').dispatch_event("click"); p.wait_for_timeout(400)
+        F = FakeGH(); c = ctx_(b, fake=F); p = page(c, "#/lesson/" + CH, "[data-phase]"); p.wait_for_timeout(1500)   # a finished lesson opens on its After page (Clear Desk)
+        if not p.locator("#fbform").count(): p.locator('button[data-phase="_after"]').first.dispatch_event("click"); p.wait_for_timeout(400)
         c.set_offline(True); F.offline = True; p.wait_for_timeout(300); p.locator("#fbform button[type=submit]").dispatch_event("click"); p.wait_for_timeout(800)
         check("offline Finish says it is kept on the device", "GitHub" not in p.locator("#toast").inner_text() and "device" in p.locator("#toast").inner_text(), p.locator("#toast").inner_text())
         c.set_offline(False); F.offline = False; p.wait_for_timeout(3000)
@@ -128,12 +128,12 @@ try:
         check("online Finish saves and says so", p.locator("#toast").inner_text() == "Lesson saved to GitHub" and F.session(CH)["status"] == "finished", p.locator("#toast").inner_text())
         p.evaluate("Object.keys(localStorage).filter(k => k.indexOf('tutor.s.') == 0).forEach(k => localStorage.removeItem(k))"); c.close()
         # 13. two tabs on one lesson: the second tab sees the running clock and the saved file keeps it running
-        F = FakeGH(); c = ctx_(b, fake=F); A = page(c, "#/lesson/" + CH + "/teach"); P2 = page(c, "#/lesson/" + CH, ".rail")
+        F = FakeGH(); c = ctx_(b, fake=F); A = page(c, "#/lesson/" + CH + "/teach"); P2 = page(c, "#/lesson/" + CH, "[data-phase]")
         A.bring_to_front(); A.click("#clkgo"); A.wait_for_timeout(300)
         for i in range(3): A.locator(".tfoot .btn.next").dispatch_event("click"); A.wait_for_timeout(200)
         P2.bring_to_front(); P2.wait_for_timeout(1500)
         check("second tab shows the clock running", P2.locator("#clkgo").inner_text() == "Pause", P2.locator("#clkgo").inner_text())
-        P2.locator('.rail button[data-phase]').first.dispatch_event("click"); P2.wait_for_timeout(300); P2.locator('#phasebox [data-v="right"]').first.dispatch_event("click"); P2.wait_for_timeout(6000)
+        P2.locator('button[data-phase]:not([data-phase^="_"])').first.dispatch_event("click"); P2.wait_for_timeout(300); P2.locator('#phasebox [data-v="right"]').first.dispatch_event("click"); P2.wait_for_timeout(6000)
         A.bring_to_front(); A.wait_for_timeout(6000); s = F.session(CH)
         check("both tabs' work saved: clock running, ticks and the verdict", [e["e"] for e in s["time"]["log"]][:1] == ["start"] and s["time"]["log"][-1]["e"] not in ("pause", "end") and sum(1 for d in s["done"].values() if not d.get("off")) >= 1 and any(a.get("v") == "right" for a in s["answers"].values()),
               ([e["e"] for e in s["time"]["log"]], sum(1 for d in s["done"].values() if not d.get("off")), [a.get("v") for a in s["answers"].values()]))
