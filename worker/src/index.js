@@ -588,7 +588,8 @@ async function route(request, env, now) {
         if (!q) fail(404, "No such question.");
         if (m === "GET") { if (!q.img) fail(404, "No picture for this question."); return imageResponse(toBytes(q.img), q.img_mime); }
         if (m === "PUT") {
-          if (started(exam)) fail(409, "Questions can't change once the exam has started.");
+          // an assignment opens with its link, so a load that stopped half way must still be able to add its pictures
+          if (started(exam) && !(isAssignment(exam) && !q.img)) fail(409, "Questions can't change once the exam has started.");
           const bytes = await bytesOf(request); const img = checkImage(bytes); if (img.error) fail(img.status || 415, img.error);
           await env.DB.prepare("UPDATE questions SET img = ?, img_mime = ? WHERE exam_id = ? AND id = ?").bind(bytes, img.mime, exam.id, b2[1]).run();
           return json({ ok: true, width: img.width, height: img.height });

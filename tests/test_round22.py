@@ -129,6 +129,12 @@ with sync_playwright() as p:
     check("Load takes it to the exam server", wait_for(lambda: pg.locator("#xt-btns").count() == 1, 30) is not None)
     eid = pg.evaluate("location.hash").split("/")[2]
     check("the Days card shows 12 hours between days", pg.input_value("#xt-gap") == "12")
+    # a load that stopped half way: one picture missing, then Finish loading pictures
+    urllib.request.urlopen(urllib.request.Request(API + "/api/t/exams/" + eid + "/questions/d1m2/image", method="DELETE", headers={"X-Exam-Password": PW}))
+    pg.reload()
+    check("a stopped load shows: 1 picture is not loaded yet", wait_for(lambda: pg.locator("#xt-miss").count() == 1 and "1 picture is not loaded yet" in pg.inner_text("#xt-miss"), 15) is not None)
+    pg.click("[data-finishpics]")
+    check("  ...Finish loading pictures sends only that one", wait_for(lambda: pg.locator("#xt-miss").count() == 0 and pg.locator("#xt-btns").count() == 1, 20) is not None)
     pg.click("[data-newlink]")
     wait_for(lambda: "#t=" in pg.input_value("#xt-link"), 8)
     link = pg.input_value("#xt-link")

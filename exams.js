@@ -166,12 +166,13 @@ function drawList(repo, all) {
 /* Join a question's pictures into one (top to bottom), JPEG, small enough for the server. */
 function stitch(urls) {
   return Promise.all(urls.map(function (u) { return new Promise(function (res, rej) { var im = new Image(); im.onload = function () { res(im); }; im.onerror = rej; im.src = u; }); })).then(function (ims) {
-    var w = Math.min(1800, Math.max.apply(null, ims.map(function (i) { return i.naturalWidth; })));
+    // 1400 px wide is sharp on a laptop and a third of the bytes of 1800 (Ali, 8 Oct: loading was far too slow)
+    var w = Math.min(1400, Math.max.apply(null, ims.map(function (i) { return i.naturalWidth; })));
     var hs = ims.map(function (i) { return Math.round(i.naturalHeight * w / i.naturalWidth); }), H = hs.reduce(function (a, b) { return a + b + 12; }, -12);
     var c = document.createElement("canvas"); c.width = w; c.height = H; var x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, w, H);
     var y = 0; ims.forEach(function (im, k) { x.drawImage(im, 0, y, w, hs[k]); y += hs[k] + 12; });
-    var q = 0.88;
-    return (function go() { return new Promise(function (res) { c.toBlob(res, "image/jpeg", q); }).then(function (b) { if (b.size > 1800000 && q > 0.5) { q -= 0.12; return go(); } return b; }); })();
+    var q = 0.8;
+    return (function go() { return new Promise(function (res) { c.toBlob(res, "image/jpeg", q); }).then(function (b) { if (b.size > 1500000 && q > 0.5) { q -= 0.1; return go(); } return b; }); })();
   });
 }
 
@@ -188,21 +189,36 @@ function loadToServer(path, btn) {
     if (asg) { body.kind = "assignment"; body.gap_hours = Number(e.gapHours) || 12; body.sections = e.sections.map(function (x) { return { id: x.id, title: x.title, subject: x.subject, day: x.day, date: x.date, suggest_min: x.suggestMin }; }); }
     var full = function (p) { return /^(students|books)\//.test(p) ? p : folder + p; };
     return call("POST", "/api/t/exams", body).then(function (made) {
-      var chain = Promise.resolve();
-      qs.forEach(function (q, i) {
-        // the question picture, and for an assignment its mark scheme (he sees it only after Done)
-        [["image", q.img], asg ? ["ms", q.msImg] : null].forEach(function (job) {
-          if (!job || !job[1] || !job[1].length) return;
-          chain = chain.then(function () {
-            btn.textContent = "Pictures " + (i + 1) + "/" + qs.length;
-            return Promise.all(job[1].map(full).map(T.fileURL)).then(function (urls) { return stitch(urls.filter(Boolean)); })
-              .then(function (b) { return call("PUT", "/api/t/exams/" + made.id + "/questions/" + encodeURIComponent(body.questions[i].id) + "/" + job[0], b, { "Content-Type": "image/jpeg" }); });
-          });
-        });
-      });
-      return chain.then(function () { location.hash = "#/exams/" + made.id; });
+      return sendPictures(made.id, e, path, null, function (t) { btn.textContent = t; })
+        .then(function (left) { if (left) T.toast(left + " pictures did not load. Open the exam and press Finish loading pictures."); location.hash = "#/exams/" + made.id; });
     });
   }).catch(function (e) { btn.disabled = false; btn.textContent = "Load to exam server"; T.toast(e.message); });
+}
+
+/* The pictures of an exam or assignment, six at a time: each question's picture and, for an assignment, its mark
+   scheme. With `have` (the server's questions), only the ones still missing, so a stopped load can be finished.
+   Resolves with how many failed. */
+function sendPictures(examId, e, path, have, say) {
+  var folder = examFolder(path), asg = isAsg(e), qs = flatQs(e), full = function (p) { return /^(students|books)\//.test(p) ? p : folder + p; };
+  var got = {}; (have || []).forEach(function (q) { got[q.id] = q; });
+  var jobs = [];
+  qs.forEach(function (q, i) {
+    var id = q.id || "q" + (i + 1);
+    if (q.img && q.img.length && !(have && got[id] && got[id].has_img)) jobs.push({ id: id, kind: "image", paths: q.img });
+    if (asg && q.msImg && q.msImg.length && !(have && got[id] && got[id].has_ms)) jobs.push({ id: id, kind: "ms", paths: q.msImg });
+  });
+  var done = 0, failed = 0, next = 0, t0 = Date.now();
+  var tell = function () { var el = (Date.now() - t0) / 1000, left = done ? Math.round(el / done * (jobs.length - done)) : 0;
+    say("Pictures " + done + " of " + jobs.length + (done > 2 && left > 5 ? " · about " + (left > 90 ? Math.round(left / 60) + " min" : left + " s") + " left" : "")); };
+  var one = function (job) {
+    return Promise.all(job.paths.map(full).map(T.fileURL)).then(function (urls) { return stitch(urls.filter(Boolean)); })
+      .then(function (b) { return call("PUT", "/api/t/exams/" + examId + "/questions/" + encodeURIComponent(job.id) + "/" + job.kind, b, { "Content-Type": "image/jpeg" }); })
+      .catch(function () { failed++; });
+  };
+  var lane = function () { if (next >= jobs.length) return Promise.resolve(); var job = jobs[next++]; return one(job).then(function () { done++; tell(); return lane(); }); };
+  tell();
+  var lanes = []; for (var k = 0; k < Math.min(6, jobs.length); k++) lanes.push(lane());
+  return Promise.all(lanes).then(function () { return failed; });
 }
 
 /* ===================== one exam: set up and run it ===================== */
@@ -212,8 +228,30 @@ function examView(id) {
   app.innerHTML = '<div class="empty"><h3>Loading</h3></div>';
   Promise.all([call("GET", "/api/t/exams/" + encodeURIComponent(id)), call("GET", "/api/t/papers")]).then(function (r) {
     X = r[0]; papers = r[1]; myRatio = null; offset = X.serverNow - Date.now();
-    drawExam(); poll();
+    drawExam(); poll(); missingPictures();
   }).catch(function (e) { app.innerHTML = '<div class="empty"><h3>Couldn’t open this exam</h3><p>' + esc(e.message) + '</p><p><a href="#/exams">Back to exams</a></p></div>'; });
+}
+
+/* a load that stopped half way (closed tab, lost connection): offer to send only the missing pictures */
+function missingPictures() {
+  if (!X || !X.sourcePath || X.practice || readOnly(X)) return;
+  var mine = X;
+  T.loadTree().then(function () { return T.fileJSON(X.sourcePath); }).then(function (j) {
+    if (!j || X !== mine) return;
+    var e = j.data, qs = flatQs(e), got = {}; X.questions.forEach(function (q) { got[q.id] = q; });
+    var n = 0; qs.forEach(function (q) { var s = got[q.id]; if (!s) return; if (q.img && q.img.length && !s.has_img) n++; if (isAsg(e) && q.msImg && q.msImg.length && !s.has_ms) n++; });
+    if (!n || $("#xt-miss")) return;
+    var bar = document.createElement("div"); bar.id = "xt-miss"; bar.className = "card xt-card xt-claude";
+    bar.innerHTML = '<div class="xt-grow"><b>' + n + ' picture' + (n === 1 ? " is" : "s are") + ' not loaded yet</b><p class="hint">The load stopped before the end. This sends only the missing ones.</p></div><button class="btn accent" type="button" data-finishpics>Finish loading pictures</button>';
+    var head = $(".xt-head"); if (head) head.parentNode.insertBefore(bar, head.nextSibling);
+    $("[data-finishpics]", bar).onclick = function () {
+      var b = this; b.disabled = true;
+      sendPictures(X.id, e, X.sourcePath, X.questions, function (t) { b.textContent = t; }).then(function (left) {
+        T.toast(left ? left + " still failed: press again" : "All pictures loaded");
+        examView(X.id);
+      });
+    };
+  }, function () {});
 }
 
 function totalMarks() { return X.questions.reduce(function (s, q) { return s + (Number(q.marks) || 0); }, 0); }
