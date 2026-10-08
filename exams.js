@@ -184,8 +184,8 @@ function loadToServer(path, btn) {
     var ratio = Number(e.ratio) || null;
     var base = Number(e.minutes) || (ratio ? Math.ceil(marks * ratio / 5) * 5 : 0);
     var body = { title: e.title, subject: e.subject || "", source_path: path, ratio: ratio, base_minutes: asg ? 0 : base || 0,
-      questions: qs.map(function (q, i) { return { id: q.id || "q" + (i + 1), label: q.label || "", text_html: q.text || "", marks: Number(q.marks) || 0, type: q.type || "long", suggested_min: q.suggestMin == null ? null : q.suggestMin, section_id: q.section_id || null }; }) };
-    if (asg) { body.kind = "assignment"; body.sections = e.sections.map(function (x) { return { id: x.id, title: x.title, subject: x.subject, day: x.day, date: x.date, suggest_min: x.suggestMin }; }); }
+      questions: qs.map(function (q, i) { return { id: q.id || "q" + (i + 1), label: q.label || "", text_html: q.text || "", marks: Number(q.marks) || 0, type: q.type || "long", suggested_min: q.suggestMin == null ? null : q.suggestMin, section_id: q.section_id || null, study: q.study || null }; }) };
+    if (asg) { body.kind = "assignment"; body.gap_hours = Number(e.gapHours) || 12; body.sections = e.sections.map(function (x) { return { id: x.id, title: x.title, subject: x.subject, day: x.day, date: x.date, suggest_min: x.suggestMin }; }); }
     var full = function (p) { return /^(students|books)\//.test(p) ? p : folder + p; };
     return call("POST", "/api/t/exams", body).then(function (made) {
       var chain = Promise.resolve();
@@ -238,6 +238,8 @@ function drawExam() {
     ? '<div class="xt-linkrow"><input type="text" readonly id="xt-link" value="' + esc(link()) + '"><button class="btn small accent" type="button" data-copy>Copy</button><button class="btn small" type="button" data-qr>QR</button></div><p class="hint">Send this to him. It opens the exam with no login. Making a new link stops the old one.</p><button class="btn small" type="button" data-newlink' + (st === "locked" || readOnly(X) ? " disabled" : "") + '>Make a new link</button><div id="xt-qr" class="xt-qrbox" hidden></div>'
     : '<p class="hint">' + (asg ? "Make the link when you are ready to send it. It opens straight away: there is no Start and no clock." : "Make the link when you are ready to send it. He sees a waiting screen until you press Start.") + '</p><button class="btn accent" type="button" data-newlink' + (readOnly(X) ? " disabled" : "") + '>Make student link</button>') + '</section>';
 
+  if (asg) h += '<section class="card xt-card"><h3>Days</h3><p class="hint">Day 1 opens with the link. Each next day opens this many hours after he first opens the day before. "Open this day now" on a day opens it at once.</p>' +
+    '<div class="xt-linkrow"><label class="field xt-narrow" style="margin:0"><span>Hours between days</span><input type="number" id="xt-gap" min="0" max="240" step="1" value="' + esc(X.gapHours == null ? 12 : X.gapHours) + '"' + (readOnly(X) ? " disabled" : "") + '></label><button class="btn small" type="button" data-savegap' + (readOnly(X) ? " disabled" : "") + '>Save</button></div></section>';
   /* time suggestion (an assignment has no clock) */
   if (!asg) h += '<section class="card xt-card"><h3>Time</h3>' + (readOnly(X) && X.startedAt == null ? '<p>Exam time: <b>' + esc(mins(X.baseMinutes || 0)) + '</b> for ' + total + ' marks.</p>' : started ? '<p>Set at the start: <b>' + esc(mins(X.baseMinutes)) + '</b> for ' + total + ' marks. Use the + buttons above to add time.</p>' :
     '<div class="xt-ratio"><div class="xt-seg" role="group" aria-label="Where the minutes per mark come from"><button type="button" class="chip" data-rmode="papers" aria-pressed="' + (mode === "papers") + '">From past papers</button><button type="button" class="chip" data-rmode="number" aria-pressed="' + (mode === "number") + '">My own number</button></div>' +
@@ -255,7 +257,7 @@ function drawExam() {
     X.questions.map(function (q, i) {
       var ro = started ? " disabled" : "", head = "";
       if (asg && q.section_id !== lastSec) { lastSec = q.section_id; var sc = (X.sections || []).filter(function (x) { return x.id === q.section_id; })[0] || {};
-        head = '<tr class="xt-secrow"><td colspan="6"><b>' + esc(sc.title || q.section_id) + '</b>' + (sc.date ? ' <span class="hint">' + esc(sc.date) + '</span>' : "") + ' · <span data-secst="' + esc(q.section_id) + '">' + secState(sc) + '</span></td></tr>'; }
+        head = '<tr class="xt-secrow"><td colspan="6"><b>' + esc(sc.title || q.section_id) + '</b>' + (sc.date ? ' <span class="hint">' + esc(sc.date) + '</span>' : "") + ' · <span data-secst="' + esc(q.section_id) + '">' + secState(sc, true) + '</span></td></tr>'; }
       return head + '<tr data-q="' + esc(q.id) + '"><td>' + (i + 1) + '</td><td><b>' + esc(q.label) + '</b>' + (q.has_img ? '<div><img class="xt-thumb" alt="Question picture" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>' : "") + '</td>' +
         '<td><input type="number" class="xt-in" data-f="marks" min="0" step="0.5" value="' + esc(q.marks) + '"' + ro + '></td>' +
         '<td><select data-f="type"' + ro + '>' + TYPES.map(function (t) { return '<option value="' + t[0] + '"' + (q.type === t[0] ? " selected" : "") + '>' + t[1] + '</option>'; }).join("") + '</select></td>' +
@@ -268,7 +270,12 @@ function drawExam() {
   showPics(app); drawRun(); drawLog();
 }
 
-function secState(sc) { return sc && sc.doneAt != null ? "Done " + esc(day(sc.doneAt)) + " " + esc(t12(sc.doneAt)) + (sc.tookMin != null ? ", took " + esc(sc.tookMin) + " min (his word)" : "") : "Not done"; }
+function secState(sc, withBtn) {
+  if (!sc) return "";
+  if (sc.doneAt != null) return "Finished " + esc(day(sc.doneAt)) + " " + esc(t12(sc.doneAt)) + (sc.tookMin != null ? ", stopwatch " + esc(sc.tookMin) + " min" : "");
+  if (sc.open === false) return (sc.opensAt ? "Opens " + esc(day(sc.opensAt)) + " " + esc(t12(sc.opensAt)) : "Not open yet (waits for him to open the day before)") + (withBtn && X && X.id && !readOnly(X) ? ' <button class="btn small" type="button" data-release="' + esc(sc.id) + '">Open this day now</button>' : "");
+  return sc.openedAt != null ? "Opened " + esc(day(sc.openedAt)) + " " + esc(t12(sc.openedAt)) : "Open, not looked at yet";
+}
 function drawRun() {
   var st = X.status, b = $("#xt-btns"); if (!b) return;
   $("#xt-st").innerHTML = chip(st, X.kind);
@@ -312,7 +319,7 @@ function tickClock() {
 }
 setInterval(function () { if (X && (location.hash || "").indexOf("#/exams/" + X.id) === 0 && !/\/mark$/.test(location.hash)) tickClock(); }, 500);
 
-var EVT = { done: "He pressed Done on", created: "Loaded to the exam server", link: "Student link made", "new-link": "New student link (old one stopped)", start: "Started", extend: "Time added", timeup: "Time up", submit: "He handed in", lock: "Locked", reopen: "Reopened", "remove-picture": "He removed a picture" };
+var EVT = { release: "You opened early:", done: "He finished", created: "Loaded to the exam server", link: "Student link made", "new-link": "New student link (old one stopped)", start: "Started", extend: "Time added", timeup: "Time up", submit: "He handed in", lock: "Locked", reopen: "Reopened", "remove-picture": "He removed a picture" };
 function drawLog() {
   var ul = $("#xt-log"); if (!ul) return;
   ul.innerHTML = (X.events || []).slice().reverse().map(function (e) {
@@ -330,7 +337,7 @@ function poll() {
     var secSig = function (l) { return JSON.stringify((l || []).map(function (x) { return x.doneAt; })); };
     var changed = d.status !== X.status || d.endAt !== X.endAt || (d.sections && secSig(d.sections) !== secSig(X.sections));
     ["status", "startedAt", "originalEndAt", "endAt", "submittedAt", "lockedAt", "lastSeenAt", "extensions"].forEach(function (k) { X[k] = d[k]; });
-    X.on = d.on; if (d.sections) { X.sections = d.sections; d.sections.forEach(function (x) { var el = $('[data-secst="' + x.id + '"]'); if (el) el.innerHTML = secState(x); }); }
+    X.on = d.on; if (d.sections) { X.sections = d.sections; d.sections.forEach(function (x) { var el = $('[data-secst="' + x.id + '"]'); if (el) { var nh = secState(x, true); if (el.getAttribute("data-h") !== nh) { el.innerHTML = nh; el.setAttribute("data-h", nh); } } }); }
     drawRun();
     $$("tr[data-q]").forEach(function (tr) { var qid = tr.getAttribute("data-q"), p = d.perQuestion[qid], c = $("[data-saved]", tr); if (!c) return;
       var bits = [];
@@ -423,18 +430,17 @@ function drawMark() {
       '<div class="xt-3">' +
         '<div class="xt-col"><div class="xt-lab">Question</div><div class="xt-qtext">' + T.clean(q.text_html) + '</div>' + (q.has_img ? '<img class="xt-zoomable" alt="Question picture" data-xsrc="/api/t/exams/' + esc(R.id) + '/questions/' + esc(q.id) + '/image">' : "") + '</div>' +
         '<div class="xt-col"><div class="xt-lab">His answer' + (q.finalAt ? ' <span class="hint">last saved ' + esc(t12(q.finalAt)) + '</span>' : "") + (q.writtenLate ? ' <span class="xt-late">part written late</span>' : "") + '</div>' + timeLine(q) +
-          (q.doneAt != null
-            ? (q.atDone ? '<div class="xt-ans">' + esc(q.atDone) + '</div>' : '<p class="hint">No typed answer when he pressed Done.</p>') +
-              (q.changedAfterDone ? '<details class="xt-det xt-after"><summary>Changed after Done (mark scheme open): not for marks</summary><div class="xt-ans">' + esc(q.final) + '</div></details>' : "")
-            : asg ? (q.final ? '<div class="xt-ans">' + esc(q.final) + '</div><p class="hint">Section not done yet.</p>' : '<p class="hint">Nothing yet; section not done.</p>')
+          (asg ? (q.final ? '<div class="xt-ans">' + esc(q.final) + '</div>' : '<p class="hint">No typed answer.</p>') + (q.doneAt == null ? '<p class="hint">He has not finished this part yet.</p>' : "")
             : q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : '<p class="hint">No typed answer.</p>') +
           (q.writtenLate ? '<details class="xt-det"><summary>What he had at the original end time (' + esc(t12(R.originalEndAt)) + ')</summary><div class="xt-ans">' + (q.atOriginalEnd ? esc(q.atOriginalEnd) : '<span class="hint">Nothing yet</span>') + '</div></details>' : "") +
           (q.revisions.length > 1 ? '<details class="xt-det"><summary>' + q.revisions.length + ' saves</summary><ul class="xt-log">' + q.revisions.map(function (v) { return '<li><span class="num">' + esc(t12(v.at)) + '</span> ' + (v.late ? '<span class="xt-late">late</span> ' : "") + esc(v.text.length > 90 ? v.text.slice(0, 90) + "…" : v.text) + '</li>'; }).join("") + '</ul></details>' : "") +
-          (q.uploads.length ? '<div class="xt-pics">' + q.uploads.map(function (u) { return '<figure><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '"><figcaption>' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">late</span>' : "") + (u.afterDone ? ' <span class="xt-late">after Done</span>' : "") + '</figcaption></figure>'; }).join("") + '</div>' : (q.type === "upload_required" ? '<p class="xt-up">No picture, but this question needed one.</p>' : "")) +
+          (q.uploads.length ? '<div class="xt-pics">' + q.uploads.map(function (u) { return '<figure><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '"><figcaption>' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">late</span>' : "") + (u.practice ? ' <span class="xt-late">practice</span>' : "") + '</figcaption></figure>'; }).join("") + '</div>' : (q.type === "upload_required" ? '<p class="xt-up">No picture, but this question needed one.</p>' : "")) +
         '</div>' +
         '<div class="xt-col"><div class="xt-lab">Mark scheme</div>' + (ms.length ? ms.map(function (p) { return '<img class="xt-zoomable" alt="Mark scheme" data-rsrc="' + esc(p) + '">'; }).join("") : '<p class="hint">' + (repoExam ? "No mark scheme picture for this question." : "The exam file isn’t in the repo, so no mark scheme.") + '</p>') +
           (r.answer ? '<div class="xt-qtext">' + T.clean(r.answer) + '</div>' : "") + '</div>' +
       '</div>' +
+      (asg && (q.practiceText || q.uploads.some(function (u) { return u.practice; })) ? '<details class="xt-det xt-after"><summary>He solved it again after finishing (practice, not for marks)</summary>' + (q.practiceText ? '<div class="xt-ans">' + esc(q.practiceText) + '</div>' : "") + '</details>' : "") +
+      (asg ? '<div class="xt-notebox"><label for="nt-' + esc(q.id) + '"><b>Note to him</b> <span class="hint">he sees it as soon as it saves' + (studyText(q.study) ? "; if he lost marks he also sees: " + esc(studyText(q.study)) : "") + '</span></label><textarea id="nt-' + esc(q.id) + '" data-note="' + esc(q.id) + '" rows="2"' + (readOnly(R) ? " disabled" : "") + '>' + esc(q.note || "") + '</textarea></div>' : "") +
       '<div data-tsumline>' + tickSummary(q) + '</div>' + '<div data-cline="' + esc(q.id) + '">' + claudeLine(q) + '</div>' +
       '<div class="xt-markrow"><label>Mark <span class="xt-of"><input type="number" class="xt-score" data-score="' + esc(q.id) + '" min="0" max="' + q.marks + '" step="0.5" value="' + (q.score == null ? "" : q.score) + '"' + (readOnly(R) ? " disabled" : "") + '> / ' + q.marks + '</span></label>' +
         '<label class="xt-grow">Comment <textarea data-comment="' + esc(q.id) + '" rows="2"' + (readOnly(R) ? " disabled" : "") + '>' + esc(q.comment || "") + '</textarea></label><span class="hint" data-mstate="' + esc(q.id) + '"></span></div>' +
@@ -528,7 +534,7 @@ function compare(i) {
     '<div class="xt-cmp2"><div class="xt-col"><div class="xt-lab">His answer</div>' +
         (q.doneAt != null ? (q.atDone ? '<div class="xt-ans">' + esc(q.atDone) + '</div>' : "") + (q.changedAfterDone ? '<details class="xt-det xt-after"><summary>Changed after Done: not for marks</summary><div class="xt-ans">' + esc(q.final) + '</div></details>' : "")
           : q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : "") +
-        q.uploads.map(function (u) { return '<figure class="xt-cmppic"><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '"><figcaption class="hint">' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">late</span>' : "") + (u.afterDone ? ' <span class="xt-late">after Done</span>' : "") + '</figcaption></figure>'; }).join("") +
+        q.uploads.map(function (u) { return '<figure class="xt-cmppic"><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '"><figcaption class="hint">' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">late</span>' : "") + (u.practice ? ' <span class="xt-late">practice</span>' : "") + '</figcaption></figure>'; }).join("") +
         (!q.final && !q.uploads.length ? '<p class="hint">No answer and no picture.</p>' : "") + '</div>' +
       '<div class="xt-col"><div class="xt-lab">Mark scheme</div>' + (ms.length ? ms.map(function (p) { return '<img class="xt-zoomable" alt="Mark scheme" data-rsrc="' + esc(p) + '">'; }).join("") : '<p class="hint">No mark scheme picture.</p>') +
         (r.answer ? '<div class="xt-qtext">' + T.clean(r.answer) + '</div>' : "") + '</div>' +
@@ -574,6 +580,7 @@ document.addEventListener("keydown", function (e) {
 });
 
 var markTimers = {};
+function studyText(st) { if (!st) return ""; if (st.videos && st.videos.length) return "Maths Genie " + st.videos.length + " videos (" + (st.chapter || "") + ")"; if (st.pages) return st.pages.map(function (p) { return p.topic + " " + p.pages; }).join("; "); return ""; }
 function saveMark(qid, ticks) {
   var se = $('[data-score="' + qid + '"]'), ce = $('[data-comment="' + qid + '"]'), st = $('[data-mstate="' + qid + '"]');
   if (!se || !ce || !st) return Promise.resolve();   // the marking page was left; an earlier save already kept the comment
@@ -584,8 +591,9 @@ function saveMark(qid, ticks) {
   if (score != null && (score < 0 || score > q.marks)) { st.textContent = "0 to " + q.marks; return Promise.resolve(); }
   st.textContent = "Saving…";
   var body = { score: score, comment: c }; if (ticks) body.ticks = ticks;
+  var ne = $('[data-note="' + qid + '"]'); if (ne) body.note = ne.value;
   return call("PUT", "/api/t/exams/" + R.id + "/marks/" + encodeURIComponent(qid), body).then(function () {
-    q.score = score; q.comment = c; st.textContent = "Saved";
+    q.score = score; q.comment = c; st.textContent = "Saved"; if (body.note != null) q.note = body.note;
     if (ticks) { q.ticks = ticks; var ts = $('[data-mq="' + qid + '"] [data-tsumline]'); if (ts) ts.innerHTML = tickSummary(q); }
     R.total = R.questions.reduce(function (a, x) { return a + (x.score || 0); }, 0); R.marked = R.questions.filter(function (x) { return x.score != null; }).length;
     var tot = $("#xt-total"), mk = $("#xt-marked");   // gone if the marking page was left before the save came back
@@ -609,9 +617,10 @@ function saveToRepo(btn) {
     total: r2(R.total), max: R.max, marked: R.marked, claudeMarks: claudeMarks ? { total: r2(claudeTotal()), markedAt: claudeMarks.markedAt || null } : null,
     questions: R.questions.map(function (q) {
       return { id: q.id, label: q.label, marks: q.marks, type: q.type, score: q.score, comment: q.comment, final: q.final, finalAt: iso(q.finalAt), atOriginalEnd: q.atOriginalEnd, writtenLate: q.writtenLate,
+        note: q.note || undefined, practiceText: q.practiceText || undefined,
         section: q.section || undefined, doneAt: q.doneAt != null ? iso(q.doneAt) : undefined, atDone: q.doneAt != null ? q.atDone : undefined, changedAfterDone: q.doneAt != null ? q.changedAfterDone : undefined,
         revisions: q.revisions.map(function (v) { return { at: iso(v.at), late: v.late, text: v.text, afterDone: v.afterDone || undefined }; }),
-        pictures: files.filter(function (f) { return f.u.question === q.id; }).map(function (f) { return { file: f.path.slice(folder.length), source: f.u.source, at: iso(f.u.at), late: f.u.late, afterDone: f.u.afterDone || undefined }; }),
+        pictures: files.filter(function (f) { return f.u.question === q.id; }).map(function (f) { return { file: f.path.slice(folder.length), source: f.u.source, at: iso(f.u.at), late: f.u.late, afterDone: f.u.afterDone || undefined, practice: f.u.practice || undefined }; }),
         ticks: q.ticks ? (function (sc) { return sc.list.length === q.ticks.length ? sc.list.map(function (it, k) { return { part: it.part, code: it.code || it.text, given: q.ticks[k], of: it.val }; }) : q.ticks; })(schemeOf(q)) : null,
         seconds: q.seconds || 0, visits: (q.visits || []).map(function (v) { return { from: iso(v.from), to: iso(v.to), seconds: Math.round((v.to - v.from) / 1000) }; }) };
     }),
@@ -665,6 +674,8 @@ document.addEventListener("click", function (e) {
   if (b.hasAttribute("data-lock")) { if (!confirm("Lock the exam? He can't change anything after this. (You can reopen it.)")) return; return act("/lock", undefined, "Locked"); }
   if (b.hasAttribute("data-reopen")) return act("/reopen", undefined, "Reopened");
   if (b.hasAttribute("data-savesetup")) return saveSetup();
+  if (b.hasAttribute("data-savegap")) { var g = Number($("#xt-gap").value); return call("PUT", "/api/t/exams/" + X.id, { gap_hours: g }).then(function () { X.gapHours = g; T.toast("Days now open " + g + " h apart"); }, function (er) { T.toast(er.message); }); }
+  if (b.hasAttribute("data-release")) { if (!confirm("Open this day for him now?")) return; return act("/sections/" + encodeURIComponent(b.getAttribute("data-release")) + "/release", undefined, "Day opened"); }
   if (b.hasAttribute("data-usesugg")) return useSuggestion();
   if (b.hasAttribute("data-rmode")) { T.ls("tutor.examRatioMode", b.getAttribute("data-rmode")); drawExam(); return; }
   if (b.hasAttribute("data-addpaper")) {
@@ -682,12 +693,14 @@ document.addEventListener("change", function (e) {
   if (t.hasAttribute("data-score")) { saveMark(t.getAttribute("data-score")); return; }
   if (t.hasAttribute("data-comment")) { saveMark(t.getAttribute("data-comment")); return; }
   if (t.hasAttribute("data-tick")) { setTick(Number(t.getAttribute("data-tick")), t.checked ? 1 : 0); return; }
+  if (t.hasAttribute("data-note")) { saveMark(t.getAttribute("data-note")); return; }
   if (t.hasAttribute("data-asgf")) { T.ls("tutor.asgFilter", t.value); drawMark(); return; }
   if (t.hasAttribute("data-cscore")) { compareSave(t.getAttribute("data-cscore")); return; }
   if (t.hasAttribute("data-ccomment")) { compareSave(t.getAttribute("data-ccomment")); return; }
 });
 document.addEventListener("input", function (e) {
   var t = e.target; if (!t.hasAttribute) return;
+  if (t.hasAttribute("data-note")) { var nid = t.getAttribute("data-note"); clearTimeout(markTimers["n" + nid]); markTimers["n" + nid] = setTimeout(function () { saveMark(nid); }, 1200); return; }
   if (t.hasAttribute("data-ccomment")) { var cid = t.getAttribute("data-ccomment"); clearTimeout(markTimers["c" + cid]); markTimers["c" + cid] = setTimeout(function () { compareSave(cid); }, 1200); return; }
   if (!t.hasAttribute("data-comment")) return;
   var id = t.getAttribute("data-comment"); clearTimeout(markTimers[id]); markTimers[id] = setTimeout(function () { saveMark(id); }, 1200);

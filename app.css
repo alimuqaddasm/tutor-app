@@ -1023,6 +1023,8 @@ html.xt-noscroll,html.xt-noscroll body{overflow:hidden}
 .xt-filter{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
 .xt-filter select{min-height:var(--tap);border-radius:12px;border:1px solid var(--line-2);background:var(--surface);padding:0 10px}
 .xt-after summary{color:var(--warn)}
+.xt-notebox{display:grid;gap:4px;margin-top:12px}
+.xt-notebox textarea{width:100%;border-radius:12px;border:1px solid var(--line-2);background:var(--surface);padding:8px 10px;min-height:48px;box-sizing:border-box}
 /* Claude's marks (7 Oct) */
 .xt-claude{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:14px;border-left:4px solid var(--accent)}
 .xt-cmark{display:flex;gap:10px;align-items:flex-start;margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--accent-wash);font-size:var(--s-sm)}

@@ -157,18 +157,48 @@ function cleanQuestions(list) {
     seen.add(id);
     const marks = Number(q.marks);
     const section_id = q.section_id == null || q.section_id === "" ? null : String(q.section_id).slice(0, 40);
+    const study = q.study == null || q.study === "" ? null : (typeof q.study === "string" ? q.study : JSON.stringify(q.study)).slice(0, 20000);
     if (!(marks >= 0 && marks <= 1000)) fail(400, "Question " + id + " needs its marks.");
     const type = q.type || "long";
     if (!TYPES.includes(type)) fail(400, "Question " + id + " has an unknown type.");
     const sm = q.suggested_min == null || q.suggested_min === "" ? null : Number(q.suggested_min);
-    return { id, pos: i, label: String(q.label || "").slice(0, 200), text_html: String(q.text_html || "").slice(0, 100000), marks, type, suggested_min: Number.isFinite(sm) ? sm : null, section_id };
+    return { id, pos: i, label: String(q.label || "").slice(0, 200), text_html: String(q.text_html || "").slice(0, 100000), marks, type, suggested_min: Number.isFinite(sm) ? sm : null, section_id, study };
   });
 }
 
-const questionsQ = (env, examId) => env.DB.prepare("SELECT id, pos, label, text_html, marks, type, suggested_min, section_id, img IS NOT NULL AS has_img, ms_img IS NOT NULL AS has_ms FROM questions WHERE exam_id = ? ORDER BY pos").bind(examId);
-const questionList = (rows) => rows.map((q) => ({ ...q, has_img: !!q.has_img, has_ms: !!q.has_ms }));
-const sectionsQ = (env, examId) => env.DB.prepare("SELECT id, pos, title, subject, day, date, suggest_min, done_at, took_min FROM sections WHERE exam_id = ? ORDER BY pos").bind(examId);
-const sectionList = (rows) => rows.map((x) => ({ id: x.id, pos: x.pos, title: x.title, subject: x.subject, day: x.day, date: x.date, suggestMin: x.suggest_min, doneAt: x.done_at, tookMin: x.took_min }));
+const questionsQ = (env, examId) => env.DB.prepare("SELECT id, pos, label, text_html, marks, type, suggested_min, section_id, study, img IS NOT NULL AS has_img, ms_img IS NOT NULL AS has_ms FROM questions WHERE exam_id = ? ORDER BY pos").bind(examId);
+const parseJSON = (t) => { if (t == null || t === "") return null; try { return JSON.parse(t); } catch (e) { return null; } };
+const questionList = (rows) => rows.map((q) => ({ ...q, has_img: !!q.has_img, has_ms: !!q.has_ms, study: parseJSON(q.study) }));
+const sectionsQ = (env, examId) => env.DB.prepare("SELECT id, pos, title, subject, day, date, suggest_min, done_at, took_min, opened_at, released_at FROM sections WHERE exam_id = ? ORDER BY pos").bind(examId);
+const sectionList = (rows) => rows.map((x) => ({ id: x.id, pos: x.pos, title: x.title, subject: x.subject, day: x.day, date: x.date, suggestMin: x.suggest_min, doneAt: x.done_at, tookMin: x.took_min, openedAt: x.opened_at, releasedAt: x.released_at }));
+
+/* Which sections are open: the first day at once; each next day gap_hours after he first opened the day before
+   (or straight away when Ali opens it by hand). Adds open and opensAt (null while not yet known) to each section. */
+function withDays(exam, secs, now) {
+  const gap = (exam.gap_hours == null ? 12 : exam.gap_hours) * 3600000;
+  const key = (x) => (x.day != null ? x.day : 100000 + x.pos);
+  const days = [...new Set(secs.map(key))].sort((a, b) => a - b);
+  let prevOpened = null;
+  days.forEach((d, i) => {
+    const ss = secs.filter((x) => key(x) === d);
+    let open = i === 0 || ss.some((x) => x.releasedAt != null), opensAt = null;
+    if (!open && prevOpened != null) { opensAt = prevOpened + gap; open = now >= opensAt; }
+    ss.forEach((x) => { x.open = open; x.opensAt = opensAt; });
+    const opened = ss.map((x) => x.openedAt).filter((v) => v != null);
+    prevOpened = open && opened.length ? Math.min(...opened) : null;
+  });
+  return secs;
+}
+/* Before he writes to an assignment question: its day must be open. After its section is finished, the write is practice. */
+async function asgWrite(env, exam, questionId, now) {
+  if (!isAssignment(exam)) return { practice: 0 };
+  const q = await env.DB.prepare("SELECT section_id FROM questions WHERE exam_id = ? AND id = ?").bind(exam.id, questionId).first();
+  if (!q) fail(404, "No such question.");
+  const secs = withDays(exam, sectionList((await sectionsQ(env, exam.id).all()).results), now);
+  const sec = secs.find((x) => x.id === q.section_id);
+  if (!sec || !sec.open) fail(403, "This day is not open yet.");
+  return { practice: sec.doneAt != null ? 1 : 0 };
+}
 const isAssignment = (exam) => exam.kind === "assignment";
 /* "late" only means something when there is an end time (exams); an assignment has none */
 const lateNow = (exam, now) => (exam.original_end_at != null && now > exam.original_end_at ? 1 : 0);
@@ -228,25 +258,27 @@ function timeOn(views, now) {
 /* ---------- answers and uploads (shared by the student, phone and teacher views) ---------- */
 
 const answersQ = (env, examId) => env.DB.prepare(
-  "SELECT a.question_id, a.text, a.seq, a.server_at, a.late FROM answer_revisions a " +
-  "JOIN (SELECT question_id, MAX(id) AS mid FROM answer_revisions WHERE exam_id = ? GROUP BY question_id) m ON a.id = m.mid"
+  "SELECT a.question_id, a.text, a.seq, a.server_at, a.late, a.practice FROM answer_revisions a " +
+  "JOIN (SELECT question_id, practice, MAX(id) AS mid FROM answer_revisions WHERE exam_id = ? GROUP BY question_id, practice) m ON a.id = m.mid"
 ).bind(examId);
-function answerMap(rows) {
+/* his answers; with practice = 1, his practice tries after finishing (an assignment) */
+function answerMap(rows, practice = 0) {
   const out = {};
-  for (const a of rows) out[a.question_id] = { text: a.text, seq: a.seq, savedAt: a.server_at, late: !!a.late };
+  for (const a of rows) if ((a.practice || 0) === practice) out[a.question_id] = { text: a.text, seq: a.seq, savedAt: a.server_at, late: !!a.late };
   return out;
 }
 
 const uploadsQ = (env, examId, questionId) => questionId
-  ? env.DB.prepare("SELECT id, question_id, source, mime, bytes, width, height, server_at, late FROM uploads WHERE exam_id = ? AND question_id = ? AND deleted_at IS NULL ORDER BY server_at").bind(examId, questionId)
-  : env.DB.prepare("SELECT id, question_id, source, mime, bytes, width, height, server_at, late FROM uploads WHERE exam_id = ? AND deleted_at IS NULL ORDER BY server_at").bind(examId);
-const uploadItems = (rows) => rows.map((u) => ({ id: u.id, question: u.question_id, source: u.source, mime: u.mime, bytes: u.bytes, width: u.width, height: u.height, at: u.server_at, late: !!u.late }));
+  ? env.DB.prepare("SELECT id, question_id, source, mime, bytes, width, height, server_at, late, practice FROM uploads WHERE exam_id = ? AND question_id = ? AND deleted_at IS NULL ORDER BY server_at").bind(examId, questionId)
+  : env.DB.prepare("SELECT id, question_id, source, mime, bytes, width, height, server_at, late, practice FROM uploads WHERE exam_id = ? AND deleted_at IS NULL ORDER BY server_at").bind(examId);
+const uploadItems = (rows) => rows.map((u) => ({ id: u.id, question: u.question_id, source: u.source, mime: u.mime, bytes: u.bytes, width: u.width, height: u.height, at: u.server_at, late: !!u.late, practice: !!u.practice }));
 async function uploadList(env, examId, questionId) { return uploadItems((await uploadsQ(env, examId, questionId).all()).results); }
 
 async function saveUpload(env, exam, questionId, source, request, now) {
   if (!canWrite(exam)) fail(409, exam.status === "waiting" ? "The exam has not started yet." : "The exam has ended, so nothing more can be added.");
   const q = await env.DB.prepare("SELECT id FROM questions WHERE exam_id = ? AND id = ?").bind(exam.id, questionId).first();
   if (!q) fail(404, "No such question.");
+  const { practice } = await asgWrite(env, exam, questionId, now);
   const bytes = await bytesOf(request);
   const img = checkImage(bytes);
   if (img.error) fail(img.status || 415, img.error);
@@ -254,9 +286,9 @@ async function saveUpload(env, exam, questionId, source, request, now) {
   if (count.n >= MAX_UPLOADS_PER_Q) fail(409, "This question already has " + MAX_UPLOADS_PER_Q + " pictures. Remove one first.");
   const id = randomToken(12);
   const late = lateNow(exam, now);
-  await env.DB.prepare("INSERT INTO uploads (id, exam_id, question_id, source, mime, bytes, width, height, data, server_at, late) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, exam.id, questionId, source, img.mime, bytes.length, img.width, img.height, bytes, now, late).run();
-  return { id, question: questionId, source, mime: img.mime, bytes: bytes.length, width: img.width, height: img.height, at: now, late: !!late };
+  await env.DB.prepare("INSERT INTO uploads (id, exam_id, question_id, source, mime, bytes, width, height, data, server_at, late, practice) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, exam.id, questionId, source, img.mime, bytes.length, img.width, img.height, bytes, now, late, practice).run();
+  return { id, question: questionId, source, mime: img.mime, bytes: bytes.length, width: img.width, height: img.height, at: now, late: !!late, practice: !!practice };
 }
 
 async function sendUpload(env, examId, uploadId, questionId) {
@@ -285,15 +317,32 @@ async function route(request, env, now) {
       // Questions only from Start on, and not once the exam is locked.
       const open = started(exam) && exam.status !== "locked";
       const seen = env.DB.prepare("UPDATE exams SET last_seen_at = ? WHERE id = ?").bind(now, exam.id);
-      const r = (await reads(env, open ? [seen, extensionsQ(env, exam.id), questionsQ(env, exam.id), answersQ(env, exam.id), uploadsQ(env, exam.id), sectionsQ(env, exam.id)] : [seen, extensionsQ(env, exam.id)])).slice(1);
+      const asg = isAssignment(exam);
+      const r = (await reads(env, open ? [seen, extensionsQ(env, exam.id), questionsQ(env, exam.id), answersQ(env, exam.id), uploadsQ(env, exam.id), sectionsQ(env, exam.id),
+        env.DB.prepare("SELECT question_id, score, note FROM marks WHERE exam_id = ?").bind(exam.id), viewsQ(env, exam.id)] : [seen, extensionsQ(env, exam.id)])).slice(1);
       const out = { title: exam.title, subject: exam.subject, practice: !!exam.practice, kind: exam.kind || "exam", ...clock(exam, now, r[0]) };
       if (open) {
-        const secs = sectionList(r[4]), done = new Set(secs.filter((x) => x.doneAt != null).map((x) => x.id));
-        // a mark scheme only once its section is Done
-        out.questions = questionList(r[1]).map((q) => ({ id: q.id, pos: q.pos, label: q.label, text_html: q.text_html, marks: q.marks, type: q.type, suggested_min: q.suggested_min, has_img: q.has_img, section: q.section_id, has_ms: q.has_ms && done.has(q.section_id) }));
+        const secs = asg ? withDays(exam, sectionList(r[4]), now) : sectionList(r[4]);
+        const done = new Set(secs.filter((x) => x.doneAt != null).map((x) => x.id)), shut = new Set(secs.filter((x) => !x.open).map((x) => x.id));
+        // an assignment: nothing from a day that is not open yet; a mark scheme only once its section is finished
+        const qs = questionList(r[1]).filter((q) => !asg || !shut.has(q.section_id)), ids = new Set(qs.map((q) => q.id));
+        out.questions = qs.map((q) => ({ id: q.id, pos: q.pos, label: q.label, text_html: q.text_html, marks: q.marks, type: q.type, suggested_min: q.suggested_min, has_img: q.has_img, section: q.section_id, has_ms: q.has_ms && done.has(q.section_id) }));
         out.answers = answerMap(r[2]);
-        out.uploads = uploadItems(r[3]);
-        if (isAssignment(exam)) out.sections = secs;
+        out.uploads = uploadItems(r[3]).filter((u) => ids.has(u.question));
+        if (asg) {
+          out.sections = secs.map((x) => ({ id: x.id, pos: x.pos, title: x.title, subject: x.subject, day: x.day, date: x.date, suggestMin: x.suggestMin, doneAt: x.doneAt, tookMin: x.tookMin, openedAt: x.openedAt, open: x.open, opensAt: x.opensAt }));
+          out.practiceAnswers = answerMap(r[2], 1);
+          out.gapHours = exam.gap_hours == null ? 12 : exam.gap_hours;
+          // Ali's notes show as soon as he saves them; the study pointer only where marks were lost
+          const notes = {};
+          for (const mk of r[5]) {
+            const q = qs.find((x) => x.id === mk.question_id); if (!q || !done.has(q.section_id)) continue;
+            const lost = mk.score != null && mk.score < q.marks;
+            if (mk.note || lost) notes[q.id] = { note: mk.note || "", study: lost ? q.study : null };
+          }
+          out.notes = notes;
+          out.on = timeOn(r[6], now).on;
+        }
       }
       return json(out);
     }
@@ -309,6 +358,15 @@ async function route(request, env, now) {
       if (!q || q.done_at == null) fail(403, "Press Done on this section first.");
       if (!q.ms_img) fail(404, "No mark scheme picture for this question.");
       return imageResponse(toBytes(q.ms_img), q.ms_mime);
+    }
+    if ((a = p.match(/^\/api\/s\/sections\/([\w-]+)\/open$/)) && m === "POST") {
+      if (!isAssignment(exam)) fail(404, "Not found.");
+      const secs = withDays(exam, sectionList((await sectionsQ(env, exam.id).all()).results), now);
+      const sec = secs.find((x) => x.id === a[1]);
+      if (!sec) fail(404, "No such section.");
+      if (!sec.open) fail(403, "This day is not open yet.");
+      if (sec.openedAt == null && canWrite(exam)) await env.DB.prepare("UPDATE sections SET opened_at = ? WHERE exam_id = ? AND id = ? AND opened_at IS NULL").bind(now, exam.id, a[1]).run();
+      return json({ ok: true, openedAt: sec.openedAt == null ? now : sec.openedAt });
     }
     if ((a = p.match(/^\/api\/s\/sections\/([\w-]+)\/done$/)) && m === "POST") {
       if (!isAssignment(exam)) fail(404, "Not found.");
@@ -327,23 +385,24 @@ async function route(request, env, now) {
       if (!canWrite(exam)) fail(409, exam.status === "waiting" || exam.status === "draft" ? "The exam has not started yet." : "The exam has ended, so answers can't be changed.");
       const q = await env.DB.prepare("SELECT id FROM questions WHERE exam_id = ? AND id = ?").bind(exam.id, a[1]).first();
       if (!q) fail(404, "No such question.");
+      const { practice } = await asgWrite(env, exam, a[1], now);
       const b = await body(request);
       const text = String(b.text == null ? "" : b.text);
       if (text.length > MAX_TEXT) fail(413, "This answer is too long.");
       const seq = Math.floor(Number(b.seq));
       if (!(seq >= 1)) fail(400, "Missing save number.");
-      const last = await env.DB.prepare("SELECT text, seq, server_at, late FROM answer_revisions WHERE exam_id = ? AND question_id = ? ORDER BY id DESC LIMIT 1").bind(exam.id, a[1]).first();
+      const last = await env.DB.prepare("SELECT text, seq, server_at, late FROM answer_revisions WHERE exam_id = ? AND question_id = ? AND practice = ? ORDER BY id DESC LIMIT 1").bind(exam.id, a[1], practice).first();
       // An older save that arrives late (or twice) must never overwrite a newer one.
       if (last && seq <= last.seq) return json({ ok: true, stale: true, seq: last.seq, savedAt: last.server_at, late: !!last.late });
       if (last && last.text === text) {
-        await env.DB.prepare("UPDATE answer_revisions SET seq = ? WHERE exam_id = ? AND question_id = ? AND seq = ?").bind(seq, exam.id, a[1], last.seq).run();
-        return json({ ok: true, unchanged: true, seq, savedAt: last.server_at, late: !!last.late });
+        await env.DB.prepare("UPDATE answer_revisions SET seq = ? WHERE exam_id = ? AND question_id = ? AND seq = ? AND practice = ?").bind(seq, exam.id, a[1], last.seq, practice).run();
+        return json({ ok: true, unchanged: true, seq, savedAt: last.server_at, late: !!last.late, practice: !!practice });
       }
       const late = lateNow(exam, now);
       const clientAt = Number.isFinite(Number(b.clientAt)) ? Math.floor(Number(b.clientAt)) : null;
-      await env.DB.prepare("INSERT INTO answer_revisions (exam_id, question_id, text, seq, client_at, server_at, late) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        .bind(exam.id, a[1], text, seq, clientAt, now, late).run();
-      return json({ ok: true, seq, savedAt: now, late: !!late });
+      await env.DB.prepare("INSERT INTO answer_revisions (exam_id, question_id, text, seq, client_at, server_at, late, practice) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(exam.id, a[1], text, seq, clientAt, now, late, practice).run();
+      return json({ ok: true, seq, savedAt: now, late: !!late, practice: !!practice });
     }
     if ((a = p.match(/^\/api\/s\/uploads\/([\w-]+)$/)) && m === "POST") {
       const src = request.headers.get("X-Upload-Source") === "drawing" ? "drawing" : "file";
@@ -351,8 +410,10 @@ async function route(request, env, now) {
     }
     if ((a = p.match(/^\/api\/s\/uploads\/([\w-]+)$/)) && m === "DELETE") {
       if (!canWrite(exam)) fail(409, "The exam has ended, so pictures can't be removed.");
-      const u = await env.DB.prepare("SELECT question_id FROM uploads WHERE id = ? AND exam_id = ? AND deleted_at IS NULL").bind(a[1], exam.id).first();
+      const u = await env.DB.prepare("SELECT question_id, practice FROM uploads WHERE id = ? AND exam_id = ? AND deleted_at IS NULL").bind(a[1], exam.id).first();
       if (!u) fail(404, "No such picture.");
+      // after finishing, his marked pictures stay; only practice pictures can go
+      if (isAssignment(exam) && !u.practice && (await asgWrite(env, exam, u.question_id, now)).practice) fail(409, "This part is finished, so its pictures stay.");
       await env.DB.prepare("UPDATE uploads SET deleted_at = ? WHERE id = ?").bind(now, a[1]).run();
       await event(env, exam.id, now, "remove-picture", u.question_id);
       return json({ ok: true });
@@ -361,6 +422,16 @@ async function route(request, env, now) {
       const u = await env.DB.prepare("SELECT deleted_at FROM uploads WHERE id = ? AND exam_id = ?").bind(a[1], exam.id).first();
       if (!u || u.deleted_at) fail(404, "No such picture.");
       return sendUpload(env, exam.id, a[1]);
+    }
+    if (p === "/api/s/phone-token" && m === "POST") {
+      // one phone link for the whole assignment: the phone picks the question
+      if (!isAssignment(exam)) fail(404, "Not found.");
+      if (!canWrite(exam)) fail(409, "This assignment is closed.");
+      const old = await env.DB.prepare("SELECT token FROM phone_tokens WHERE exam_id = ? AND question_id = '*'").bind(exam.id).first();
+      if (old) return json({ token: old.token });
+      const token = randomToken(32);
+      await env.DB.prepare("INSERT INTO phone_tokens (token, exam_id, question_id, created_at) VALUES (?, ?, '*', ?)").bind(token, exam.id, now).run();
+      return json({ token }, 201);
     }
     if ((a = p.match(/^\/api\/s\/phone-token\/([\w-]+)$/)) && m === "POST") {
       if (!canWrite(exam)) fail(409, "The exam is not running.");
@@ -389,6 +460,21 @@ async function route(request, env, now) {
     const pt = await env.DB.prepare("SELECT exam_id, question_id FROM phone_tokens WHERE token = ?").bind(token).first();
     if (!pt) fail(404, "This phone link is not valid.");
     const exam = await examById(env, pt.exam_id);
+    const all = pt.question_id === "*";
+    if (all && p === "/api/p/info" && m === "GET") {
+      const [qr, sr, ur, vr] = await reads(env, [questionsQ(env, exam.id), sectionsQ(env, exam.id), uploadsQ(env, exam.id), viewsQ(env, exam.id)]);
+      const secs = withDays(exam, sectionList(sr), now).filter((x) => x.open);
+      const open = new Set(secs.map((x) => x.id)), qs = questionList(qr).filter((q) => open.has(q.section_id));
+      return json({ title: exam.title, all: true, status: liveStatus(exam, now), on: timeOn(vr, now).on,
+        sections: secs.map((x) => ({ id: x.id, title: x.title, subject: x.subject, day: x.day, doneAt: x.doneAt })),
+        questions: qs.map((q) => ({ id: q.id, label: q.label, section: q.section_id, marks: q.marks })),
+        uploads: uploadItems(ur).filter((u) => qs.some((q) => q.id === u.question)) });
+    }
+    if (all && p === "/api/p/upload" && m === "POST") {
+      const q = url.searchParams.get("q") || "";
+      if (!/^[\w-]+$/.test(q)) fail(400, "Pick the question first.");
+      return json(await saveUpload(env, exam, q, "phone", request, now), 201);
+    }
     if (p === "/api/p/info" && m === "GET") {
       const q = await env.DB.prepare("SELECT label, pos FROM questions WHERE exam_id = ? AND id = ?").bind(exam.id, pt.question_id).first();
       return json({ title: exam.title, question: pt.question_id, label: q ? q.label : "", number: q ? q.pos + 1 : null, status: liveStatus(exam, now), uploads: await uploadList(env, exam.id, pt.question_id) });
@@ -397,7 +483,7 @@ async function route(request, env, now) {
     if ((a = p.match(/^\/api\/p\/files\/([\w-]+)$/)) && m === "GET") {
       const u = await env.DB.prepare("SELECT deleted_at FROM uploads WHERE id = ? AND exam_id = ?").bind(a[1], exam.id).first();
       if (!u || u.deleted_at) fail(404, "No such picture.");
-      return sendUpload(env, exam.id, a[1], pt.question_id);
+      return sendUpload(env, exam.id, a[1], all ? null : pt.question_id);
     }
     fail(404, "Not found.");
   }
@@ -439,7 +525,8 @@ async function route(request, env, now) {
       const stmts = [env.DB.prepare("INSERT INTO exams (id, title, subject, source_path, ratio, base_minutes, practice, kind, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(id, title, String(b.subject || "").slice(0, 40), String(b.source_path || "").slice(0, 300), Number.isFinite(ratio) ? ratio : null, base, b.practice ? 1 : 0, kind, now)];
       for (const x of secs) stmts.push(env.DB.prepare("INSERT INTO sections (exam_id, id, pos, title, subject, day, date, suggest_min) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(id, x.id, x.pos, x.title, x.subject, x.day, x.date, x.suggest_min));
-      for (const q of qs) stmts.push(env.DB.prepare("INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, section_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(q.id, id, q.pos, q.label, q.text_html, q.marks, q.type, q.suggested_min, q.section_id));
+      for (const q of qs) stmts.push(env.DB.prepare("INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, section_id, study) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(q.id, id, q.pos, q.label, q.text_html, q.marks, q.type, q.suggested_min, q.section_id, q.study));
+      const gap = Number(b.gap_hours); if (kind === "assignment" && gap > 0 && gap <= 240) stmts.push(env.DB.prepare("UPDATE exams SET gap_hours = ? WHERE id = ?").bind(gap, id));
       stmts.push(env.DB.prepare("INSERT INTO events (exam_id, at, kind, detail) VALUES (?, ?, 'created', ?)").bind(id, now, String(b.source_path || "")));
       await env.DB.batch(stmts);
       return json({ id }, 201);
@@ -461,13 +548,14 @@ async function route(request, env, now) {
         const [ext, qs, evs, secs] = await reads(env, [extensionsQ(env, exam.id), questionsQ(env, exam.id), eventsQ(env, exam.id), sectionsQ(env, exam.id)]);
         return json({
           id: exam.id, title: exam.title, subject: exam.subject, sourcePath: exam.source_path, practice: !!exam.practice, kind: exam.kind || "exam", token: exam.token, ratio: exam.ratio, createdAt: exam.created_at, lastSeenAt: exam.last_seen_at,
-          ...clock(exam, now, ext), questions: questionList(qs), sections: sectionList(secs), events: evs
+          ...clock(exam, now, ext), questions: questionList(qs), sections: isAssignment(exam) ? withDays(exam, sectionList(secs), now) : sectionList(secs), gapHours: exam.gap_hours == null ? 12 : exam.gap_hours, events: evs
         });
       }
       if (sub === "" && m === "PUT") {
         const b = await body(request);
         const sets = [], vals = [];
         if (b.title != null) { const t = String(b.title).trim().slice(0, 200); if (!t) fail(400, "The exam needs a title."); sets.push("title = ?"); vals.push(t); }
+        if (b.gap_hours != null) { const g = Number(b.gap_hours); if (!(g >= 0 && g <= 240)) fail(400, "Hours between days: 0 to 240."); sets.push("gap_hours = ?"); vals.push(g); }
         if (b.ratio !== undefined) { const r = b.ratio === null || b.ratio === "" ? null : Number(b.ratio); sets.push("ratio = ?"); vals.push(Number.isFinite(r) ? r : null); }
         if (b.base_minutes != null) {
           if (started(exam)) fail(409, "The exam has started. Use the + minutes buttons instead.");
@@ -506,6 +594,15 @@ async function route(request, env, now) {
           return json({ ok: true, width: img.width, height: img.height });
         }
         if (m === "DELETE") { await env.DB.prepare("UPDATE questions SET img = NULL, img_mime = NULL WHERE exam_id = ? AND id = ?").bind(exam.id, b2[1]).run(); return json({ ok: true }); }
+      }
+      if ((b2 = sub.match(/^\/sections\/([\w-]+)\/release$/)) && m === "POST") {
+        // Ali opens a day early (all its sections)
+        const sec = await env.DB.prepare("SELECT day FROM sections WHERE exam_id = ? AND id = ?").bind(exam.id, b2[1]).first();
+        if (!sec) fail(404, "No such section.");
+        await env.DB.batch([sec.day == null ? env.DB.prepare("UPDATE sections SET released_at = ? WHERE exam_id = ? AND id = ?").bind(now, exam.id, b2[1])
+            : env.DB.prepare("UPDATE sections SET released_at = ? WHERE exam_id = ? AND day = ?").bind(now, exam.id, sec.day),
+          env.DB.prepare("INSERT INTO events (exam_id, at, kind, detail) VALUES (?, ?, 'release', ?)").bind(exam.id, now, b2[1])]);
+        return json({ ok: true });
       }
       if ((b2 = sub.match(/^\/questions\/([\w-]+)\/ms$/))) {
         const q = await env.DB.prepare("SELECT ms_img, ms_mime FROM questions WHERE exam_id = ? AND id = ?").bind(exam.id, b2[1]).first();
@@ -588,19 +685,20 @@ async function route(request, env, now) {
         for (const u of ups) { perQ[u.question_id] = perQ[u.question_id] || { lastSave: null, saves: 0, late: false }; perQ[u.question_id].pictures = u.n; perQ[u.question_id].lastPicture = u.at; }
         const views = timeOn(vs, now);
         for (const [q, v] of Object.entries(views.per)) { perQ[q] = perQ[q] || { lastSave: null, saves: 0, late: false, pictures: 0 }; perQ[q].seconds = v.seconds; perQ[q].visits = v.visits.length; }
-        return json({ ...clock(exam, now, ext), lastSeenAt: exam.last_seen_at, perQuestion: perQ, on: views.on, sections: isAssignment(exam) ? sectionList(secr) : undefined });
+        return json({ ...clock(exam, now, ext), lastSeenAt: exam.last_seen_at, perQuestion: perQ, on: views.on, sections: isAssignment(exam) ? withDays(exam, sectionList(secr), now) : undefined });
       }
       if ((sub === "/review" || sub === "/export") && m === "GET") {
         const [revs, marks, ups, vs, qs, ext, evs, secr] = await reads(env, [
-          env.DB.prepare("SELECT question_id, text, seq, client_at, server_at, late FROM answer_revisions WHERE exam_id = ? ORDER BY id").bind(exam.id),
-          env.DB.prepare("SELECT question_id, score, comment, ticks, updated_at FROM marks WHERE exam_id = ?").bind(exam.id),
+          env.DB.prepare("SELECT question_id, text, seq, client_at, server_at, late, practice FROM answer_revisions WHERE exam_id = ? ORDER BY id").bind(exam.id),
+          env.DB.prepare("SELECT question_id, score, comment, ticks, note, updated_at FROM marks WHERE exam_id = ?").bind(exam.id),
           uploadsQ(env, exam.id), viewsQ(env, exam.id), questionsQ(env, exam.id), extensionsQ(env, exam.id), eventsQ(env, exam.id), sectionsQ(env, exam.id)]);
-        const sections = sectionList(secr), doneAt = {};
+        const sections = isAssignment(exam) ? withDays(exam, sectionList(secr), now) : sectionList(secr), doneAt = {};
         for (const x of sections) doneAt[x.id] = x.doneAt;
         const uploads = uploadItems(ups);
         const views = timeOn(vs, now);
         const questions = questionList(qs).map((q) => {
-          const mine = revs.filter((r) => r.question_id === q.id);
+          const tries = revs.filter((r) => r.question_id === q.id && r.practice);
+          const mine = revs.filter((r) => r.question_id === q.id && !r.practice);
           const inTime = mine.filter((r) => !r.late);
           const mk = marks.find((x) => x.question_id === q.id);
           // assignment: what he had when he pressed Done is what gets marked; later saves are "after the mark scheme"
@@ -621,6 +719,9 @@ async function route(request, env, now) {
             score: mk ? mk.score : null,
             comment: mk ? mk.comment : "",
             ticks: mk && mk.ticks ? JSON.parse(mk.ticks) : null,
+            note: mk ? mk.note || "" : "",
+            practiceText: tries.length ? tries[tries.length - 1].text : "",
+            practiceAt: tries.length ? tries[tries.length - 1].server_at : null,
             seconds: views.per[q.id] ? views.per[q.id].seconds : 0,
             visits: views.per[q.id] ? views.per[q.id].visits : []
           };
@@ -629,7 +730,7 @@ async function route(request, env, now) {
         const max = questions.reduce((s, q) => s + q.marks, 0);
         return json({
           id: exam.id, title: exam.title, subject: exam.subject, sourcePath: exam.source_path, practice: !!exam.practice, kind: exam.kind || "exam",
-          ...clock(exam, now, ext), sections: isAssignment(exam) ? sections : undefined,
+          ...clock(exam, now, ext), sections: isAssignment(exam) ? sections : undefined, gapHours: exam.gap_hours == null ? 12 : exam.gap_hours,
           questions, total, max, marked: questions.filter((q) => q.score != null).length,
           events: evs
         });
@@ -646,8 +747,10 @@ async function route(request, env, now) {
           if (!Array.isArray(b.ticks) || b.ticks.length > 60 || !b.ticks.every((t) => Number.isFinite(Number(t)) && Number(t) >= 0 && Number(t) <= 20)) fail(400, "The ticked marks are not valid.");
           ticks = JSON.stringify(b.ticks.map(Number));
         }
-        await env.DB.prepare("INSERT INTO marks (exam_id, question_id, score, comment, ticks, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (exam_id, question_id) DO UPDATE SET score = excluded.score, comment = excluded.comment, ticks = COALESCE(excluded.ticks, marks.ticks), updated_at = excluded.updated_at")
-          .bind(exam.id, b2[1], score, String(b.comment || "").slice(0, 5000), ticks, now).run();
+        // note: what he sees (assignments); left out = keep what is there
+        const note = b.note === undefined || b.note === null ? null : String(b.note).slice(0, 5000);
+        await env.DB.prepare("INSERT INTO marks (exam_id, question_id, score, comment, ticks, note, updated_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, ''), ?) ON CONFLICT (exam_id, question_id) DO UPDATE SET score = excluded.score, comment = excluded.comment, ticks = COALESCE(?, marks.ticks), note = COALESCE(?, marks.note), updated_at = excluded.updated_at")
+          .bind(exam.id, b2[1], score, String(b.comment || "").slice(0, 5000), ticks, note, now, ticks, note).run();
         return json({ ok: true, score, updatedAt: now });
       }
     }

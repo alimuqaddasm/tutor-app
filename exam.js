@@ -18,7 +18,8 @@ var KEY = "exam." + (TOKEN || PHONE || "preview").slice(0, 12);
 var follow = true;         // Student view: keep his current question on screen
 var SEC = null;            // assignment: the section on screen (null = the list of sections)
 try { SEC = sessionStorage.getItem(KEY + ".sec") || null; } catch (e) {}
-var needQ = false;         // redraw the question after Done (its mark scheme has opened)
+var AMODE = "one";         // assignment review: one question at a time, or all together
+var APRAC = {};            // assignment review: practice area open, per question
 var MAXSIDE = 2000, MAXBYTES = 1800000, MAXTEXT = 50000;
 
 function parseHash() {
@@ -198,14 +199,17 @@ function poll() {
     setNet("ok");
     var first = !S, was = S && S.status;
     S = d;
-    if (PREVIEW && follow && d.on && d.questions) { var at = d.questions.map(function (x) { return x.id; }).indexOf(d.on); if (at >= 0 && at !== cur) {
-      cur = at; if (ASG() && d.questions[at].section !== SEC) { setSec(d.questions[at].section); if (!first) render(); } else if (!first) { question(); dots(); } } }
-    if (ASG() && SEC && !secOf(SEC)) setSec(null);
+    if (ASG()) {
+      if (PREVIEW && follow && d.on) { var aq = d.questions.filter(function (x) { return x.id === d.on; })[0]; if (aq) { setSec(aq.section); cur = d.questions.indexOf(aq); } }
+      if (SEC && !(secOf(SEC) || {}).open) setSec(null);
+      if (d.answers) mergeAnswers(asgAnswers(d));
+      if (first || group(was) !== group(d.status) || $("#ex").getAttribute("data-asig") !== asgSig()) render(); else asgUpdate();
+    } else {
+    if (PREVIEW && follow && d.on && d.questions) { var at = d.questions.map(function (x) { return x.id; }).indexOf(d.on); if (at >= 0 && at !== cur) { cur = at; if (!first) { question(); dots(); } } }
     if (d.answers) mergeAnswers(d.answers);
     // Running and "time up" share one screen, so the answer box keeps its cursor when the time runs out.
-    if (ASG() && !SEC) render();          // the list redraws itself only when something on it changed
-    else if (first || group(was) !== group(d.status) || !$(".ex-q")) render(); else refresh();
-    if (needQ && $(".ex-q")) { needQ = false; question(); banner(); }
+    if (first || group(was) !== group(d.status) || !$(".ex-q")) render(); else refresh();
+    }
     if (was === "waiting" && (d.status === "running" || d.status === "timeup")) toast("The exam has started");
     if (anyDirty()) flush();
     sendPending();
@@ -366,23 +370,10 @@ function render() {
     return;
   }
   if (!S.questions || !S.questions.length) { m.innerHTML = '<div class="ex-center"><div><h1>' + esc(S.title) + '</h1><p>No questions yet.</p></div></div>'; return; }
-  if (ASG() && !SEC) return home(m);
+  if (ASG()) return asgRender(m);
   cur = Math.min(cur, S.questions.length - 1);
   if (order().indexOf(cur) < 0) cur = order()[0] || 0;
-  m.removeAttribute("data-home");
   var done = S.status === "submitted";
-  if (ASG()) {
-    var sec = secOf(SEC);
-    m.innerHTML =
-      '<header class="ex-top"><button class="btn small" type="button" data-home>All days</button><div class="ex-title">' + esc(sec.title) + (sec.date ? ' <span class="hint">planned for ' + esc(dayText(sec.date)) + '</span>' : "") + '</div><div class="ex-save" aria-live="polite"></div><div class="ex-bannerslot"></div></header>' +
-      (PREVIEW ? '<div class="ex-preview" role="status"><b>Student view</b> <span class="ex-pvwhat"></span><label class="ex-follow"><input type="checkbox" data-follow' + (follow ? " checked" : "") + '> Follow his question</label></div>' : "") +
-      '<nav class="ex-dots" aria-label="Questions"></nav><section class="ex-q card"></section>' +
-      '<div class="ex-nav"><div class="in"><button class="btn" type="button" data-prev>Previous</button><span class="grow"></span>' +
-      (sec.doneAt == null && !PREVIEW ? '<button class="btn" type="button" data-secdone>Done with ' + esc(sec.title) + '</button>' : "") +
-      '<button class="btn accent" type="button" data-next>Next</button></div></div>';
-    dots(); question(); banner(); saveState(); previewLine();
-    return;
-  }
   m.innerHTML =
     '<header class="ex-top"><div class="ex-title">' + esc(S.title) + (S.practice ? ' <span class="ex-prac">Practice</span>' : "") + '</div><div class="ex-timer num" role="timer" aria-live="off"></div><div class="ex-save" aria-live="polite"></div>' +
     (done || PREVIEW ? "" : '<button class="btn small" type="button" data-handin>Hand in</button>') + '<div class="ex-bannerslot"></div></header>' +
@@ -396,35 +387,6 @@ function render() {
 }
 
 function refresh() { banner(); pics(); dots(); tick(); lockInputs(); previewLine(); }
-
-/* Assignment home: every section with its state. Drawn again only when something on it changes. */
-function home(m) {
-  var secs = S.sections || [];
-  var rows = secs.map(function (x) {
-    var qs = S.questions.filter(function (q) { return q.section === x.id; }), n = qs.filter(answered).length, marks = qs.reduce(function (a, q) { return a + (Number(q.marks) || 0); }, 0);
-    var st = x.doneAt != null ? "done" : n ? "going" : "new";
-    return { x: x, qs: qs, n: n, marks: marks, st: st };
-  });
-  var sig = JSON.stringify(rows.map(function (r) { return [r.x.id, r.st, r.n]; })) + S.status + (PREVIEW ? S.on + S.lastSeenAt : "");
-  if (m.getAttribute("data-home") === sig) { saveState(); return; }
-  m.setAttribute("data-home", sig);
-  var days = [], byDay = {};
-  rows.forEach(function (r) { var k = r.x.day != null ? r.x.day : r.x.title; if (!byDay[k]) { byDay[k] = []; days.push(k); } byDay[k].push(r); });
-  var LBL = { done: "Done", going: "Started", "new": "Not started" };
-  m.innerHTML = '<header class="ex-top"><div class="ex-title">' + esc(S.title) + '</div><div class="ex-save" aria-live="polite"></div></header>' +
-    (PREVIEW ? '<div class="ex-preview" role="status"><b>Student view</b> <span class="ex-pvwhat"></span><label class="ex-follow"><input type="checkbox" data-follow' + (follow ? " checked" : "") + '> Follow his question</label></div>' : "") +
-    '<p class="ex-intro">No timer: open it as often as you like. Try each part in one go, writing every line of working. When a part is finished, press <b>Done</b>: its mark scheme then opens under each question. Your teacher marks what you had when you pressed Done.</p>' +
-    days.map(function (k) {
-      var first = byDay[k][0].x;
-      return '<section class="ex-day"><h2>' + (first.day != null ? "Day " + esc(first.day) : esc(k)) + (first.date ? ' <span class="hint">' + esc(dayText(first.date)) + '</span>' : "") + '</h2><div class="ex-secs">' +
-        byDay[k].map(function (r) {
-          return '<button type="button" class="card ex-sec ' + r.st + '" data-sec="' + esc(r.x.id) + '"><span class="ex-sectitle">' + esc(r.x.title) + '</span>' +
-            '<span class="hint">' + r.qs.length + ' question' + (r.qs.length === 1 ? "" : "s") + ' · ' + r.marks + ' marks' + (r.x.suggestMin ? ' · about ' + Math.round(r.x.suggestMin) + ' min' : "") + '</span>' +
-            '<span class="ex-secst">' + LBL[r.st] + (r.st === "going" ? " · " + r.n + " of " + r.qs.length + " answered" : "") + (r.st === "done" ? " · " + esc(clockTime(r.x.doneAt)) + ", " + esc(dayText(new Date(r.x.doneAt).toISOString().slice(0, 10))) : "") + '</span></button>';
-        }).join("") + '</div></section>';
-    }).join("");
-  saveState(); previewLine();
-}
 
 /* Student view: what he sees right now, and where he is. */
 var SEES = { draft: "the waiting screen (no link made yet)", waiting: "the waiting screen", running: "the questions", timeup: "the questions, with Time is up", submitted: "his answers, handed in", locked: "The exam has ended" };
@@ -454,7 +416,6 @@ var lastExtCount = null;
 function banner() {
   var b = $(".ex-bannerslot"); if (!b) return;
   var n = (S.extensions || []).length, html = "";
-  if (ASG()) { var sc = secOf(SEC); b.innerHTML = sc && sc.doneAt != null ? '<div class="ex-banner info" role="status">Done ' + esc(clockTime(sc.doneAt)) + '. The mark scheme is under each question now. You can still fix answers to learn from it; your teacher marks what you had when you pressed Done.</div>' : ""; return; }
   if (S.status === "timeup") html = '<div class="ex-banner up" role="status">Time is up. You can keep working until your teacher ends the exam.</div>';
   else if (S.status === "submitted") html = '<div class="ex-banner info" role="status">You have handed in. Your answers are saved; they can no longer be changed.</div>';
   else if (lastExtCount !== null && n > lastExtCount) { var e = S.extensions[n - 1]; html = '<div class="ex-banner info" role="status">Your teacher added ' + esc(e.minutes) + ' min.</div>'; toast("+" + e.minutes + " min added"); }
@@ -464,6 +425,7 @@ function banner() {
 }
 
 function dots() {
+  if (ASG()) return asgNav();
   var n = $(".ex-dots"); if (!n || !S.questions) return;
   var has = {}; (S.uploads || []).forEach(function (u) { has[u.question] = 1; }); pending.forEach(function (p) { has[p.q] = 1; });
   n.innerHTML = order().map(function (i, k) {
@@ -491,9 +453,7 @@ function question() {
       '<label class="btn small"><input type="file" accept="image/*" multiple hidden data-file>Choose picture</label>' +
       '<button class="btn small" type="button" data-draw>Draw</button>' +
       '<button class="btn small" type="button" data-phone>Use phone</button>' +
-    '</div><div class="ex-pics"></div>' +
-    (q.has_ms ? '<div class="ex-ms"><h3>Mark scheme</h3><button type="button" data-zoom><img alt="Mark scheme for this question"></button></div>' : "");
-  if (q.has_ms) shown($(".ex-ms img", box), "/api/s/questions/" + encodeURIComponent(q.id) + "/ms");
+    '</div><div class="ex-pics"></div>';
   if (q.has_img) shown($(".ex-qimg img", box), "/api/s/questions/" + encodeURIComponent(q.id) + "/image");
   maths($(".ex-qtext", box));
   var a = $("#ans");
@@ -512,6 +472,7 @@ function lockInputs() {
 }
 
 function pics() {
+  if (ASG()) return asgPics();
   var box = $(".ex-pics"); if (!box || !S.questions) return;
   var q = S.questions[cur].id, ro = !writable();
   var saved = (S.uploads || []).filter(function (u) { return u.question === q; });
@@ -527,6 +488,272 @@ function pics() {
   }).join("");
   $$("img[data-src]", box).forEach(function (im) { shown(im, im.getAttribute("data-src")); });
 }
+
+/* =====================================================================
+   ASSIGNMENT (Ali, 8 Oct; design canvas "Holiday Assignment Design")
+   Days open one after another (the server decides). Inside a day: his notebook pages by phone, a stopwatch he
+   runs himself, "I'm done". Finishing fixes his answers and opens the mark schemes; after that he can solve a
+   question again as practice, and sees Ali's notes (plus what to study where he lost marks).
+   ===================================================================== */
+function secDone(id) { var x = secOf(id); return !!(x && x.doneAt != null); }
+function secQs(id) { return (S.questions || []).filter(function (q) { return q.section === id; }); }
+function dayKey(x) { return x.day != null ? x.day : 100000 + x.pos; }
+function subjOf(x) { return /^math/i.test(x.subject || x.title) ? "maths" : "chem"; }
+function shortTitle(x) { return subjOf(x) === "maths" ? "Maths" : "Chemistry"; }
+function whenText(ms) { var d = new Date(ms); return d.toLocaleDateString([], { weekday: "short" }) + " " + clockTime(ms); }
+function mainUps(qid) { return (S.uploads || []).filter(function (u) { return u.question === qid && !u.practice; }); }
+function pracUps(qid) { return (S.uploads || []).filter(function (u) { return u.question === qid && u.practice; }); }
+function hasWork(q) { var a = (S.answers || {})[q.id], d = drafts[q.id]; return (secDone(q.section) ? a && a.text && a.text.trim() : d && d.text && d.text.trim()) || mainUps(q.id).length || (!secDone(q.section) && pending.some(function (p) { return p.q === q.id; })); }
+
+/* what the editable box holds: before finishing, his answer; after, his practice */
+function asgAnswers(d) {
+  var out = {};
+  (d.questions || []).forEach(function (q) {
+    var done = (d.sections || []).some(function (x) { return x.id === q.section && x.doneAt != null; });
+    var src = done ? (d.practiceAnswers || {})[q.id] : (d.answers || {})[q.id];
+    if (src) out[q.id] = src; else if (done) out[q.id] = { text: "", seq: 0, savedAt: null, late: false };
+  });
+  return out;
+}
+/* what changes the layout (anything else is updated in place, so typing is never interrupted) */
+function asgSig() {
+  return JSON.stringify([SEC, AMODE, S.status, (S.sections || []).map(function (x) { return [x.id, x.open, x.doneAt, x.opensAt]; }),
+    Object.keys(S.notes || {}).map(function (k) { return [k, S.notes[k].note, !!S.notes[k].study]; }), (S.questions || []).length, SEC ? cur : 0]);
+}
+
+/* ---------- stopwatch (his own; no countdown) ---------- */
+function swKey() { return KEY + ".sw." + SEC; }
+function swGet() { try { return JSON.parse(ls(swKey()) || "null") || { acc: 0, since: null }; } catch (e) { return { acc: 0, since: null }; } }
+function swMs() { var w = swGet(); return w.acc + (w.since ? Date.now() - w.since : 0); }
+function swSet(run) { var w = swGet(); if (run && !w.since) w.since = Date.now(); if (!run && w.since) { w.acc += Date.now() - w.since; w.since = null; } ls(swKey(), JSON.stringify(w)); swDraw(); }
+function swText(ms) { var s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : String(m).padStart(2, "0")) + ":" + String(x).padStart(2, "0"); }
+function swDraw() { var t = $(".a-swt"), b = $("[data-a-sw]"); if (!t) return; var w = swGet(); t.textContent = swText(swMs()); if (b) b.textContent = w.since ? "Pause" : swMs() ? "Carry on" : "Start"; }
+setInterval(function () { if (ASG() && SEC) swDraw(); }, 1000);
+
+/* ---------- one phone link for the whole holiday ---------- */
+var phoneTok = ls(KEY + ".phone") || "";
+function phoneURL() { return phoneTok ? location.origin + location.pathname + "#p=" + encodeURIComponent(phoneTok) + (H.api ? "&api=" + encodeURIComponent(H.api) : "") : ""; }
+function qrInto(box) {
+  if (!box) return;
+  if (PREVIEW) { box.innerHTML = '<span>His QR code shows here</span>'; return; }
+  var draw = function () { try { var qr = qrcode(0, "M"); qr.addData(phoneURL()); qr.make(); box.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true }); } catch (e) { box.innerHTML = '<span>' + esc(phoneURL()) + '</span>'; } };
+  if (phoneTok) return draw();
+  if (!writable()) { box.innerHTML = "<span>Closed</span>"; return; }
+  api("POST", "/api/s/phone-token").then(function (r) { phoneTok = r.token; ls(KEY + ".phone", phoneTok); $$(".a-qr").forEach(qrInto); }, function () { box.innerHTML = "<span>No connection: the code shows when you are back online</span>"; });
+}
+function qrAside(compact) {
+  return '<aside class="a-scan' + (compact ? " compact" : "") + '"><h2>' + (compact ? "Snap with your phone" : "Your phone is your scanner") + '</h2>' +
+    (compact ? "" : '<p>Scan once. Your phone then shows the open days: pick the question, take the photo, done.</p>') +
+    '<div class="a-qr" role="img" aria-label="QR code for your phone"></div>' +
+    '<p class="a-follow">' + (compact ? "Already scanned? Your phone follows this screen." : "Works for every day of the holiday") + '</p></aside>';
+}
+
+/* ---------- screens ---------- */
+function asgRender(m) {
+  document.body.classList.add("a-body");
+  m.setAttribute("data-asig", asgSig());
+  if (!SEC) asgHome(m);
+  else if (secDone(SEC)) asgReview(m);
+  else asgWork(m);
+  $$(".a-qr").forEach(qrInto);
+  $$(".a-qimg img[data-src], .a-ms img[data-src]").forEach(function (im) { shown(im, im.getAttribute("data-src")); });
+  $$(".a-qtext").forEach(maths);
+  asgPics(); asgNav(); saveState(); swDraw(); previewLine();
+}
+function asgUpdate() { asgPics(); asgNav(); saveState(); previewLine(); }
+
+function pvBar() { return PREVIEW ? '<div class="ex-preview" role="status"><b>Student view</b> <span class="ex-pvwhat"></span><label class="ex-follow"><input type="checkbox" data-follow' + (follow ? " checked" : "") + '> Follow his question</label></div>' : ""; }
+
+function asgHome(m) {
+  var secs = S.sections || [], days = [], by = {};
+  secs.forEach(function (x) { var k = dayKey(x); if (!by[k]) { by[k] = []; days.push(k); } by[k].push(x); });
+  days.sort(function (a, b) { return a - b; });
+  var open = days.filter(function (k) { return by[k][0].open; }), shut = days.filter(function (k) { return !by[k][0].open; });
+  var today = open[open.length - 1], earlier = open.slice(0, -1).reverse();
+  var dname = function (k) { var x = by[k][0]; return x.day != null ? "Day " + x.day : x.title; };
+  var stateOf = function (x) { var qs = secQs(x.id), n = qs.filter(hasWork).length; return x.doneAt != null ? { k: "done", t: "Finished", n: n, of: qs.length } : n ? { k: "going", t: "Started · " + n + " of " + qs.length, n: n, of: qs.length } : { k: "new", t: "Not started", n: 0, of: qs.length }; };
+  var card = function (x) {
+    var st = stateOf(x), qs = secQs(x.id), marks = qs.reduce(function (a, q) { return a + (Number(q.marks) || 0); }, 0), notes = qs.filter(function (q) { return S.notes && S.notes[q.id]; }).length;
+    return '<button type="button" class="a-card ' + st.k + '" data-a-sec="' + esc(x.id) + '"><span class="a-cardhead"><span class="a-dot ' + subjOf(x) + '"></span><b>' + esc(shortTitle(x)) + '</b><span class="grow"></span><span class="a-st ' + st.k + '">' + esc(st.t) + '</span></span>' +
+      '<span class="a-meta">' + qs.length + ' question' + (qs.length === 1 ? "" : "s") + ' · ' + marks + ' marks' + (x.suggestMin ? ' · about ' + Math.round(x.suggestMin) + ' min' : "") + '</span>' +
+      '<span class="a-bar"><span class="' + subjOf(x) + '" style="width:' + (st.of ? Math.round(100 * st.n / st.of) : 0) + '%"></span></span>' +
+      '<span class="a-go">' + (st.k === "done" ? "See mark scheme" + (notes ? " · " + notes + " note" + (notes === 1 ? "" : "s") + " from Ali" : "") : st.k === "going" ? "Carry on" : "Start") + '</span></button>';
+  };
+  var chip = function (x) { var st = stateOf(x); return '<button type="button" class="a-chip ' + st.k + '" data-a-sec="' + esc(x.id) + '">' + esc(shortTitle(x)) + ' ' + (st.k === "done" ? "finished" : st.k === "going" ? "started" : "not started") + '</button>'; };
+  var notesIn = function (k) { return by[k].reduce(function (a, x) { return a + secQs(x.id).filter(function (q) { return S.notes && S.notes[q.id]; }).length; }, 0); };
+  m.innerHTML = '<div class="a-root">' +
+    '<header class="a-top"><div class="a-brand">' + esc(S.title) + '</div><span class="a-sub">' + days.length + ' days · maths and chemistry</span><span class="grow"></span><div class="ex-save" aria-live="polite"></div></header>' + pvBar() +
+    '<div class="a-home"><main class="a-main">' +
+      (today != null ? '<div class="a-hero"><div class="a-eyebrow">Today</div><h1>' + esc(dname(today)) + ' is open</h1><p>Work in your notebook and write every line of working. Snap each page with your phone and it lands under the right question here.</p></div>' +
+        '<section class="a-cards">' + by[today].map(card).join("") + '</section>' : "") +
+      (earlier.length ? '<section class="a-block"><h2 class="a-eyebrow">Earlier days stay open</h2>' + earlier.map(function (k) {
+        var n = notesIn(k);
+        return '<div class="a-dayrow"><b>' + esc(dname(k)) + '</b>' + by[k].map(chip).join("") + '<span class="grow"></span>' + (n ? '<span class="a-notes">' + n + ' note' + (n === 1 ? "" : "s") + ' from Ali</span>' : "") + '</div>';
+      }).join("") + '</section>' : "") +
+      (shut.length ? '<section class="a-block"><h2 class="a-eyebrow">Still to come</h2><div class="a-soon">' + shut.map(function (k, i) {
+        var x = by[k][0], prev = i === 0 ? open[open.length - 1] : null;
+        return '<span>' + esc(dname(k)) + ' · ' + (x.opensAt ? "opens " + esc(whenText(x.opensAt)) : i === 0 && prev != null ? "opens " + esc(S.gapHours) + " h after you open " + esc(dname(prev)) : "later") + '</span>';
+      }).join("") + '</div></section>' : "") +
+    '</main>' + qrAside(false) + '</div></div>';
+}
+
+function header(x, extra) {
+  return '<header class="a-top"><button type="button" class="a-btn" data-a-home>All days</button><span class="a-dot ' + subjOf(x) + '"></span><b class="a-title">' + esc(x.title) + '</b>' + (extra || "") + '<span class="grow"></span><div class="ex-save" aria-live="polite"></div></header>';
+}
+
+function asgWork(m) {
+  var x = secOf(SEC), qs = secQs(SEC);
+  if (!qs.some(function (q) { return S.questions.indexOf(q) === cur; })) cur = S.questions.indexOf(qs[0]);
+  var q = S.questions[cur], k = qs.indexOf(q), d = drafts[q.id] || { text: "" }, ro = !writable();
+  var input = q.type === "short"
+    ? '<input type="text" id="ans" autocomplete="off" spellcheck="false" value="' + esc(d.text) + '"' + (ro ? " disabled" : "") + '>'
+    : '<textarea id="ans" rows="3" spellcheck="false"' + (ro ? " disabled" : "") + '>' + esc(d.text) + '</textarea>';
+  m.innerHTML = '<div class="a-root">' + header(x,
+      '<div class="a-sw"><span class="a-eyebrow">Stopwatch</span><span class="a-swt">00:00</span>' + (ro ? "" : '<button type="button" class="a-btn dark" data-a-sw>Start</button>') + '</div>') + pvBar() +
+    '<div class="a-work">' +
+      '<nav class="a-qnav" aria-label="Questions"><div class="a-eyebrow">Questions</div><div class="a-qlist"></div><span class="grow"></span>' +
+        (ro ? "" : '<button type="button" class="a-finish" data-a-finish>I\'m done with ' + esc(x.title) + '</button>') + '</nav>' +
+      '<main class="a-qcard"><div class="a-qhead"><h2>Question ' + (k + 1) + '</h2>' + (q.label && q.label !== "Q" + (k + 1) ? '<span class="a-meta">' + esc(q.label) + '</span>' : "") + '<span class="grow"></span><b>' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</b></div>' +
+        '<div class="a-qtext">' + paperHTML(q.text_html, subjOf(x) === "chem" ? "chem" : "maths") + '</div>' +
+        (q.has_img ? '<figure class="a-qimg"><button type="button" data-zoom><img alt="Question ' + (k + 1) + '" data-src="/api/s/questions/' + esc(q.id) + '/image"></button></figure>' : "") +
+        '<div class="a-lab">Your pages for this question</div><div class="a-pages" data-q="' + esc(q.id) + '" data-kind="main"></div>' +
+        (ro ? "" : '<div class="a-attach"><label class="a-btn"><input type="file" accept="image/*" multiple hidden data-file>Choose picture</label><button type="button" class="a-btn" data-draw>Draw</button></div>') +
+        '<label class="a-lab" for="ans">' + (q.type === "short" ? "Your answer" : "Typed answer or note (optional)") + '</label>' + input + '<p class="ex-count hint" hidden></p>' +
+        '<div class="a-qfoot"><button type="button" class="a-btn" data-a-prev' + (k ? "" : " disabled") + '>Previous</button><span class="grow"></span><button type="button" class="a-btn dark" data-a-next' + (k < qs.length - 1 ? "" : " disabled") + '>Next question</button></div>' +
+      '</main>' + qrAside(true) +
+    '</div></div>';
+  var a = $("#ans");
+  if (a) { a.addEventListener("input", function () { onType(q.id, a.value); count(a); asgNav(); }); a.addEventListener("blur", function () { flush(); }); count(a); }
+}
+
+function studyHTML(st) {
+  if (!st) return "";
+  if (st.videos && st.videos.length) return '<div class="a-study"><b>Watch on Maths Genie</b><ul>' + st.videos.map(function (v) { return '<li><a href="https://www.youtube.com/watch?v=' + encodeURIComponent(v.id) + '" target="_blank" rel="noopener">' + esc(v.title) + '</a></li>'; }).join("") + '</ul></div>';
+  if (st.pages && st.pages.length) return '<div class="a-study"><b>Read in ' + esc(st.book || "the book") + '</b><ul>' + st.pages.map(function (p) { return '<li>' + esc((p.topic ? p.topic + ": " : "") + p.pages) + '</li>'; }).join("") + '</ul></div>';
+  return "";
+}
+function noteHTML(q) {
+  var n = S.notes && S.notes[q.id]; if (!n || (!n.note && !n.study)) return "";
+  return '<section class="a-note"><span class="a-avatar" aria-hidden="true">A</span><div>' + (n.note ? '<b>Ali\'s note</b><p>' + esc(n.note) + '</p>' : '<b>To go over</b>') + studyHTML(n.study) + '</div></section>';
+}
+function workCol(q) {
+  var a = (S.answers || {})[q.id];
+  return '<div class="a-col"><div class="a-eyebrow">Your work</div>' + (a && a.text && a.text.trim() ? '<div class="a-typed">' + esc(a.text) + '</div>' : "") +
+    '<div class="a-mywork" data-q="' + esc(q.id) + '"></div></div>';
+}
+function msCol(q) { return '<div class="a-col"><div class="a-eyebrow">Mark scheme</div>' + (q.has_ms ? '<div class="a-ms"><button type="button" data-zoom><img alt="Mark scheme" data-src="/api/s/questions/' + esc(q.id) + '/ms"></button></div>' : '<p class="hint">No mark scheme picture.</p>') + '</div>'; }
+
+function asgReview(m) {
+  var x = secOf(SEC), qs = secQs(SEC), ro = !writable();
+  if (!qs.some(function (q) { return S.questions.indexOf(q) === cur; })) cur = S.questions.indexOf(qs[0]);
+  var q = S.questions[cur], k = qs.indexOf(q), pr = APRAC[q.id];
+  var head = header(x, '<span class="a-pill done">Finished ' + esc(whenText(x.doneAt)) + (x.tookMin != null ? ' · ' + esc(x.tookMin) + ' min' : "") + '</span>' +
+    '<span class="a-seg" role="group" aria-label="View"><button type="button" data-a-mode="one" aria-pressed="' + (AMODE === "one") + '">One at a time</button><button type="button" data-a-mode="all" aria-pressed="' + (AMODE === "all") + '">All together</button></span>');
+  var body;
+  if (AMODE === "all") {
+    body = '<div class="a-review">' + qs.map(function (qq, i) {
+      return '<section class="a-rq"><div class="a-qhead"><h2>Question ' + (i + 1) + '</h2><span class="a-meta">' + esc(qq.marks) + ' marks</span><span class="grow"></span>' + (ro ? "" : '<button type="button" class="a-btn" data-a-again="' + esc(qq.id) + '">Solve it again</button>') + '</div>' +
+        '<div class="a-two">' + workCol(qq) + msCol(qq) + '</div>' + noteHTML(qq) + '</section>';
+    }).join("") + '</div>';
+  } else {
+    body = '<div class="a-review"><div class="a-qhead"><h2>Question ' + (k + 1) + '</h2><span class="a-meta">' + esc(q.marks) + ' marks</span><span class="grow"></span>' +
+        '<button type="button" class="a-btn" data-a-prev' + (k ? "" : " disabled") + '>Previous</button><button type="button" class="a-btn dark" data-a-next' + (k < qs.length - 1 ? "" : " disabled") + '>Next</button></div>' +
+      '<div class="a-two">' + workCol(q) + msCol(q) + '</div>' + noteHTML(q) +
+      (ro ? "" : pr
+        ? '<section class="a-practice"><div class="a-qhead"><h3>Solving it again</h3><span class="a-meta">Practice: kept for Ali, not marked</span><span class="grow"></span><button type="button" class="a-btn" data-a-again="' + esc(q.id) + '">Close</button></div>' +
+          '<div class="a-pages" data-q="' + esc(q.id) + '" data-kind="practice"></div>' +
+          '<div class="a-attach"><label class="a-btn"><input type="file" accept="image/*" multiple hidden data-file>Choose picture</label><button type="button" class="a-btn" data-draw>Draw</button></div>' +
+          '<label class="a-lab" for="ans">Practice working (optional)</label><textarea id="ans" rows="3" spellcheck="false">' + esc((drafts[q.id] || {}).text || "") + '</textarea></section>'
+        : '<div class="a-again"><button type="button" class="a-btn" data-a-again="' + esc(q.id) + '">Solve it again for practice</button><span class="hint">Your marked answer stays as it is.</span></div>') +
+      '</div>';
+  }
+  m.innerHTML = '<div class="a-root">' + head + pvBar() + '<div class="a-revwrap">' + body + (pr && AMODE === "one" ? qrAside(true) : "") + '</div></div>';
+  var a = $("#ans");
+  if (a) { a.addEventListener("input", function () { onType(q.id, a.value); }); a.addEventListener("blur", function () { flush(); }); }
+}
+
+/* the question list down the side of a day */
+function asgNav() {
+  var box = $(".a-qlist"); if (!box || !SEC) return;
+  box.innerHTML = secQs(SEC).map(function (q, i) {
+    var n = mainUps(q.id).length + pending.filter(function (p) { return p.q === q.id; }).length, d = drafts[q.id], typed = d && d.text && d.text.trim();
+    var st = n ? n + " photo" + (n === 1 ? "" : "s") : typed ? "typed" : "empty";
+    return '<button type="button" class="a-qbtn' + (S.questions.indexOf(q) === cur ? " on" : "") + (n || typed ? " has" : "") + '" data-a-q="' + S.questions.indexOf(q) + '"' + (S.questions.indexOf(q) === cur ? ' aria-current="true"' : "") + '><b>Q' + (i + 1) + '</b><span>' + st + '</span></button>';
+  }).join("");
+  var f = $(".a-follow"); if (f && SEC) { var qq = S.questions[cur]; if (qq && qq.section === SEC) f.textContent = "Already scanned? Your phone follows this screen: it is on Q" + (secQs(SEC).indexOf(qq) + 1) + " now."; }
+}
+
+/* photos: his pages before finishing, practice pages after */
+function asgPics() {
+  $$(".a-pages").forEach(function (box) {
+    var qid = box.getAttribute("data-q"), prac = box.getAttribute("data-kind") === "practice", ro = !writable();
+    var saved = (prac ? pracUps : mainUps)(qid), wait = pending.filter(function (p) { return p.q === qid; });
+    var want = saved.map(function (u) { return u.id; }).concat(wait.map(function (p) { return p.id; })).join(",") + "|" + ro;
+    if (box.getAttribute("data-key") === want) return;
+    box.setAttribute("data-key", want);
+    box.innerHTML = saved.map(function (u) {
+      return '<div class="ex-pic" data-id="' + esc(u.id) + '"><img alt="Your page" data-src="/api/s/files/' + esc(u.id) + '"><div class="meta"><span>' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " · " + esc(clockTime(u.at)) + '</span>' + (ro ? "" : '<button type="button" data-rm="' + esc(u.id) + '" aria-label="Remove picture">Remove</button>') + '</div></div>';
+    }).join("") + wait.map(function (p) { return '<div class="ex-pic pending"><img alt="Sending" src="' + p.url + '"><div class="meta"><span>Sending</span></div></div>'; }).join("") +
+      (ro ? "" : '<div class="a-snap"><b>' + (saved.length + wait.length ? "Next page?" : "Your first page") + '</b><span>Snap it on your phone</span></div>');
+    $$("img[data-src]", box).forEach(function (im) { shown(im, im.getAttribute("data-src")); });
+  });
+  $$(".a-mywork").forEach(function (box) {
+    var qid = box.getAttribute("data-q"), saved = mainUps(qid), want = saved.map(function (u) { return u.id; }).join(",");
+    if (box.getAttribute("data-key") === want && box.innerHTML) return;
+    box.setAttribute("data-key", want);
+    box.innerHTML = saved.length ? saved.map(function (u) { return '<button type="button" class="a-shot" data-zoom><img alt="Your page" data-src="/api/s/files/' + esc(u.id) + '"></button>'; }).join("") : '<p class="hint">No photos for this question.</p>';
+    $$("img[data-src]", box).forEach(function (im) { shown(im, im.getAttribute("data-src")); });
+  });
+}
+
+function openSec(id) {
+  flush(); setSec(id); follow = false; AMODE = "one"; APRAC = {};
+  cur = S.questions.indexOf(secQs(id)[0]);
+  if (writable() && !secDone(id)) api("POST", "/api/s/sections/" + encodeURIComponent(id) + "/open").catch(function () {});
+  render(); window.scrollTo(0, 0); if (writable()) poll();
+}
+function goQ(i) { flush(); cur = i; render(); window.scrollTo(0, 0); if (writable()) poll(); }
+
+/* "I'm done": not yet, or finished (answers fixed, mark schemes open) */
+function asgFinish() {
+  var x = secOf(SEC), qs = secQs(SEC), work = qs.filter(hasWork), empty = qs.filter(function (q) { return !hasWork(q); }), ms = swMs();
+  var d = modal('<div class="ex-box a-finbox" role="dialog" aria-modal="true" aria-labelledby="fin-h"><h2 id="fin-h">Are you finished with ' + esc(x.title) + '?</h2>' +
+    '<div class="a-chips"><span class="a-pill done">' + work.length + ' of ' + qs.length + ' questions have work</span>' +
+      empty.map(function (q) { return '<span class="a-pill going">Q' + (qs.indexOf(q) + 1) + ' is empty</span>'; }).join("") +
+      (ms ? '<span class="a-pill">Stopwatch ' + swText(ms) + '</span>' : "") + '</div>' +
+    '<p>If you finish now, the mark schemes open and Ali marks what you have done. You won\'t be able to change these answers after that, but you can solve any question again for practice.</p>' +
+    (pending.length ? '<p><b>Some pictures are still sending. Wait a moment first.</b></p>' : "") +
+    '<div class="a-choices"><button type="button" class="a-choice" data-x><b>Not yet</b><span>I\'ll come back to it. Nothing opens.</span></button>' +
+    '<button type="button" class="a-choice yes" data-ok' + (pending.length ? " disabled" : "") + '><b>Yes, I\'m finished</b><span>Show me the mark schemes. Ali can mark it and leave notes.</span></button></div></div>');
+  $("[data-x]", d.el).onclick = function () { swSet(false); d.close(); };
+  $("[data-ok]", d.el).onclick = function () {
+    this.disabled = true; flush();
+    var took = ms ? Math.max(1, Math.round(ms / 60000)) : null;
+    var wait = setInterval(function () {
+      if (anyDirty() && net === "ok") return;
+      clearInterval(wait);
+      if (anyDirty()) { d.close(); toast("Can't finish while offline. Your work is kept; try again when connected."); return; }
+      api("POST", "/api/s/sections/" + encodeURIComponent(SEC) + "/done", { tookMin: took }).then(function (r) {
+        d.close(); swSet(false); x.doneAt = r.doneAt; x.tookMin = r.tookMin; toast("Mark schemes open"); poll();
+      }, function (e) { d.close(); toast(e.message); poll(); });
+    }, 300);
+  };
+}
+
+document.addEventListener("click", function (e) {
+  if (!ASG()) return;
+  var t = e.target.closest && e.target.closest("[data-a-sec],[data-a-home],[data-a-q],[data-a-prev],[data-a-next],[data-a-sw],[data-a-finish],[data-a-mode],[data-a-again]"); if (!t) return;
+  var ord = secQs(SEC || "").map(function (q) { return S.questions.indexOf(q); }), k = ord.indexOf(cur);
+  if (t.hasAttribute("data-a-sec")) openSec(t.getAttribute("data-a-sec"));
+  else if (t.hasAttribute("data-a-home")) { flush(); swSet(false); setSec(null); follow = false; render(); window.scrollTo(0, 0); }
+  else if (t.hasAttribute("data-a-q")) goQ(Number(t.getAttribute("data-a-q")));
+  else if (t.hasAttribute("data-a-prev") && k > 0) goQ(ord[k - 1]);
+  else if (t.hasAttribute("data-a-next") && k < ord.length - 1) goQ(ord[k + 1]);
+  else if (t.hasAttribute("data-a-sw")) swSet(!swGet().since);
+  else if (t.hasAttribute("data-a-finish")) asgFinish();
+  else if (t.hasAttribute("data-a-mode")) { AMODE = t.getAttribute("data-a-mode"); render(); }
+  else if (t.hasAttribute("data-a-again")) { var qid = t.getAttribute("data-a-again"); APRAC[qid] = !APRAC[qid]; AMODE = "one"; cur = S.questions.map(function (q) { return q.id; }).indexOf(qid); render(); }
+});
 
 /* ---------- dialogs ---------- */
 function modal(html, cls) {
@@ -554,31 +781,6 @@ function handIn() {
       clearInterval(wait);
       if (anyDirty()) { d.close(); toast("Can't hand in while offline. Your work is kept; try again when connected."); return; }
       api("POST", "/api/s/submit").then(function () { d.close(); poll(); }, function (e) { d.close(); toast(e.message); poll(); });
-    }, 300);
-  };
-}
-
-/* Done on a section: after this its mark schemes show. Asks how long it took (there is no clock). */
-function sectionDone() {
-  var sec = secOf(SEC); if (!sec) return;
-  var qs = S.questions.filter(function (q) { return q.section === SEC; }), empty = qs.filter(function (q) { return !answered(q); }).length;
-  var d = modal('<div class="ex-box" role="dialog" aria-modal="true" aria-labelledby="sd-h"><h2 id="sd-h">Done with ' + esc(sec.title) + '?</h2>' +
-    '<p>The mark scheme then opens under each question. You can still change answers to learn from it, but your teacher marks what you have now.</p>' +
-    (empty ? '<p><b>' + empty + ' question' + (empty === 1 ? " has" : "s have") + ' no answer yet.</b></p>' : "") +
-    (pending.length ? '<p><b>Some pictures are still sending. Wait a moment first.</b></p>' : "") +
-    '<label class="ex-took">How long did it take you? <input type="number" min="0" max="600" step="1" data-took placeholder="minutes"></label>' +
-    '<div class="row"><button class="btn" type="button" data-ok' + (pending.length ? " disabled" : "") + '>Done, show the mark scheme</button><button class="btn accent" type="button" data-x>Keep working</button></div></div>');
-  $("[data-x]", d.el).onclick = d.close;
-  $("[data-ok]", d.el).onclick = function () {
-    this.disabled = true; flush();
-    var took = $("[data-took]", d.el).value;
-    var wait = setInterval(function () {
-      if (anyDirty() && net === "ok") return;
-      clearInterval(wait);
-      if (anyDirty()) { d.close(); toast("Can't finish while offline. Your work is kept; try again when connected."); return; }
-      api("POST", "/api/s/sections/" + encodeURIComponent(SEC) + "/done", { tookMin: took === "" ? null : Number(took) }).then(function (r) {
-        d.close(); sec.doneAt = r.doneAt; needQ = true; var b = $("[data-secdone]"); if (b) b.remove(); banner(); poll(); toast("Mark scheme open");
-      }, function (e) { d.close(); toast(e.message); poll(); });
     }, 300);
   };
 }
@@ -656,9 +858,7 @@ document.addEventListener("click", function (e) {
   if (t.hasAttribute("data-go")) { cur = Number(t.getAttribute("data-go")); moved(); }
   else if (t.hasAttribute("data-prev") && order().indexOf(cur) > 0) { cur = order()[order().indexOf(cur) - 1]; moved(); }
   else if (t.hasAttribute("data-next") && order().indexOf(cur) < order().length - 1) { cur = order()[order().indexOf(cur) + 1]; moved(); }
-  else if (t.hasAttribute("data-sec")) { setSec(t.getAttribute("data-sec")); cur = order()[0] || 0; follow = false; render(); window.scrollTo(0, 0); if (writable()) poll(); }
-  else if (t.hasAttribute("data-home")) { flush(); setSec(null); follow = false; render(); window.scrollTo(0, 0); }
-  else if (t.hasAttribute("data-secdone")) sectionDone();
+
   else if (t.hasAttribute("data-handin")) handIn();
   else if (t.hasAttribute("data-draw")) drawDialog(S.questions[cur]);
   else if (t.hasAttribute("data-phone")) phoneDialog(S.questions[cur]);
@@ -686,7 +886,11 @@ function startPhone() {
   window.addEventListener("online", function () { phonePoll(); phoneSend(); });
 }
 function phonePoll() {
-  api("GET", "/api/p/info").then(function (d) { P = d; phoneRender(); }, function (e) {
+  api("GET", "/api/p/info").then(function (d) {
+    P = d;
+    if (P.all) { var busy = phoneQueue.length || document.activeElement && document.activeElement.matches && document.activeElement.matches("input"); if (!busy) phoneAll(); else phonePics(); setTimeout(phonePoll, 4000); }
+    else phoneRender();
+  }, function (e) {
     if (e.status === 404) return fatal("This phone link is not valid", "Scan the code on the computer again.");
     $("#ex").innerHTML = '<div class="ex-center"><div><h1>No connection</h1><p>Check the phone’s internet. This page keeps trying.</p></div></div>';
     setTimeout(phonePoll, 4000);
@@ -705,14 +909,16 @@ function phoneRender() {
 }
 function phonePics() {
   var box = $("#phpics"); if (!box) return;
-  box.innerHTML = (P.uploads || []).map(function (u) { return '<div class="ex-pic"><img alt="Sent photo" data-src="/api/p/files/' + esc(u.id) + '"><div class="meta"><span>Sent ' + esc(clockTime(u.at)) + '</span></div></div>'; }).join("") +
-    phoneQueue.map(function (p) { return '<div class="ex-pic pending"><img alt="Photo sending" src="' + p.url + '"><div class="meta"><span>' + (p.err ? esc(p.err) : "Sending") + '</span></div></div>'; }).join("");
+  var mine = (P.uploads || []).filter(function (u) { return !P.all || u.question === PQ; }), queued = phoneQueue.filter(function (p) { return !P.all || p.q === PQ; });
+  box.innerHTML = mine.map(function (u) { return '<div class="ex-pic"><img alt="Sent photo" data-src="/api/p/files/' + esc(u.id) + '"><div class="meta"><span>Sent ' + esc(clockTime(u.at)) + '</span></div></div>'; }).join("") +
+    queued.map(function (p) { return '<div class="ex-pic pending"><img alt="Photo sending" src="' + p.url + '"><div class="meta"><span>' + (p.err ? esc(p.err) : "Sending") + '</span></div></div>'; }).join("");
   $$("img[data-src]", box).forEach(function (im) { shown(im, im.getAttribute("data-src")); });
 }
 document.addEventListener("change", function (e) {
   if (!PHONE || !e.target.matches || !e.target.matches("[data-cam],[data-gal]")) return;
   Array.prototype.forEach.call(e.target.files, function (f) {
-    shrink(f).then(function (b) { phoneQueue.push({ blob: b, url: URL.createObjectURL(b) }); phonePics(); phoneSend(); }, function (err) { toast(err.message); });
+    var q = P && P.all ? PQ : null;
+    shrink(f).then(function (b) { phoneQueue.push({ blob: b, url: URL.createObjectURL(b), q: q }); phonePics(); phoneSend(); }, function (err) { toast(err.message); });
   });
   e.target.value = "";
 });
@@ -720,7 +926,7 @@ var phoneBusy = false;
 function phoneSend() {
   if (phoneBusy || !phoneQueue.length) return;
   phoneBusy = true; var it = phoneQueue[0]; it.err = null; phonePics();
-  api("POST", "/api/p/upload", it.blob, { "Content-Type": it.blob.type || "image/jpeg" }).then(function (u) {
+  api("POST", "/api/p/upload" + (it.q ? "?q=" + encodeURIComponent(it.q) : ""), it.blob, { "Content-Type": it.blob.type || "image/jpeg" }).then(function (u) {
     phoneQueue.shift(); blobCache["/api/p/files/" + u.id] = it.url; P.uploads = (P.uploads || []).concat([u]); phoneBusy = false; toast("Photo sent"); phonePics(); phoneSend();
   }, function (e) {
     phoneBusy = false;
@@ -728,6 +934,37 @@ function phoneSend() {
     it.err = "Waiting for connection"; phonePics(); setTimeout(phoneSend, 4000);
   });
 }
+
+/* One phone link for a whole assignment (Ali, 8 Oct): pick the day and the question (it follows the laptop),
+   take the photo. */
+var PSEC = null, PQ = null, pickedAt = 0;
+function phoneAll() {
+  document.body.classList.add("a-body");
+  var secs = P.sections || [], qs = P.questions || [];
+  // follow the laptop unless he picked something himself in the last half minute
+  if (P.on && Date.now() - pickedAt > 30000) { var oq = qs.filter(function (q) { return q.id === P.on; })[0]; if (oq) { PSEC = oq.section; PQ = oq.id; } }
+  if (!PSEC || !secs.some(function (x) { return x.id === PSEC; })) { var nd = secs.filter(function (x) { return x.doneAt == null; }); PSEC = (nd[nd.length - 1] || secs[secs.length - 1] || {}).id || null; }
+  var sq = qs.filter(function (q) { return q.section === PSEC; });
+  if (!PQ || !sq.some(function (q) { return q.id === PQ; })) PQ = sq.length ? sq[0].id : null;
+  var sec = secs.filter(function (x) { return x.id === PSEC; })[0], open = P.status === "running" || P.status === "timeup", n = sq.map(function (q) { return q.id; }).indexOf(PQ) + 1;
+  $("#ex").innerHTML = '<div class="a-phone"><div class="a-eyebrow">' + esc(P.title) + '</div><h1>' + esc(sec ? sec.title : "Nothing open yet") + '</h1>' +
+    '<div class="a-pchips">' + secs.slice().reverse().map(function (x) { return '<button type="button" class="a-chip' + (x.id === PSEC ? " on" : "") + '" data-p-sec="' + esc(x.id) + '">' + esc(x.title) + (x.doneAt != null ? " ✓" : "") + '</button>'; }).join("") + '</div>' +
+    (sec ? '<div class="a-lab">Which question is this page for?</div><div class="a-pqs">' + sq.map(function (q, i) { return '<button type="button" class="a-pq' + (q.id === PQ ? " on" : "") + '" data-p-q="' + esc(q.id) + '">' + (i + 1) + '</button>'; }).join("") + '</div>' +
+      (P.on === PQ ? '<p class="hint">Follows the laptop: it is on Q' + n + ' there too.</p>' : "") +
+      (sec.doneAt != null ? '<p class="hint">This part is finished: new photos are kept as practice.</p>' : "") +
+      (open ? '<label class="a-shoot ' + subjOf(sec) + '"><input type="file" accept="image/*" capture="environment" data-cam>Take photo of Q' + n + '</label>' +
+        '<label class="a-btn wide"><input type="file" accept="image/*" multiple data-gal>Choose from photos</label>' : '<div class="ex-banner info">The assignment is closed.</div>') +
+      '<div class="a-lab">Sent for Q' + n + '</div><div class="ex-pics" id="phpics"></div>' : '<p>Your next day opens later.</p>') + '</div>';
+  phonePics();
+}
+document.addEventListener("click", function (e) {
+  if (!PHONE || !P || !P.all) return;
+  var t = e.target.closest && e.target.closest("[data-p-sec],[data-p-q]"); if (!t) return;
+  pickedAt = Date.now();
+  if (t.hasAttribute("data-p-sec")) { PSEC = t.getAttribute("data-p-sec"); PQ = null; }
+  else PQ = t.getAttribute("data-p-q");
+  phoneAll();
+});
 
 /* A different link pasted into the same tab: start again with it. */
 window.addEventListener("hashchange", function () { location.reload(); });
