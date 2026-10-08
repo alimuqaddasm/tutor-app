@@ -34,7 +34,7 @@ try:
         p.screenshot(path=os.path.join(R.OUT, "r13-maths-font.png"))
         # 3. try-out look
         glow = p.evaluate("getComputedStyle(document.body, '::after').boxShadow")
-        check("try-out: a soft orange glow round the window", "245, 158, 11" in glow, glow[:80])
+        check("try-out: a soft orange glow round the window", "178, 98, 0" in glow, glow[:80])
         check("try-out: the marker dot is there (v21: plain dot; the Try-out button is in the top bar)", p.locator("#trydot").count() == 1 and p.locator(".tmini [data-trytoggle]").inner_text() == "Leave try-out")
         nb = p.locator(".tfoot .btn.next"); bb = nb.bounding_box(); a = R.pos(p)
         p.mouse.click(bb["x"] + bb["width"] - 4, bb["y"] + bb["height"] / 2); p.wait_for_timeout(400)

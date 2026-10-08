@@ -3,6 +3,7 @@
 Read this before you add or change any page. Every screen follows it, so a new page looks right the first time.
 
 - **Styles:** `design.css`. Tokens (colours, type, space, corners) and the shared parts (buttons, tags, cards, verdicts). Pages use these classes and tokens. Never write a new colour, font size or corner size on a page.
+- **Design system in Claude:** "Clear Desk" design system artifact (tokens, components, cover): https://claude.ai/artifact/8Zz82qih6yELUUsWH68uxb (private to Ali's account).
 - **Screens:** the Claude Design canvas "Tutor Desk Design System" has all 26 screens drawn in this system: https://claude.ai/artifact/H5JReBhkCaFYfif9Jnh5D4 (private to Ali's account). `design.css` is the same file the canvas uses (`clear-desk.css` there).
 - **Questions:** exam text keeps the board's font: Arial for AQA (`.q-aqa`), Times for Edexcel (`.q-edexcel`). Everything else uses the app font.
 
@@ -75,7 +76,7 @@ Topic codes: chemistry uses the AQA spec code (3.3.8). Maths uses the Pearson bo
 
 Always this set, always this order, with these symbols: **Right ✓, Partly ½, Wording ≈, Terminology Aa, Wrong ✕, No answer −**.
 "Not asked" (you chose not to ask it) is not a verdict: a dashed button in the bottom bar, never a mistake.
-In Teach the verdicts are round buttons down the right edge (`.vrail` / `.rv`), with the mic last ("Say what he said").
+In Teach the verdicts are round buttons down the right edge (`.vrail`; in the app `.ctl.big.vrail .vr .vd`): A (answer) on top, then Right, Wrong, Partly on keys 1 to 3, then the mic and More (Wording, Terminology, No answer, marks, note on keys 4 to 6). Soft tinted circles; the chosen one fills with its colour.
 
 ## Words (glossary)
 
@@ -114,10 +115,20 @@ In Teach the verdicts are round buttons down the right edge (`.vrail` / `.rv`), 
 ## Page patterns
 
 - **List pages** (Lessons, Videos, Exams, Record, Settings): sidebar (`.side`) + `.main` + `.wrap`. Title `.t-page`, then a row of tags, then sections with `.t-sec` headings.
-- **Lesson and focus pages** (Plan, Teach, Warm-up, After the lesson, His work, Mark): the thin icon rail (`.rail`) instead of the sidebar, so the work gets the room.
+- **Lesson and focus pages** (Plan, Teach, Warm-up, After the lesson, His work, Mark): the thin icon rail (`.iconrail`) instead of the sidebar, so the work gets the room.
 - **His screens** (Show him, Student view, his exam page, his phone, his assignment): no app chrome, white or ground, big exam-font text, round arrow buttons.
 - **Bars:** `.topbar` and `.botbar`. The main action sits at the right end of the bottom bar.
 - **Phone** (under 760 px): the sidebar becomes a bottom bar of five tabs (Lessons, Warm-up, Exams, Record, More).
+
+## How the app is wired (read before editing CSS or markup)
+
+- Every page loads `design.css` then its own sheet: `app.css` (teacher app, one numbered section per screen) or `app.css` + `exam.css` (his pages). The `<body>` has class `cd`.
+- `design.css` base rules use `:where()`, so they weigh nothing and any class rule wins. Never add `!important` to beat them.
+- Class names in `design.css` are the shared vocabulary. Before you add a class to a page, check `design.css` does not already use the name for something else (`grep -n '\.name' design.css`). Names already taken: `.iconrail`, `.clockpill`, `.input`, `.icon`, `.loadmore`, `.mrow`, `.choice`, `.tag`, `.ref`, `.flow`, `.kinds`, `.seg`, `.field`, `.check`, `.v`, `.vrail`, `.card`, `.list`, `.li`, `.btn`.
+- Subject colour: put `data-subject="maths"` or `"chem"` on a container and use `var(--accent)`, `var(--accent-ink)`, `var(--accent-wash)` inside it.
+- Light theme only. No dark-mode blocks.
+- Tags in `app.js`: `tag(html, cls)`, `subjTag(subject)`, `topicTag(script)`. Lesson words: `lessonTitle(script, session)` (main topic), `kindOf(partName)` and `partTitle(partName)` (kind tag + the rest), `kindsHTML(script)`. Use these, never build the strings again.
+- Verdicts in `app.js`: `VERD` (order and labels), `VHELP` (tooltips), `VTAG` (as tags).
 
 ## Adding a new page
 

@@ -84,7 +84,7 @@ try:
         part = p.locator(".tcrumb b").inner_text(); p.click("#clkgo"); p.wait_for_timeout(1200)
         p.evaluate("location.hash = '#/lesson/%s'" % CH); p.wait_for_selector(".rail"); p.wait_for_timeout(500)
         live = p.locator(".rail button.live .nm").all_inner_texts()
-        check("Start after a reload counts time for the part on screen", live == [part], (part, live)); c.close()
+        check("Start after a reload counts time for the part on screen", len(live) == 1 and live[0].lower() in part.lower(), (part, live))  # the rail shows the part name without its kind (Clear Desk, 8 Oct); c.close()
         # 5. Ctrl/Alt + keys do nothing; 6. nothing moves behind a zoomed picture
         c = ctx_(b); p = page(c, "?try#/lesson/" + CH + "/teach"); jump(p, "Choose the quiz"); p.keyboard.press("ArrowRight"); p.wait_for_timeout(300)
         v0 = p.locator(".chunk.cur .ctl.big [aria-pressed=true]").all_inner_texts(); p.keyboard.press("Control+1"); p.keyboard.press("Alt+2"); p.wait_for_timeout(200); a = pos(p); p.keyboard.press("Control+ArrowRight"); p.wait_for_timeout(200)

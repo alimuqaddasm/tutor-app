@@ -285,7 +285,7 @@ function drawExam() {
     '<div class="xt-linkrow"><label class="field xt-narrow" style="margin:0"><span>Hours between days</span><input type="number" id="xt-gap" min="0" max="240" step="1" value="' + esc(X.gapHours == null ? 12 : X.gapHours) + '"' + (readOnly(X) ? " disabled" : "") + '></label><button class="btn small" type="button" data-savegap' + (readOnly(X) ? " disabled" : "") + '>Save</button></div></section>';
   /* time suggestion (an assignment has no clock) */
   if (!asg) h += '<section class="card xt-card"><h3>Time</h3>' + (readOnly(X) && X.startedAt == null ? '<p>Exam time: <b>' + esc(mins(X.baseMinutes || 0)) + '</b> for ' + total + ' marks.</p>' : started ? '<p>Set at the start: <b>' + esc(mins(X.baseMinutes)) + '</b> for ' + total + ' marks. Use the + buttons above to add time.</p>' :
-    '<div class="xt-ratio"><div class="xt-seg" role="group" aria-label="Where the minutes per mark come from"><button type="button" class="chip" data-rmode="papers" aria-pressed="' + (mode === "papers") + '">From past papers</button><button type="button" class="chip" data-rmode="number" aria-pressed="' + (mode === "number") + '">My own number</button></div>' +
+    '<div class="xt-ratio"><div class="xt-seg" role="group" aria-label="Where the minutes per mark come from"><button type="button" class="chip" data-rmode="papers" aria-pressed="' + (mode === "papers") + '">From past papers</button><button type="button" class="chip" data-rmode="number" aria-pressed="' + (mode === "number") + '">Other amount</button></div>' +
     (mode === "number"
       ? '<div class="field xt-narrow"><label for="xt-ratio">Minutes per mark</label><input type="number" id="xt-ratio" step="0.05" min="0.1" value="' + esc(myRatio || X.ratio || 1.2) + '"></div>'
       : '<table class="xt-table"><thead><tr><th></th><th>Past paper</th><th>Marks</th><th>Minutes</th><th></th></tr></thead><tbody>' + papers.map(function (p, i) {
@@ -469,10 +469,10 @@ function drawMark() {
       nIn++;
     }
     shown++;
-    return head + '<section class="card xt-mq" data-mq="' + esc(q.id) + '"><div class="xt-mhead"><h3>Question ' + (asg ? nIn : i + 1) + (q.label ? ' <span class="hint">(' + esc(q.label) + ')</span>' : "") + '</h3><span class="hint">' + q.marks + ' mark' + (q.marks === 1 ? "" : "s") + (r.source ? " · " + esc(r.source) : "") + '</span><button class="btn small accent" type="button" data-compare="' + i + '" title="His answer beside the mark scheme, full screen">Compare</button></div>' +
+    return head + '<section class="card xt-mq" data-mq="' + esc(q.id) + '"><div class="xt-mhead"><h3>Question ' + (asg ? nIn : i + 1) + (q.label ? ' <span class="hint">(' + esc(q.label) + ')</span>' : "") + '</h3><span class="hint">' + q.marks + ' mark' + (q.marks === 1 ? "" : "s") + (r.source ? " · " + esc(r.source) : "") + '</span><button class="btn small accent" type="button" data-compare="' + i + '" title="His work beside the mark scheme, full screen">Compare</button></div>' +
       '<div class="xt-3">' +
         '<div class="xt-col"><div class="xt-lab">Question</div><div class="xt-qtext">' + T.clean(q.text_html) + '</div>' + (q.has_img ? '<img class="xt-zoomable" alt="Question picture" data-xsrc="/api/t/exams/' + esc(R.id) + '/questions/' + esc(q.id) + '/image">' : "") + '</div>' +
-        '<div class="xt-col"><div class="xt-lab">His answer' + (q.finalAt ? ' <span class="hint">last saved ' + esc(t12(q.finalAt)) + '</span>' : "") + (q.writtenLate ? ' <span class="xt-late">part written late</span>' : "") + '</div>' + timeLine(q) +
+        '<div class="xt-col"><div class="xt-lab">His work' + (q.finalAt ? ' <span class="hint">last saved ' + esc(t12(q.finalAt)) + '</span>' : "") + (q.writtenLate ? ' <span class="xt-late">part written late</span>' : "") + '</div>' + timeLine(q) +
           (asg ? (q.final ? '<div class="xt-ans">' + esc(q.final) + '</div>' : '<p class="hint">No typed answer.</p>') + (q.doneAt == null ? '<p class="hint">He has not finished this part yet.</p>' : "")
             : q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : '<p class="hint">No typed answer.</p>') +
           (q.writtenLate ? '<details class="xt-det"><summary>What he had at the original end time (' + esc(t12(R.originalEndAt)) + ')</summary><div class="xt-ans">' + (q.atOriginalEnd ? esc(q.atOriginalEnd) : '<span class="hint">Nothing yet</span>') + '</div></details>' : "") +
@@ -504,7 +504,7 @@ function claudeLine(q) {
   var done = sameAsClaude(q);
   return '<div class="xt-cmark' + (done ? " ok" : "") + '"><div class="xt-grow"><b>Claude: ' + esc(c.score) + ' / ' + q.marks + '</b>' + (t ? ' <span class="hint">' + esc(t) + '</span>' : "") +
     (c.comment ? '<div>' + esc(c.comment) + '</div>' : "") + (c.unsure ? '<div class="xt-unsure">Not sure: ' + esc(c.unsure) + '</div>' : "") + '</div>' +
-    (done ? '<span class="xt-now">Accepted</span>' : '<button class="btn small accent" type="button" data-accept="' + esc(q.id) + '"' + (readOnly(R) ? " disabled" : "") + '>Accept</button>') + '</div>';
+    (done ? '<span class="xt-now">Accepted</span>' : '<button class="btn small accent" type="button" data-accept="' + esc(q.id) + '"' + (readOnly(R) ? " disabled" : "") + '>Accept Claude\u2019s mark</button>') + '</div>';
 }
 /* put Claude's mark, ticks and comment into the page's fields and save them as Ali's */
 function acceptClaude(qid) {
@@ -574,7 +574,7 @@ function compare(i) {
   cmp.innerHTML = '<div class="xt-cmphead"><b>Question ' + (i + 1) + ' of ' + R.questions.length + '</b><span class="hint">' + (q.label ? esc(q.label) + " · " : "") + q.marks + ' mark' + (q.marks === 1 ? "" : "s") + (q.seconds ? " · " + esc(dur(q.seconds)) + " on it" : "") + '</span><span class="xt-grow"></span>' +
       '<button class="btn small" type="button" data-cmpgo="' + (i - 1) + '"' + (i ? "" : " disabled") + '>Previous</button><button class="btn small" type="button" data-cmpgo="' + (i + 1) + '"' + (i < R.questions.length - 1 ? "" : " disabled") + '>Next</button><button class="btn small" type="button" data-cmpx>Close</button></div>' +
     '<details class="xt-cmpq"><summary>The question</summary><div class="xt-qtext">' + T.clean(q.text_html) + '</div>' + (q.has_img ? '<img class="xt-zoomable" alt="Question picture" data-xsrc="/api/t/exams/' + esc(R.id) + '/questions/' + esc(q.id) + '/image">' : "") + '</details>' +
-    '<div class="xt-cmp2"><div class="xt-col"><div class="xt-lab">His answer</div>' +
+    '<div class="xt-cmp2"><div class="xt-col"><div class="xt-lab">His work</div>' +
         (q.doneAt != null ? (q.atDone ? '<div class="xt-ans">' + esc(q.atDone) + '</div>' : "") + (q.changedAfterDone ? '<details class="xt-det xt-after"><summary>Changed after Done: not for marks</summary><div class="xt-ans">' + esc(q.final) + '</div></details>' : "")
           : q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : "") +
         q.uploads.map(function (u) { return '<figure class="xt-cmppic"><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '"><figcaption class="hint">' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">late</span>' : "") + (u.practice ? ' <span class="xt-late">practice</span>' : "") + '</figcaption></figure>'; }).join("") +

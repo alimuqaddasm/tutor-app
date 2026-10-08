@@ -78,14 +78,8 @@ with sync_playwright() as p:
     check("a double tap on the tick doesn't mark the next question", [x for x in r4 if x["k"] == k][0]["v"] == "right" and nk and before.get(nk[0]["k"]) == [x for x in r4 if x["open"]][0]["v"], (nk, before.get(nk[0]["k"]) if nk else None))
     check("the icons sit clear of the list", pg.evaluate("(()=>{const r=document.querySelector('.vrail').getBoundingClientRect(),c=document.querySelector('.chunk.cur').getBoundingClientRect();return c.right<=r.left+1})()"))
     if SHOTS: pg.screenshot(path=os.path.join(SHOTS, "vrail-1440.png"))
-    # Solid or Soft tiles, from the ... menu at the top; the device remembers it
-    pg.click("[data-tmore]"); pg.click("[data-vstylebtn]"); pg.wait_for_timeout(200)
-    check("the top menu switches the buttons to soft tiles", pg.evaluate("(()=>{const e=getComputedStyle(document.querySelector('.vrail .vr-wrong .vd'));return [e.borderRadius,e.backgroundColor]})()") == ["16px", "rgb(253, 232, 232)"] and "Soft tiles" in pg.inner_text("[data-vstylebtn]"))
-    if SHOTS: pg.screenshot(path=os.path.join(SHOTS, "vrail-soft-1440.png"))
-    pg.reload(); pg.wait_for_selector(".chunk.cur", timeout=30000)
-    check("  and it stays after a reload", pg.evaluate("document.documentElement.dataset.vstyle") == "soft")
-    pg.click("[data-tmore]"); pg.click("[data-vstylebtn]")
-    check("  tap again: back to solid", pg.evaluate("document.documentElement.dataset.vstyle") is None and "Solid" in pg.inner_text("[data-vstylebtn]"))
+    # one style for the marking buttons since the Clear Desk redesign (8 Oct): soft tinted circles, the chosen one fills
+    check("the marking buttons are soft tinted circles", pg.evaluate("(()=>{const e=getComputedStyle(document.querySelector('.vrail .vr-wrong .vd'));return [e.borderRadius,e.backgroundColor]})()") == ["50%", "rgb(252, 235, 232)"])
     pg.context.close()
 
     for w, h in ((1024, 768), (390, 844)):

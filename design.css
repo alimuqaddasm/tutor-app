@@ -36,21 +36,27 @@
   --r-sm:8px; --r-md:12px; --r-lg:16px; --r-full:999px;
   --raise:0 8px 24px rgba(27,33,48,.08); --raise-lg:0 24px 64px rgba(27,33,48,.18);
   --tap:48px;
+  /* the open lesson's subject colour: chemistry unless the page says maths */
+  --accent:var(--chem); --accent-ink:var(--chem-ink); --accent-wash:var(--chem-wash);
 }
+[data-subject="maths"]{--accent:var(--maths);--accent-ink:var(--maths-ink);--accent-wash:var(--maths-wash)}
+[data-subject="chem"]{--accent:var(--chem);--accent-ink:var(--chem-ink);--accent-wash:var(--chem-wash)}
 :root[data-font="hanken"]{--font:"Hanken Grotesk","Segoe UI",system-ui,sans-serif}
 :root[data-font="atkinson"]{--font:"Atkinson Hyperlegible Next","Segoe UI",system-ui,sans-serif}
 
 /* ---------- base ---------- */
-.cd,.cd *{box-sizing:border-box}
+[hidden]{display:none!important}
+/* base rules use :where() so they weigh nothing: any class rule beats them */
+:where(.cd),:where(.cd) *{box-sizing:border-box}
 .cd{font-family:var(--font);font-size:var(--fs-md);line-height:1.6;color:var(--text);background:var(--ground);-webkit-font-smoothing:antialiased}
-.cd h1,.cd h2,.cd h3,.cd p,.cd figure{margin:0}
-.cd a{color:inherit}
-.cd button,.cd input,.cd select,.cd textarea{font:inherit;color:inherit}
-.cd :focus-visible{outline:3px solid var(--slate);outline-offset:2px;border-radius:8px}
+:where(.cd) :where(h1,h2,h3,p,figure){margin:0}
+:where(.cd) a{color:inherit}
+:where(.cd) :where(button,input,select,textarea){font:inherit;color:inherit}
+:where(.cd) :focus-visible{outline:3px solid var(--slate);outline-offset:2px;border-radius:8px}
 .num{font-variant-numeric:tabular-nums}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.ic.sm{width:16px;height:16px}.ic.lg{width:24px;height:24px}
+.icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.icon.sm{width:16px;height:16px}.icon.lg{width:24px;height:24px}
 
 /* text roles */
 .t-page{font-size:var(--fs-3xl);line-height:1.15;font-weight:600;letter-spacing:-.02em}
@@ -97,10 +103,10 @@
 .nav .count{margin-left:auto}
 .side-foot{margin-top:auto;display:flex;flex-direction:column;gap:var(--s2);padding:0 var(--s2)}
 /* icon rail (lesson and focus pages) */
-.rail{flex:none;width:72px;padding:var(--s5) var(--s3);display:flex;flex-direction:column;align-items:center;gap:var(--s2);background:var(--surface);border-right:1px solid var(--line)}
-.rail a{width:48px;height:48px;display:grid;place-items:center;border-radius:var(--r-md);color:var(--text-2)}
-.rail a:hover{background:var(--sunk)}
-.rail a[aria-current]{background:var(--selected);color:var(--text)}
+.iconrail{flex:none;width:72px;padding:var(--s5) var(--s3);display:flex;flex-direction:column;align-items:center;gap:var(--s2);background:var(--surface);border-right:1px solid var(--line)}
+.iconrail a{width:48px;height:48px;display:grid;place-items:center;border-radius:var(--r-md);color:var(--text-2)}
+.iconrail a:hover{background:var(--sunk)}
+.iconrail a[aria-current]{background:var(--selected);color:var(--text)}
 /* bars */
 .topbar{display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap;padding:var(--s4) 40px;background:var(--surface);border-bottom:1px solid var(--line)}
 .botbar{position:sticky;bottom:0;display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;padding:var(--s4) 40px;background:var(--surface);border-top:1px solid var(--line)}
@@ -118,7 +124,7 @@
 .li{display:grid;gap:var(--s4);align-items:center;padding:var(--s4) var(--s5);text-decoration:none;color:var(--text)}
 a.li:hover,button.li:hover{background:var(--hover)}
 button.li{width:100%;border:0;background:transparent;text-align:left;cursor:pointer}
-.more{width:100%;min-height:52px;border:0;background:var(--surface);font-weight:600;color:var(--text-2);cursor:pointer}
+.loadmore{width:100%;min-height:52px;border:0;background:var(--surface);font-weight:600;color:var(--text-2);cursor:pointer}
 details.fold{border-radius:var(--r-md);background:var(--sunk)}
 details.fold > summary{min-height:var(--tap);display:flex;align-items:center;gap:var(--s2);padding:0 var(--s4);font-weight:600;cursor:pointer}
 details.fold > :not(summary){padding:0 var(--s4) var(--s4)}
@@ -176,7 +182,7 @@ kbd{font:inherit;font-size:12px;padding:1px 6px;border-radius:6px;border:1px sol
 
 /* lesson flow: the parts of a lesson as kind chips, sized by minutes */
 .flow{display:flex;gap:4px;width:100%}
-.flow > span{display:flex;flex-direction:column;gap:6px;min-width:0}
+.flow > span{display:flex;flex-direction:column;gap:6px;min-width:52px}
 .flow i{display:block;height:6px;border-radius:3px;background:var(--line)}
 .flow em{font-style:normal;font-size:12px;font-weight:600;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .flow.maths i{background:var(--maths-soft)}.flow.maths .on i{background:var(--maths)}.flow.maths .on em{color:var(--maths-ink)}
@@ -192,12 +198,12 @@ kbd{font:inherit;font-size:12px;padding:1px 6px;border-radius:6px;border:1px sol
 .seg [aria-pressed="true"],.seg [aria-current]{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(27,33,48,.08)}
 .field{display:flex;flex-direction:column;gap:var(--s2);min-width:0}
 .field > label,.field > .fl{font-size:15px;font-weight:600}
-.in{width:100%;min-height:var(--tap);padding:0 var(--s4);border-radius:var(--r-md);border:1px solid var(--line-strong);background:var(--surface);font-size:var(--fs-md);color:var(--text)}
-textarea.in{min-height:96px;padding:var(--s3) var(--s4);line-height:1.5;resize:vertical}
+.input{width:100%;min-height:var(--tap);padding:0 var(--s4);border-radius:var(--r-md);border:1px solid var(--line-strong);background:var(--surface);font-size:var(--fs-md);color:var(--text)}
+textarea.input{min-height:96px;padding:var(--s3) var(--s4);line-height:1.5;resize:vertical}
 .check{display:flex;align-items:center;gap:var(--s3);min-height:44px;font-size:15px}
 .check input{width:20px;height:20px;accent-color:var(--slate);flex:none}
-.opt{display:flex;flex-direction:column;gap:var(--s2);padding:var(--s4);border-radius:var(--r-md);border:1px solid var(--line-strong);background:var(--surface);text-align:left;cursor:pointer}
-.opt[aria-pressed="true"]{border:2px solid var(--slate);padding:15px}
+.choice{display:flex;flex-direction:column;gap:var(--s2);padding:var(--s4);border-radius:var(--r-md);border:1px solid var(--line-strong);background:var(--surface);text-align:left;cursor:pointer}
+.choice[aria-pressed="true"]{border:2px solid var(--slate);padding:15px}
 
 /* verdicts: one set, one order, everywhere */
 .verdicts{display:flex;flex-wrap:wrap;gap:var(--s2)}
@@ -236,12 +242,12 @@ table.tbl{width:100%;border-collapse:collapse;font-size:15px}
 .tbl td{padding:var(--s3) var(--s4);border-bottom:1px solid var(--line-soft);vertical-align:top}
 .tbl tr:last-child td{border-bottom:0}
 .tbl .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.clock{display:inline-flex;align-items:center;gap:var(--s2);min-height:44px;padding:0 var(--s4);border-radius:var(--r-full);background:var(--sunk);color:var(--text-2);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
-.clock.live{background:var(--live-wash);color:var(--live-ink)}
-.clock.live .dot{background:var(--live);box-shadow:0 0 0 4px #FFE3B8}
+.clockpill{display:inline-flex;align-items:center;gap:var(--s2);min-height:44px;padding:0 var(--s4);border-radius:var(--r-full);background:var(--sunk);color:var(--text-2);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.clockpill.live{background:var(--live-wash);color:var(--live-ink)}
+.clockpill.live .dot{background:var(--live);box-shadow:0 0 0 4px #FFE3B8}
 .ph{display:grid;place-items:center;border-radius:var(--r-md);background:var(--sunk);color:var(--text-4);font-size:var(--fs-sm);text-align:center}
-.mk{display:grid;grid-template-columns:4px minmax(0,1fr);gap:0 var(--s4);padding:var(--s4) var(--s5)}
-.mk > .edge{border-radius:2px;grid-row:span 3}
+.mrow{display:grid;grid-template-columns:4px minmax(0,1fr);gap:0 var(--s4);padding:var(--s4) var(--s5)}
+.mrow > .edge{border-radius:2px;grid-row:span 3}
 .fix{margin-top:var(--s2);padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--ground);font-size:15px;color:var(--text-2)}
 .fix b{color:var(--right);font-weight:600}
 .toast{display:inline-flex;align-items:center;gap:var(--s3);padding:var(--s3) 20px;border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line);box-shadow:var(--raise);font-size:15px}
