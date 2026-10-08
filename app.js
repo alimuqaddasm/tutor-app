@@ -223,7 +223,7 @@ function settingsView() {
     grp("s4", "Font", "Questions always keep the exam board’s font.", '<div class="card pad cols3" role="group" aria-label="Font"><input type="hidden" id="s-font" value="' + esc(f) + '">' + fonts.map(function (o) {
       return '<button class="choice" type="button" data-fontpick="' + o[0] + '" aria-pressed="' + (f === o[0]) + '"><span style="font-family:\'' + o[1] + '\',sans-serif;font-size:26px;font-weight:600;line-height:1.2">Aa</span><b>' + o[1].replace(" Next", "") + '</b><span class="hint">' + o[2] + '</span></button>'; }).join("") + '</div>') +
     grp("s5", "This device", "Install, cache and key.", '<div class="card pad stack"><div class="row"><button class="btn" type="button" id="s-install" hidden>Install on this device</button><div class="tags">' + tag("Opens full screen") + tag("Works offline") + '</div></div>' +
-      '<div class="row"><button class="btn" type="button" id="s-cache">Clear this device’s cache</button><span class="hint">Reloads lessons from GitHub. Nothing is lost.</span></div><div class="row"><button class="btn danger" type="button" id="s-clear">Remove key from this device</button></div></div>') +
+      '<div class="row"><button class="btn" type="button" id="s-cache">Clear this device’s cache</button><span class="hint">Reloads lessons from GitHub. Nothing is lost.</span></div><div class="row"><button class="btn danger" type="button" id="s-clear">Remove key from this device</button></div><div class="row"><button class="btn" type="button" data-suggest>Suggest a change</button><button class="btn trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button><span class="hint">Try-out: practise on real lessons, nothing saves.</span></div></div>') +
     '<div class="row savebar"><a class="btn quiet" href="#/">Cancel</a><button class="btn pri" type="submit">Save and test</button></div></form>';
   if (installEvt) $("#s-install").hidden = false;
   if (CFG.token) testConnection();
@@ -1354,16 +1354,19 @@ var VIC = { right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
   partly: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>',
   mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18.5" cy="12" r="2"/></svg>' };
-function vrail(id, a, q, o) { a = a || {}; o = o || {}; var off = id ? "" : " disabled", lab = { right: "Right", wrong: "Wrong", partly: "Partly" }, other = a.v === "wording" || a.v === "terminology" || a.v === "skipped";
-  return '<div class="ctl big vrail' + (id ? "" : " idle") + (asked_(a.v) ? " has" : "") + '"' + (id ? ' data-item="' + esc(id) + '" data-q="' + esc(String(q || "").slice(0, 160)) + '"' : "") + ' role="toolbar" aria-label="Mark the open question">' +
-    (o.flip ? '<button class="vr vr-flip" type="button" ' + o.flip + ' aria-pressed="' + !!o.flipped + '" title="Mark scheme (A)" aria-label="Mark scheme"' + (o.flipHidden ? " hidden" : "") + '><span class="vd">A</span><kbd>A</kbd></button><span class="vrsep" aria-hidden="true"></span>' : "") +
-    VBIG.map(function (v, i) { return '<button class="v vr vr-' + v[0] + '" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '" title="' + lab[v[0]] + ' (' + (i + 1) + ')" aria-label="' + lab[v[0]] + '"' + off + '><span class="vd">' + VIC[v[0]] + '</span><kbd>' + (i + 1) + '</kbd></button>'; }).join("") +
+/* the verdicts as round buttons down the right edge, in the design's order; the keys stay as Ali learned them */
+var KEYV = { 1: "right", 2: "wrong", 3: "partly", 4: "wording", 5: "terminology", 6: "skipped" }, VKEY = { right: 1, wrong: 2, partly: 3, wording: 4, terminology: 5, skipped: 6 };
+var VRAIL = [["right", "Right"], ["partly", "Partly"], ["wording", "Wording"], ["terminology", "Terminology"], ["wrong", "Wrong"], ["skipped", "No answer"]];
+VIC.wording = '<b aria-hidden="true">≈</b>'; VIC.terminology = '<b aria-hidden="true">Aa</b>'; VIC.skipped = '<b aria-hidden="true">−</b>';
+function vrail(id, a, q, o) { a = a || {}; o = o || {}; var off = id ? "" : " disabled";
+  return '<div class="ctl big vrail' + (id ? "" : " idle") + (asked_(a.v) ? " has" : "") + '"' + (id ? ' data-item="' + esc(id) + '" data-q="' + esc(String(q || "").slice(0, 160)) + '"' : "") + ' role="toolbar" aria-label="How he did">' +
+    (o.flip ? '<button class="vr vr-flip" type="button" ' + o.flip + ' aria-pressed="' + !!o.flipped + '" title="Answer side (A)" aria-label="Answer side"' + (o.flipHidden ? " hidden" : "") + '><span class="vd">A</span><kbd>A</kbd></button><span class="vrsep" aria-hidden="true"></span>' : "") +
+    VRAIL.map(function (v) { return '<button class="v vr vr-' + v[0] + '" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '" title="' + v[1] + ' (' + VKEY[v[0]] + ')" aria-label="' + v[1] + '"' + off + '><span class="vd">' + VIC[v[0]] + '</span><kbd>' + VKEY[v[0]] + '</kbd></button>'; }).join("") +
+    '<span class="vrsep" aria-hidden="true"></span>' +
     (SR ? '<button class="vr vr-mic" type="button" data-mic title="Say what he said: tap, speak, it stops by itself (or hold M)" aria-label="Say what he said"' + off + '><span class="vd">' + VIC.mic + '</span><span class="vt">Say it</span><kbd>M</kbd></button>' : "") +
-    '<button class="vr vr-more" type="button" data-vrmore aria-expanded="false" aria-pressed="' + other + '" title="Wording, terminology, no answer, note" aria-label="More"' + off + '><span class="vd">' + VIC.more + '</span><kbd>4-6</kbd></button>' +
-    (id ? '<div class="vrmenu" hidden><span class="hint">Right idea, wrong words:</span>' + VSMALL.map(function (v, i) { return '<button class="v vs" type="button" data-v="' + v[0] + '" aria-pressed="' + (a.v === v[0]) + '">' + v[1] + '<kbd>' + (i + 4) + '</kbd></button>'; }).join("") +
-      '<button class="v vs" type="button" data-v="skipped" title="He did not attempt it" aria-pressed="' + (a.v === "skipped") + '">No answer<kbd>6</kbd></button>' +
-      (o.marks ? '<label class="mkin">Marks <input class="mk" type="number" min="0" step="0.5" inputmode="decimal" aria-label="Marks out of ' + esc(o.marks) + '" data-mk value="' + (a.m != null ? esc(a.m) : "") + '"><span class="hint num">/ ' + esc(o.marks) + '</span></label>' : "") +
-      '<input class="note" type="text" data-note aria-label="What he said" placeholder="What he said or got wrong" value="' + esc(a.note || "") + '"></div>' : "") + '</div>'; }
+    '<button class="vr vr-more" type="button" data-vrmore aria-expanded="false" aria-pressed="' + !!(a.note || a.m != null) + '" title="' + (o.marks ? "Marks and what he said" : "What he said") + '" aria-label="' + (o.marks ? "Marks and note" : "Note") + '"' + off + '><span class="vd">' + VIC.more + '</span></button>' +
+    (id ? '<div class="vrmenu" hidden>' + (o.marks ? '<label class="mkin">Marks <input class="input mk" type="number" min="0" step="0.5" inputmode="decimal" aria-label="Marks out of ' + esc(o.marks) + '" data-mk value="' + (a.m != null ? esc(a.m) : "") + '"><span class="hint num">/ ' + esc(o.marks) + '</span></label>' : "") +
+      '<input class="input note" type="text" data-note aria-label="What he said or got wrong" placeholder="What he said or got wrong" value="' + esc(a.note || "") + '"></div>' : "") + '</div>'; }
 function boardJump(iid) { var c = TCH.seq[TCH.pos]; if (!c || c.t !== "board") return null;
   var keys = $$(".chunk.cur .brow .bq").map(function (b) { return b.getAttribute("data-bopen"); }), byk = {};
   c.items.forEach(function (it) { byk[boardKey(it)] = it; });
@@ -1518,7 +1521,8 @@ function tposKey() { return "tutor.tpos." + CFG.student + "." + L.id; }
 function live() { return replay(L.session.time.log).running; }
 /* Teach before the clock has ever started: rehearsing, so verdict taps are not recorded */
 function previewing() { return MODE === "teach" && L && !(L.session.time.log || []).length && L.session.status !== "finished"; }
-function tlabel(kind, ic, text) { return '<div class="tlabel k-' + kind + '"><span class="ic">' + ic + '</span>' + esc(text) + '</div>'; }
+var TLTAG = { q: "ask", ask: "ask", check: "ok", draw: "bad", say: "chem", show: "maths", core: "line", deep: "dash", "do": "line" };
+function tlabel(kind, ic, text) { return '<div class="tlabel k-' + kind + '"><span class="tag lg ' + (TLTAG[kind] || "line") + '">' + esc(cap(text)) + '</span></div>'; }
 var KIC = { say: "S", draw: "D", ask: "?", show: "▣", check: "✓" };
 function chunkKey(c) { return c.t === "quiz" ? c.it.id : c.t === "drill" ? c.key : c.t === "question" ? c.b.id : c.key || null; }
 /* what one chunk is, in a few words: for the outline, the greyed lines and "up next" */
@@ -1538,8 +1542,8 @@ function iconOf(c) { return c.t === "step" ? (KIC[c.it.kind] || "→") : c.t ===
 function chunkHTML(c) {
   var k = chunkKey(c), tk = k && { step: 1, text: 1, mod: 1 }[c.t] ? '<span class="ctick">' + tick_(k, shortOf(c)) + '</span>' : "";
   switch (c.t) {
-    case "phase": return '<div class="tphase"><div class="label">Part ' + (phases().indexOf(c.p) + 1) + (c.p.start != null ? ' · ' + c.p.start + '–' + c.p.end + ' min' : "") + '</div><h2>' + esc(c.p.name) + '</h2>' + (c.p.show ? '<div class="screen" style="margin-top:16px"><span class="label">On screen</span><div>' + clean(c.p.show) + '</div></div>' : "") + (L.script && L.script.focus && phases()[0] === c.p ? focusTable(L.script.focus) : "") + phasePages(c.p) + '</div>';
-    case "mod": return tk + tlabel(c.b.level === "deep" ? "deep" : "core", c.b.level === "deep" ? "D" : "C", (c.b.level === "deep" ? "Deep dive, optional" : "Core") + (c.b.minutes ? " · " + c.b.minutes + " min" : "")) + '<h2 style="font-size:var(--fs-xl)">' + esc(c.b.name) + '</h2>';
+    case "phase": var pk = kindOf(c.p.name); return '<div class="tphase stack s4"><div class="tags">' + tag("Part " + (phases().indexOf(c.p) + 1)) + (pk ? tag(esc(pk), pk === "If time" ? "dash" : "line") : "") + (c.p.start != null ? tag(c.p.start + " to " + c.p.end + " min", "num") : "") + '</div><h2>' + esc(pk ? partTitle(c.p.name) : c.p.name) + '</h2>' + (c.p.show ? '<div class="screen"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg><div class="stack" style="gap:2px"><span class="lab">On his screen</span><div>' + clean(c.p.show) + '</div></div></div>' : "") + (L.script && L.script.focus && phases()[0] === c.p ? focusTable(L.script.focus) : "") + phasePages(c.p) + '</div>';
+    case "mod": return tk + tlabel(c.b.level === "deep" ? "deep" : "core", c.b.level === "deep" ? "D" : "C", (c.b.level === "deep" ? "If time" : "Core") + (c.b.minutes ? " · " + c.b.minutes + " min" : "")) + '<h2 style="font-size:var(--fs-xl)">' + esc(c.b.name) + '</h2>';
     case "step": var kd = c.it.kind || "do"; return tk + tlabel(kd, KIC[kd] || "\u2192", KIND[kd] || kd) + '<div class="big prose">' + clean(c.it.html) + '</div>' + warmBtn(c);
     case "text": var g2 = gradeRows(clean(c.b.html)); return tk + (g2.rows.length ? tlabel("q", "?", "Ask him row by row · " + g2.rows.filter(function (r) { var a = L.session.answers[r.k]; return a && asked(a.v); }).length + " of " + g2.rows.length + " asked") : "") + '<div class="prose big">' + g2.html + '</div>';
     case "fig": return '<figure class="tfig">' + img(c.b.img, plain(c.b.caption) || "Picture") + (c.b.caption ? '<figcaption>' + clean(c.b.caption) + '</figcaption>' : "") + '</figure>';
@@ -1552,10 +1556,10 @@ function chunkHTML(c) {
         qtags(c.it) + '<div class="qtext prose">' + paperHTML(c.it.q, subjNow()) + '</div>' + answerBox(c.it.a, c.it.book ? c.it.page : null) + hintsHTML(c) + ctlBig(c.it.id, a, plain(c.it.q));
     case "drill": var a2 = L.session.answers[c.key] || {};
       return '<div class="qhead">' + tlabel("q", "?", (c.title || "Drill") + (c.of > 1 ? " \u00b7 " + c.n + " of " + c.of : "")) + '</div><div class="qtext prose">' + paperHTML(c.d[0], subjNow()) + '</div>' + answerBox(c.d[1]) + hintsHTML(c) + ctlBig(c.key, a2, plain(c.d[0]));
-    case "question": return (c.b.parts || []).length ? sliderHTML(c) + hintsHTML(c) : tlabel("q", "Q", "Exam question") + questionBlock(c.b, true) + hintsHTML(c);
+    case "question": return (c.b.parts || []).length ? sliderHTML(c) + hintsHTML(c) : questionBlock(c.b, true) + hintsHTML(c);
     case "board": return boardHTML(c);
     case "concept": return conceptHTML(c);
-    case "end": return '<div class="tphase"><div class="label">Done</div><h2>End of the script</h2><p class="hint">Log times, notes and what to change next time.</p><button class="btn next" type="button" data-tgo="after">After the lesson →</button></div>';
+    case "end": return '<div class="tphase stack s4"><div class="tags">' + tag("Done", "ok") + '</div><h2>End of the script</h2><span class="hint">Log times, notes and what to change next time.</span><div><button class="btn next" type="button" data-tgo="after">After the lesson</button></div></div>';
     default: return block(c.b || {});
   }
 }
@@ -1573,16 +1577,19 @@ function drawTeach() {
   if (TCH.pos >= TCH.seq.length) TCH.pos = TCH.seq.length - 1;
   var c = TCH.seq[TCH.pos], pct = Math.round(100 * TCH.pos / Math.max(1, TCH.seq.length - 1)), lv = live();
   if (c.p) L.phase = c.p.id;
+  var pk = c.p ? kindOf(c.p.name) : "", reals = phases().filter(function (p) { return !p.sys && kindOf(p.name) !== "Bank" && kindOf(p.name) !== "Recycle"; });
+  var inPart = c.p ? TCH.seq.filter(function (q) { return q.p === c.p; }) : [], pf = inPart.length ? Math.round(100 * (inPart.indexOf(c) + 1) / inPart.length) : 0;
   var h = '<div class="teach3">' + runwayHTML(c) + '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
-    '<button class="btn small outl" type="button" id="toc" aria-label="Outline">☰ Outline</button><a class="back" style="margin:0" href="#/lesson/' + encodeURIComponent(L.id) + '">← Plan</a><span aria-hidden="true">·</span><b>' + esc((c.p && c.p.name) || "End") + '</b>' + (c.mod ? '<span aria-hidden="true">›</span><span>' + esc(c.mod) + '</span>' : "") + '</div>' +
-    /* one slim row (5 Oct): Warm-up, Suggest and Try-out behind ⋯; Preview / Clock stopped as a small label by the clock */
-    '<div class="tmini"><span class="tmore"><button class="btn small" type="button" data-tmore aria-expanded="false" aria-label="More: warm-up, suggest a change, try-out">\u22ef<span class="tdot" id="wudot" hidden></span></button>' +
-      '<div class="tmenu" hidden><button class="btn small" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn small" type="button" data-suggest>Suggest a change</button><button class="btn small trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button></div></span>' +
-      '<a class="btn small" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view ↗</a>' +
-      (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a chunk by hand.">Preview</button>'
+    '<button class="btn sm outl" type="button" id="toc" aria-label="Outline">☰<span class="olab"> Outline</span></button><a class="btn sm quiet" href="#/lesson/' + encodeURIComponent(L.id) + '" title="Back to Plan">Plan</a>' + (pk ? tag(esc(pk), pk === "If time" ? "dash" : "line") : "") + '<b>' + esc(c.p ? (pk ? partTitle(c.p.name) : c.p.name) : "End") + '</b>' + (c.mod ? '<span class="hint">· ' + esc(c.mod) + '</span>' : "") + '</div>' +
+    '<div class="tmini"><span class="tmore"><button class="btn sm" type="button" data-tmore aria-expanded="false" aria-label="More: warm-up, suggest a change, try-out">⋯<span class="tdot" id="wudot" hidden></span></button>' +
+      '<div class="tmenu" hidden><button class="btn sm" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn sm" type="button" data-suggest>Suggest a change</button><button class="btn sm trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button></div></span>' +
+      '<a class="btn sm" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"></path></svg></a>' +
+      '<span class="tag num"><span class="olab">Step </span>' + (TCH.pos + 1) + ' of ' + TCH.seq.length + '</span>' +
+      (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a step by hand.">Preview</button>'
         : '<button type="button" class="preview stopped" data-pvhelp title="The clock is stopped. Taught, Skip and verdicts still count.">Clock stopped</button>') +
-      '<span class="clockpill"><i aria-hidden="true"></i><span class="t" id="clk">0:00</span></span><button class="btn small" id="clkgo" type="button"></button><span class="hint num">' + (TCH.pos + 1) + ' / ' + TCH.seq.length + '</span></div></div>' +
-    '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>' +
+      '<span class="clockpill' + (lv ? " live" : "") + '"><span class="dot"></span><span class="t num" id="clk">0:00</span></span><button class="btn sm' + (lv ? "" : " pri") + '" id="clkgo" type="button"></button></div></div>' +
+    (reals.length > 1 ? '<div class="flow ' + esc(subj) + ' tflow" aria-hidden="true">' + reals.map(function (p) { var on = p === c.p, past = c.p && reals.indexOf(p) < reals.indexOf(c.p);
+      return '<span style="flex:' + pw(p) + '"' + (on ? ' class="on"' : "") + '><i' + (on ? ' style="background:linear-gradient(90deg,var(--accent) ' + pf + '%,var(--line) ' + pf + '%)"' : past ? ' style="background:var(--accent);opacity:.45"' : "") + '></i></span>'; }).join("") + '</div>' : '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>') +
     '</div><div class="tstage">';
   /* the last two chunks of the same section as short grey lines, then the current one */
   var keep = window.innerWidth < 900 ? 1 : 2, start = TCH.pos;
@@ -1591,7 +1598,7 @@ function drawTeach() {
   if (!flowQuick()) for (var i = start; i < TCH.pos; i++) h += pastLine(TCH.seq[i], i);
   h += '<div class="chunk cur t-' + c.t + (stateOf(c) === "done" ? " done" : "") + '" data-tk="' + esc(chunkKey(c) || "") + '">' + stripHTML(c) + chunkHTML(c) + '</div>';
   var nx = TCH.seq[TCH.pos + 1];
-  h += '</div>' + (nx ? '<button type="button" class="upnext" data-tjump="' + (TCH.pos + 1) + '"><b>UP NEXT</b><span>' + esc(shortOf(nx, 130)) + '</span></button>' : "") + '</div>' + footHTML(c, lv) + '</section></div>';
+  h += '</div>' + (nx ? '<button type="button" class="upnext" data-tjump="' + (TCH.pos + 1) + '"><b class="lab">Up next</b><span>' + esc(shortOf(nx, 130)) + '</span></button>' : "") + '</div>' + footHTML(c, lv) + '</section></div>';
   app.innerHTML = h; fillRows(app); loadImages(app); maths(app); tick();
   window.scrollTo(0, 0); fitBoards(); fitBoard(); applyFit(); warmCount(); prefetchLesson(); prefetchAhead(TCH.seq.slice(TCH.pos + 1, TCH.pos + 5));
   if (fgo) { var fb = $('.tfoot [data-tgo="' + fgo + '"]') || $(".tfoot .btn.next") || $(".tfoot .btn"); if (fb && !fb.disabled) fb.focus({ preventScroll: true }); }
@@ -1602,17 +1609,17 @@ function drawTeach() {
 }
 function footHTML(c, lv) {
   var taughtable = { step: 1, mod: 1, concept: 1, board: 1 }[c.t] || (c.t === "text" && c.key), mid = "";
-  if (c.t === "question" && (c.b.img || []).length) mid += '<button class="btn small" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
-  if (c.t === "mod") mid += '<button class="btn small" type="button" data-tskip="mod">Skip this section</button>';
-  if (c.t === "phase") mid += '<button class="btn small" type="button" data-tskip="phase">Skip this part</button>';
+  if (c.t === "question" && (c.b.img || []).length) mid += '<button class="btn accent-soft" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
+  if (c.t === "mod") mid += '<button class="btn quiet" type="button" data-tskip="mod">Skip this section</button>';
+  if (c.t === "phase") mid += '<button class="btn quiet" type="button" data-tskip="phase">Skip this part</button>';
   // Taught / Skip / Next once the lesson has started (clock running, paused or ended); before that only Next
   var three = !previewing() && taughtable && c.t !== "mod", qk = { quiz: 1, drill: 1, question: 1 }[c.t] && chunkKey(c), qa = qk && L.session.answers[qk];
-  var iskip = qk ? '<button class="btn iskip" type="button" data-tiskip aria-pressed="' + !!(qa && qa.v === "tskip") + '" title="You chose not to ask it: not a verdict, never a mistake">Not asked <kbd>0</kbd></button>' : "";
+  var iskip = qk ? '<button class="btn dash iskip" type="button" data-tiskip aria-pressed="' + !!(qa && qa.v === "tskip") + '" title="You chose not to ask it: not a verdict, never a mistake">Not asked <kbd>0</kbd></button>' : "";
   var lab = c.t === "phase" ? "Start this part" : c.t === "mod" ? "Teach this" : "Next";
-  return '<div class="tfoot' + (three ? " three" : "") + '"><button class="btn" type="button" data-tgo="-1"' + (TCH.pos === 0 ? " disabled" : "") + '>← Back</button><div class="mid">' + mid + '</div>' +
+  return '<div class="tfoot' + (three ? " three" : "") + '"><button class="btn" type="button" data-tgo="-1"' + (TCH.pos === 0 ? " disabled" : "") + '><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>Back</button><div class="mid">' + mid + '</div>' +
     (c.t === "end" ? "" : three
-      ? '<button class="btn skip" type="button" data-tgo="skip" title="You skipped this on purpose (recorded, not ticked)">Skip <kbd>S</kbd></button><button class="btn look" type="button" data-tgo="next" title="Move on without ticking, to look ahead">Next <kbd>→</kbd></button><button class="btn next" type="button" data-tgo="+1"><span class="ck" aria-hidden="true">✓</span>Taught <kbd>T</kbd></button>'
-      : iskip + '<button class="btn next" type="button" data-tgo="+1">' + lab + ' <kbd>→</kbd></button>') + '</div>';
+      ? '<button class="btn dash skip" type="button" data-tgo="skip" title="You skipped this on purpose: recorded, not ticked">Skip <kbd>S</kbd></button><button class="btn quiet look" type="button" data-tgo="next" title="Move on without ticking">Look ahead <kbd>\u2192</kbd></button><button class="btn next" type="button" data-tgo="+1">Taught, next <kbd>T</kbd><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>'
+      : iskip + '<button class="btn next" type="button" data-tgo="+1">' + lab + ' <kbd>\u2192</kbd><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>') + '</div>';
 }
 /* outline: every part, section and chunk, so any point can be reached; the clock as a pin on a time bar */
 function pw(p) { return p.start != null && p.end != null ? Math.max(2, p.end - p.start) : 4; }
@@ -1793,7 +1800,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "teach" || SH |
   if (e.key === "0") { iskipIt(); return; }
   if ((e.key === "a" || e.key === "A") && ($(".chunk.cur.flip") || $(".chunk.cur .slider"))) { flipIt(); return; }
   if ((e.key === "ArrowDown" || e.key === "ArrowUp") && $(".chunk.cur .slider")) { e.preventDefault(); slGo(SL.i + (e.key === "ArrowDown" ? 1 : -1)); return; }
-  if (/^[1-6]$/.test(e.key)) { var bs = $$(".chunk.cur .vrail [data-v]"); if (!bs.length) bs = $$(".chunk.cur .ctl.big [data-v]"); if (bs[+e.key - 1]) bs[+e.key - 1].click(); return; }
+  if (/^[1-6]$/.test(e.key)) { var vb = $('.chunk.cur .vrail [data-v="' + KEYV[e.key] + '"]') || $('.chunk.cur .ctl.big [data-v="' + KEYV[e.key] + '"]'); if (vb) vb.click(); return; }
   var three = !!$(".tfoot.three");
   if (e.key === "ArrowRight") tmove(1, three ? "next" : "taught"); else if (e.key === "ArrowLeft") tmove(-1, "jump");
   else if (three && (e.key === "t" || e.key === "T")) tmove(1, "taught"); else if (three && (e.key === "s" || e.key === "S")) tmove(1, "skip"); });
@@ -1825,15 +1832,21 @@ function drawStudent() {
   var list = STU.items.map(function (q, i) { q.i = i; return q; }).filter(function (q) { return q.kind === STU.tab; });
   if (STU.i < 0 || !STU.items[STU.i] || STU.items[STU.i].kind !== STU.tab) STU.i = list.length ? list[0].i : -1;
   var cnt = function (k) { return STU.items.filter(function (q) { return q.kind === k; }).length; }, ne = cnt("exam"), nq = cnt("quick"), nv = cnt("video"), cur = STU.items[STU.i], pos = list.indexOf(cur);
-  var view = !cur ? '<div class="empty"><h3>No questions here</h3></div>' : cur.kind === "video" ? '<div class="stu-vid">' + localVideo(cur.v, true) + '<div class="stu-vt">' + esc(cur.v.title || "") + '</div></div>' : cur.kind === "exam"
+  var view = !cur ? '<div class="empty"><b class="t-card">No questions here</b></div>' : cur.kind === "video" ? '<div class="stu-vid">' + localVideo(cur.v, true) + '<div class="stu-vt">' + esc(cur.v.title || "") + '</div></div>' : cur.kind === "exam"
     ? cur.twin ? '<div class="stu-twin">' + twinHTML(cur.twin) + '</div>' : '<div class="stu-fit ' + (cur.img.length > 1 ? "many" : "one") + '">' + cur.img.map(function (i) { return '<img data-src="' + esc(i) + '" alt="Question" hidden>'; }).join("") + '</div>'
-    : '<div class="stu-q">' + paperHTML(cur.text, subjNow()) + '</div>';
+    : '<div class="stu-card"><div class="stu-q">' + paperHTML(cur.text, subjNow()) + '</div></div>';
   var drawer = '<aside class="stu-drawer"' + (STU.drawer ? "" : " hidden") + ' aria-label="Questions"><div class="stu-dh"><div class="modes"><button type="button" data-stab="exam" aria-pressed="' + (STU.tab === "exam") + '">Exam ' + ne + '</button><button type="button" data-stab="quick" aria-pressed="' + (STU.tab === "quick") + '">Quick ' + nq + '</button>' + (nv ? '<button type="button" data-stab="video" aria-pressed="' + (STU.tab === "video") + '">Video ' + nv + '</button>' : "") + '</div><button class="btn small" type="button" id="stufs">Full screen</button><button class="btn small" type="button" id="stux">Close</button></div>' +
     '<p class="hint">Only the question or video shows on his screen. Move with the arrow keys, a swipe, or the faint \u2039 \u203a at the edges; \u201cShow him\u201d in Teach sends a question here.</p><nav class="stu-list">' +
     list.map(function (q, k) { return '<button type="button" class="stu-item' + (q === cur ? " cur" : "") + '" data-si="' + q.i + '"><span class="n num">' + (k + 1) + '</span>' + (q.kind === "exam" && q.img.length ? '<img data-src="' + esc(q.img[0]) + '" alt="" hidden><span class="ph"></span>' : '<span class="tx">' + (q.kind === "video" ? "\u25b6 " : "") + esc(plain(q.text).slice(0, 80)) + '</span>') + '</button>'; }).join("") + '</nav></aside>';
   var at = STU.items.indexOf(cur);
-  app.innerHTML = '<div class="stu clean"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question">\u2630</button><main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
-    '<button class="stu-edge prev" type="button" data-sgo="-1" aria-label="Previous question"' + (at <= 0 ? " disabled" : "") + '>\u2039</button><button class="stu-edge next" type="button" data-sgo="1" aria-label="Next question"' + (at < 0 || at >= STU.items.length - 1 ? " disabled" : "") + '>\u203a</button>' + drawer + '</div>';
+  /* his screen (canvas Student board): a faint menu and "2 of 9" at the top, the question in a white card, round arrows at the edges, the items as chips below */
+  var short = function (q) { var m = /Q\d+\w*(\s?\([a-z]+\))?/.exec(q.id && q.twin ? (q.twin.label || "") : q.kind === "exam" ? String(q.lab || "") : ""); return q.kind === "video" ? "Video" : q.kind === "quick" ? "Quick" : m ? m[0].replace(/\s/g, "") : "Question"; };
+  STU.items.forEach(function (q) { if (q.kind === "exam" && !q.lab) { var b0 = null; (function find(bs) { (bs || []).forEach(function (b) { if (b.id === q.id) b0 = b; if (b.blocks) find(b.blocks); }); })(q.p.blocks); q.lab = b0 && (b0.label || b0.source) || ""; } });
+  var from = Math.max(0, Math.min(at - 2, STU.items.length - 6)), chips = STU.items.slice(from, from + 6);
+  var CHEV = function (d) { return '<svg class="icon lg" viewBox="0 0 24 24" aria-hidden="true"><path d="' + (d < 0 ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6") + '"></path></svg>'; };
+  app.innerHTML = '<div class="stu clean"><header class="stu-top"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button><span class="push"></span>' + (cur ? tag((at + 1) + " of " + STU.items.length, "num") : "") + '</header><main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
+    '<button class="stu-edge prev" type="button" data-sgo="-1" aria-label="Previous question"' + (at <= 0 ? " disabled" : "") + '>' + CHEV(-1) + '</button><button class="stu-edge next" type="button" data-sgo="1" aria-label="Next question"' + (at < 0 || at >= STU.items.length - 1 ? " disabled" : "") + '>' + CHEV(1) + '</button>' +
+    (STU.items.length > 1 ? '<nav class="stu-chips" aria-label="Questions">' + chips.map(function (q) { return '<button type="button" class="it" data-si="' + q.i + '"' + (q === cur ? ' aria-current="true"' : "") + '>' + (q.kind === "video" ? '<svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"></path></svg>' : "") + (STU.items.indexOf(q) + 1) + ' \u00b7 ' + esc(short(q)) + '</button>'; }).join("") + (STU.items.length > 6 ? '<button type="button" class="it" id="stumore">More</button>' : "") + '</nav>' : "") + drawer + '</div>';
   $$(".stu-view img").forEach(showImg); loadImages(app); maths(app); prefetchLesson();
   var ci = $(".stu-item.cur"); if (ci && STU.drawer) ci.scrollIntoView({ block: "nearest" });
   if (BC) BC.postMessage({ type: "alive", lesson: L.id });
@@ -1848,7 +1861,7 @@ document.addEventListener("click", function (e) { if (MODE !== "student" || !STU
   if (t.hasAttribute("data-stab")) { STU.tab = t.getAttribute("data-stab"); STU.i = -1; drawStudent(); }
   else if (t.hasAttribute("data-si")) { STU.i = +t.getAttribute("data-si"); STU.drawer = false; drawStudent(); }
   else if (t.hasAttribute("data-sgo")) stuGo(+t.getAttribute("data-sgo"));
-  else if (t.id === "stumenu") { STU.drawer = !STU.drawer; drawStudent(); }
+  else if (t.id === "stumenu" || t.id === "stumore") { STU.drawer = !STU.drawer; drawStudent(); }
   else if (t.id === "stux") { STU.drawer = false; drawStudent(); }
   else if (t.id === "stufs") { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (x) {} } });
 document.addEventListener("keydown", function (e) { if (MODE !== "student" || !STU || e.ctrlKey || e.altKey || e.metaKey || !$("#zoom").hidden) return; if (e.key === "Escape" && STU.drawer) { STU.drawer = false; drawStudent(); return; } if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); stuGo(1); } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); stuGo(-1); } });
@@ -1872,13 +1885,12 @@ function whereAmI() {
 function sugPanel() {
   var old = $("#sug"); if (old) old.remove();
   var el = document.createElement("div"); el.id = "sug"; el.className = "sug"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Suggest a change");
-  el.innerHTML = '<div class="sug-card"><div class="sug-head"><h3>Suggest a change</h3><button class="btn small" type="button" id="sug-x" aria-label="Close">×</button></div>' +
-    '<div class="sug-where"><span class="label">Where</span><span id="sug-w">' + esc(whereAmI()) + '</span>' + (SUG.target ? '<span class="sug-t">You pointed at: ' + esc(SUG.target) + '</span>' : "") + '</div>' +
-    '<button class="btn small" type="button" id="sug-point">' + (SUG.target ? "Point at something else" : "Point at it on the screen") + '</button>' +
-    '<div class="qbar" role="group" aria-label="Kind">' + ["Layout", "Wording", "Hard to find", "Too slow", "Bug", "Missing", "Teaching flow"].map(function (t) { return '<button class="chip" type="button" data-sugtag="' + t + '" aria-pressed="' + !!SUG.tags[t] + '">' + t + '</button>'; }).join("") + '</div>' +
-    '<textarea id="sug-text" rows="4" placeholder="What should change, and why? e.g. “the Skip button is too far from my thumb on the tablet”"></textarea>' +
-    '<div class="sug-foot"><span class="hint" id="sug-st">' + (TRY ? "Try-out mode: this note is the only thing that gets saved." : "Saved as a note for Claude, not into the lesson.") + '</span><button class="btn primary" type="button" id="sug-save">Save suggestion</button></div>' +
-    '<details class="sug-list" id="sug-list"><summary>Your suggestions</summary><div id="sug-items" class="hint">Loading…</div></details></div>';
+  el.innerHTML = '<div class="sug-card stack s5"><div class="row top"><div class="stack s2"><h2 class="t-sec" style="font-size:22px">Suggest a change</h2><div class="tags"><span class="lab">Page</span><span class="tag" id="sug-w">' + esc(cap(whereAmI())) + '</span>' + (SUG.target ? '<span class="tag line sug-t">' + esc(SUG.target) + '</span>' : "") + '</div></div><button class="icon-btn push" type="button" id="sug-x" aria-label="Close" style="border:0;background:var(--sunk)"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div>' +
+    '<div class="field"><label for="sug-text">What should change, and why?</label><textarea id="sug-text" class="input" style="min-height:140px" placeholder="e.g. The Skip button is too far from my thumb on the tablet"></textarea></div>' +
+    '<div class="tags" role="group" aria-label="Kind">' + ["Layout", "Wording", "Hard to find", "Too slow", "Bug", "Missing", "Teaching flow"].map(function (t) { return '<button class="chip" type="button" data-sugtag="' + t + '" aria-pressed="' + !!SUG.tags[t] + '">' + t + '</button>'; }).join("") + '</div>' +
+    '<button class="btn dash" type="button" id="sug-point" style="justify-content:flex-start"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path><circle cx="12" cy="12" r="3"></circle></svg>' + (SUG.target ? "Point at something else" : "Point at it on the screen") + '</button>' +
+    '<button class="btn pri" type="button" id="sug-save">Save suggestion</button><span class="hint" id="sug-st">' + (TRY ? "Try-out: this note is the only thing that gets saved." : "Saved as a note for Claude, not into the lesson.") + '</span>' +
+    '<div class="stack s2 sug-list" id="sug-list"><span class="lab">Your earlier suggestions</span><div id="sug-items" class="sunk hint" style="padding:var(--s4)">Loading…</div></div></div>';
   document.body.appendChild(el); SUG.open = true; var ta = $("#sug-text"); ta.value = SUG.draft || ""; ta.focus();
   ta.addEventListener("input", function () { SUG.draft = ta.value; });
   loadSugs().then(drawSugs).catch(function () { $("#sug-items").textContent = "Couldn’t load them."; });
