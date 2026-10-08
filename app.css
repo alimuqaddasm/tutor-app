@@ -2,7 +2,7 @@
    design.css loads first: it holds every colour, size and font as a token, plus the shared parts
    (tags, buttons, verdicts, cards). This file only lays out the app's own screens, one section each:
      1 shell and sidebar   2 shared pieces   3 home   4 lesson plan   5 warm-up, show him, zoom
-     6 teach   7 teach layouts (side panel, floating card, flip, round buttons)   8 board, concept, paper, slider
+     6 teach   7 teach: Flip and the round marking buttons   8 board, concept, paper, slider
      9 student view   10 try-out and suggestions   11 exams tab   12 question fonts
    Rules: use tokens, never a new colour or size. One rule per selector. No dark theme (light only, Ali's choice). */
 
@@ -580,57 +580,33 @@ button.upnext:hover span{color:var(--text-2);text-decoration:underline}
   .btn.skip,.btn.look,.btn.iskip{min-height:52px;white-space:nowrap}
 }
 
-/* ================= 7 teach layouts for questions ================= */
-/* side panel ("fit"): question left, answer and verdicts right */
-.chunk.cur.fit{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr);gap:var(--s5);overflow:hidden}
-.chunk.fit .fitq,.chunk.fit .fita{min-height:0;overflow:auto}
-.chunk.fit .fita{padding-left:var(--s5);border-left:1px solid var(--line)}
-.chunk.fit .fitq .fig img{display:block;width:auto;max-width:100%;height:auto;margin:0 auto;object-fit:contain}
+/* ================= 7 teach: Flip, the one layout for questions ================= */
+/* the question fills the screen with the answer text under it; A turns the screen to the mark scheme pictures and hints */
+.chunk.cur.fit{display:block;overflow:hidden}
+.chunk.fit .fitq,.chunk.fit .fita{height:100%;min-height:0;overflow:auto;border:0;padding:0}
+.chunk.fit .fita{display:none}
+.chunk.fit.flipped .fita{display:block}
+.chunk.fit.flipped .fitq{display:none}
 .chunk.fit .fitq .qtext{margin-bottom:var(--s2)}
-.chunk.fit .fita .tnote{margin:0 0 var(--s3)}
-.chunk.fit .fita .ctl.big .vmain{gap:var(--s2)}
-.chunk.fit .fita .ctl.big .vb{min-height:52px;padding:0 6px;gap:6px;font-size:1rem}
-.chunk.fit .fita .ctl.big kbd{display:none}
+.chunk.fit .fitq .fig img{display:block;width:100%;height:auto;margin:0 auto;object-fit:contain}
 .chunk.fit .figrow{display:flex;gap:var(--s3);justify-content:center;align-items:flex-start}
 .chunk.fit .figrow .fig{flex:0 1 auto;min-width:0;margin:0}
 .tstage:has(.chunk.fit) .pastline,.tstage:has(.chunk.fit) .upnext{display:none}
-.fita-h{all:unset;box-sizing:border-box;display:flex;justify-content:space-between;align-items:center;width:100%;padding:10px var(--s4);border-bottom:1px solid var(--line);font-size:var(--fs-sm);cursor:pointer}
-/* floating card */
-body[data-tlayout="float"] .chunk.cur.fit{display:block}
-body[data-tlayout="float"] .chunk.fit .fitq{height:100%}
-body[data-tlayout="float"] .chunk.fit .fita{position:fixed;right:var(--s5);bottom:calc(var(--footh,90px) + 12px);z-index:30;width:min(420px,calc(100vw - 32px));max-height:min(64vh,600px);padding:0;border:1px solid var(--line-strong);border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--raise-lg)}
-body[data-tlayout="float"] .fita-b{padding:var(--s3) var(--s4)}
-body[data-tlayout="float"] .fita.min .fita-b > :not(.ctl.big):not(.items),body[data-tlayout="float"] .fita.min .ctl.big > :not(.vmain){display:none}
-body[data-tlayout="float"] .fita.min .vb{min-height:48px}
-@media (max-width:600px){
-  body[data-tlayout="float"] .chunk.fit .fita{left:var(--s2);right:var(--s2);width:auto;bottom:calc(var(--footh,90px) + 6px)}
-  body[data-tlayout="float"] .fita-h{padding:6px var(--s3)}
-  body[data-tlayout="float"] .fita-b{padding:var(--s2)}
-  body[data-tlayout="float"] .fita.min .vb{min-height:40px}
-  body[data-tlayout="float"] .chunk.fit .fitq{padding-bottom:110px}
-}
-/* flip: the question fills the screen; A turns it to the answer */
-body[data-tlayout="flip"] .chunk.cur.fit{display:block}
-body[data-tlayout="flip"] .chunk.fit .fitq,body[data-tlayout="flip"] .chunk.fit .fita{height:100%;overflow:auto;border:0;padding:0}
-body[data-tlayout="flip"] .chunk.fit .fita{display:none}
-body[data-tlayout="flip"] .chunk.fit.flipped .fita{display:block}
-body[data-tlayout="flip"] .chunk.fit.flipped .fitq{display:none}
-body[data-tlayout="flip"] .chunk.fit .fitq .fig img{width:100%;object-fit:contain}
-body[data-tlayout="flip"] .fita details.ans > summary,body[data-tlayout="flip"] .fita details.reveal > summary{display:none}
-body[data-tlayout="flip"] .fita details.ans,body[data-tlayout="flip"] .fita details.reveal{margin:0;border:0;background:none}
-body[data-tlayout="flip"] .fita .fig img{display:block;width:auto;max-width:100%;height:auto;margin:0 auto;object-fit:contain}
-body[data-tlayout="flip"] .ansfront{margin:var(--s4) 0 0;padding:var(--s3) var(--s4) var(--s4);border-radius:var(--r-md);background:var(--right-wash)}
-body[data-tlayout="flip"] .ansfront .prose{font-size:var(--fs-md);line-height:1.55}
-body[data-tlayout="flip"] .ansf-l{margin:0 0 6px;font-size:var(--fs-xs);font-weight:600;line-height:1;color:var(--right)}
-body[data-tlayout="flip"] .ansmore{margin:var(--s3) 0 0;padding:10px var(--s4);border-radius:var(--r-md);border:1px dashed var(--line-strong);font-size:var(--fs-sm);color:var(--text-2)}
-body[data-tlayout="flip"] .ansback{margin:0 0 var(--s4)}
-body[data-tlayout="flip"] .flipa .figrow{flex-direction:column;align-items:stretch;margin:0 0 var(--s4)}
-body[data-tlayout="flip"] .flipa .figrow .fig{flex:1 1 0}
-body[data-tlayout="flip"] .flipa .figrow .fig img{width:100%;max-width:100%}
-body[data-tlayout="flip"] .chunk.flipped .prose.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:var(--s5);align-items:start}
+.fita details.ans > summary,.fita details.reveal > summary{display:none}
+.fita details.ans,.fita details.reveal{margin:0;border:0;background:none}
+.fita .fig img{display:block;width:auto;max-width:100%;height:auto;margin:0 auto;object-fit:contain}
+.ansfront{margin:var(--s4) 0 0;padding:var(--s3) var(--s4) var(--s4);border-radius:var(--r-md);background:var(--right-wash)}
+.ansfront .prose{font-size:var(--fs-md);line-height:1.55}
+.ansf-l{margin:0 0 6px;font-size:var(--fs-xs);font-weight:600;line-height:1;color:var(--right)}
+.ansmore{margin:var(--s3) 0 0;padding:10px var(--s4);border-radius:var(--r-md);border:1px dashed var(--line-strong);font-size:var(--fs-sm);color:var(--text-2)}
+.ansback{margin:0 0 var(--s4)}
+.chunk.fit .flipa .figrow{flex-direction:column;align-items:stretch;margin:0 0 var(--s4)}
+.flipa .figrow .fig{flex:1 1 0}
+.flipa .figrow .fig img{width:100%;max-width:100%}
+.chunk.flipped .prose.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:var(--s5);align-items:start}
 body[data-tlayout="flip"] .tfoot{margin-top:var(--s3);padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
 body[data-tlayout="flip"] .tfoot > .btn{min-height:var(--tap)}
-@media (max-width:900px){body[data-tlayout="flip"] .chunk.flipped .prose.two{display:block}}
+@media (max-width:900px){.chunk.flipped .prose.two{display:block}}
 .flip-h{margin:0 0 10px;padding-bottom:var(--s2);border-bottom:1px solid var(--line);font-size:var(--fs-sm);font-weight:600;color:var(--text-2)}
 /* the marking strip in the bottom bar (flip without round buttons) */
 .vstrip{flex:1 1 100%;order:-2;grid-column:1 / -1;display:flex;flex-wrap:nowrap;align-items:center;gap:10px;padding:0 0 10px;margin-bottom:2px;border-bottom:1px solid var(--line)}

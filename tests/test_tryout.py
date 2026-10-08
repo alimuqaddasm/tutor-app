@@ -18,7 +18,7 @@ try:
     with sync_playwright() as pw:
         b = pw.chromium.launch(channel="msedge")
         c = b.new_context(viewport={"width": 1400, "height": 900}, service_workers="block")
-        c.add_init_script("localStorage.setItem('tutor.layout', 'classic'); localStorage.setItem('tutor.token', %s); localStorage.setItem('tutor.device','test');" % json.dumps(TOK))
+        c.add_init_script("localStorage.setItem('tutor.token', %s); localStorage.setItem('tutor.device','test');" % json.dumps(TOK))
         c.route("https://api.github.com/**", route)
         p = c.new_page(); p.on("pageerror", lambda e: errs.append(str(e)))
         p.goto(B + "?try#/lesson/" + L + "/teach"); p.wait_for_selector(".teach3", timeout=60000); p.wait_for_timeout(500)

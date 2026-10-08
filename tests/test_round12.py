@@ -33,7 +33,7 @@ try:
         p.screenshot(path=os.path.join(R.OUT, "r12-try-dot.png")); p.click("#tryx"); p.wait_for_timeout(200)
         # 4. hints fold under the maths question
         p.evaluate("Array.from(document.querySelectorAll('.outline .oc')).find(x => x.textContent.indexOf('Set 6 Q12') >= 0).click()"); p.wait_for_timeout(500)
-        check("maths: Set 6 Q12 carries its hints, closed", p.locator(".chunk.cur .thints").count() == 1 and p.locator(".chunk.cur .thints[open]").count() == 0)
+        check("maths: Set 6 Q12 carries its hints, on the back of the Flip card (A)", p.locator(".chunk.cur .thints").count() == 1 and p.locator(".chunk.cur .fita .thints").count() == 1 and not p.locator(".chunk.cur .thints").is_visible())
         p.keyboard.press("ArrowRight"); p.wait_for_timeout(300)
         check("maths: the next screen is the next question, not a hint", p.locator(".chunk.cur.t-question").count() == 1, p.locator(".chunk.cur").get_attribute("class"))
         p.screenshot(path=os.path.join(R.OUT, "r12-hints.png")); c.close()

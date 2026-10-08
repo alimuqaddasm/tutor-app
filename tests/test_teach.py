@@ -8,7 +8,7 @@ FIG = "\u25a7"
 
 def ctx_(b, w, h):
     c = b.new_context(viewport={"width": w, "height": h}, service_workers="block")
-    c.add_init_script("localStorage.setItem('tutor.layout', 'classic'); localStorage.setItem('tutor.token', %s); localStorage.setItem('tutor.device','test');" % json.dumps(TOK))
+    c.add_init_script("localStorage.setItem('tutor.token', %s); localStorage.setItem('tutor.device','test');" % json.dumps(TOK))
     c.route("https://api.github.com/**", lambda r: r.abort() if r.request.method != "GET" else r.continue_())
     return c
 

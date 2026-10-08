@@ -22,7 +22,8 @@ The lesson app for Ali's tutoring. Static site on GitHub Pages (`main` is live a
 | `sw.js` | offline shell. Bump `SHELL` and the `?v=` numbers in `index.html`/`exam.html` when a file changes |
 | `worker/` | exam server. `cd worker && npx vitest run` |
 | `tests/` | Playwright browser tests (see `tests/README.md`). They serve this folder on :8765 and never write to the real repo |
-| `v1/`, `v2/` | old versions kept as revert points (tags `v1-before-redesign`, `v2-liked`) |
+
+Old versions are git tags, not folders: `v1-before-redesign`, `v2-liked`. Teach has one layout for questions: Flip.
 
 ## Working rules
 

@@ -13,7 +13,7 @@ try:
     with sync_playwright() as pw:
         b = pw.chromium.launch(channel="msedge")
         c = b.new_context(viewport={"width": 1440, "height": 765}, service_workers="block")
-        c.add_init_script("localStorage.setItem('tutor.layout', 'classic'); localStorage.setItem('tutor.token', %s);" % json.dumps(R.TOK))
+        c.add_init_script("localStorage.setItem('tutor.token', %s);" % json.dumps(R.TOK))
         blobs = []
         def route(r):
             if r.request.method != "GET": return r.abort()

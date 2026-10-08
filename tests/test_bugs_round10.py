@@ -45,7 +45,7 @@ class FakeGH:
 
 def ctx_(b, w=1400, h=900, fake=None):
     c = b.new_context(viewport={"width": w, "height": h}, service_workers="block")
-    c.add_init_script("localStorage.setItem('tutor.layout', 'classic'); localStorage.setItem('tutor.token', %s); localStorage.setItem('tutor.device','test');" % json.dumps(TOK))
+    c.add_init_script("localStorage.setItem('tutor.token', %s); localStorage.setItem('tutor.device','test');" % json.dumps(TOK))
     c.route("https://api.github.com/**", fake.route if fake else (lambda r: r.abort() if r.request.method != "GET" else r.continue_()))
     return c
 
@@ -89,7 +89,7 @@ try:
         c = ctx_(b); p = page(c, "?try#/lesson/" + CH + "/teach"); jump(p, "Choose the quiz"); p.keyboard.press("ArrowRight"); p.wait_for_timeout(300)
         v0 = p.locator(".chunk.cur .ctl.big [aria-pressed=true]").all_inner_texts(); p.keyboard.press("Control+1"); p.keyboard.press("Alt+2"); p.wait_for_timeout(200); a = pos(p); p.keyboard.press("Control+ArrowRight"); p.wait_for_timeout(200)
         check("Ctrl/Alt + number sets no verdict, Ctrl+Right does not move", p.locator(".chunk.cur .ctl.big [aria-pressed=true]").all_inner_texts() == v0 and pos(p) == a, (p.locator(".chunk.cur .ctl.big [aria-pressed=true]").all_inner_texts(), a, pos(p)))
-        p.keyboard.press("1"); p.wait_for_timeout(200); check("plain key 1 still marks Right", p.locator(".chunk.cur .ctl.big [aria-pressed=true]").all_inner_texts()[:1] == ["\u2713\nRight\n1"])
+        p.keyboard.press("1"); p.wait_for_timeout(200); check("plain key 1 still marks Right", p.locator(".chunk.cur .ctl.big [aria-pressed=true][data-v]").first.get_attribute("data-v") == "right")
         jump_ic(p, "\u25a7", 2); p.wait_for_timeout(1500); a = pos(p); p.locator(".chunk.cur .tfig img").click(); p.wait_for_timeout(300)
         p.keyboard.press("ArrowRight"); p.keyboard.press("ArrowRight"); p.wait_for_timeout(300)
         check("arrows do not move the lesson behind a zoomed picture", pos(p) == a, (a, pos(p))); p.keyboard.press("Escape"); p.wait_for_timeout(200)

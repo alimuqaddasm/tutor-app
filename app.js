@@ -218,7 +218,6 @@ function settingsView() {
     '<div class="field"><label for="s-xpw">Exam password</label><input type="password" id="s-xpw" autocomplete="off" value="' + esc(ls("tutor.examPw") || "") + '"><span class="hint">For the Exams tab. It stays in this browser only.</span></div>' +
     '<div class="field"><label for="s-font">Font</label><select id="s-font">' + [["jakarta", "Plus Jakarta Sans (standard)"], ["hanken", "Hanken Grotesk (rounder)"], ["atkinson", "Atkinson Hyperlegible (easiest to read)"]].map(function (o) { return '<option value="' + o[0] + '"' + (f === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + '</select></div></div>' +
     '<div class="field"><span class="lab">Teach flow</span><span class="laysw" role="group">' + FLOWS.map(function (f) { return '<button type="button" class="chip" data-flow="' + f[0] + '" aria-pressed="' + ((ls("tutor.flow") || "quick") === f[0]) + '">' + f[1] + '</button>'; }).join("") + '</span><span class="hint">Quick: no title screens, a section\u2019s points on one screen beside its picture, the quiz as one list you tap.</span></div>' +
-    '<div class="field"><span class="lab">Teach layout for questions</span><span class="laysw" role="group">' + LAYOUTS.map(function (l) { return '<button type="button" class="chip" data-layout="' + l[0] + '" aria-pressed="' + (layoutPick() === l[0]) + '">' + l[1] + '</button>'; }).join("") + '</span><span class="hint">Side panel: question left, answer and verdicts right. Floating card: the question fills the screen; answer and verdicts in a card in the corner. Flip: the question fills the screen with the verdicts in the bottom bar; Show answer (key A) turns the screen to the answer.</span></div>' +
     '<div class="field"><span class="lab">Hints in Teach</span><label class="mkchk"><input type="checkbox" data-fold="maths"' + (foldOn("maths") ? " checked" : "") + '> Maths: fold the hints under each question (open them only when he is stuck)</label><label class="mkchk"><input type="checkbox" data-fold="chem"' + (foldOn("chem") ? " checked" : "") + '> Chemistry: fold the hints the same way</label></div>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="submit">Save and test</button><button class="btn" type="button" id="s-cache">Clear this device’s cache</button><button class="btn danger" type="button" id="s-clear">Remove key from this device</button><span class="hint" id="s-msg"></span></div></form>' +
     '<div class="card" style="padding:18px 20px;margin-top:16px;max-width:820px"><h3 style="font-size:var(--fs-lg)">Install on this device</h3><p class="hint" style="margin:6px 0 12px">Adds a Tutor Desk icon to the home screen. It opens full screen, and lessons you have opened before keep working without internet; taps upload when you are back online. On the Samsung tablet: browser menu \u2192 <b>Add page to</b> \u2192 <b>Home screen</b> (or <b>Install app</b>).</p><button class="btn primary" type="button" id="s-install" hidden>Install Tutor Desk</button></div>';
@@ -1504,7 +1503,7 @@ function drawTeach() {
   var nx = TCH.seq[TCH.pos + 1];
   h += '</div>' + (nx ? '<button type="button" class="upnext" data-tjump="' + (TCH.pos + 1) + '"><b>UP NEXT</b><span>' + esc(shortOf(nx, 130)) + '</span></button>' : "") + '</div>' + footHTML(c, lv) + '</section></div>';
   app.innerHTML = h; fillRows(app); loadImages(app); maths(app); tick();
-  window.scrollTo(0, 0); fitBoards(); fitBoard(); applyFit(); layW = layoutOf(); warmCount(); prefetchLesson(); prefetchAhead(TCH.seq.slice(TCH.pos + 1, TCH.pos + 5));
+  window.scrollTo(0, 0); fitBoards(); fitBoard(); applyFit(); warmCount(); prefetchLesson(); prefetchAhead(TCH.seq.slice(TCH.pos + 1, TCH.pos + 5));
   if (fgo) { var fb = $('.tfoot [data-tgo="' + fgo + '"]') || $(".tfoot .btn.next") || $(".tfoot .btn"); if (fb && !fb.disabled) fb.focus({ preventScroll: true }); }
   /* move only the outline's own scroll box: scrollIntoView also scrolled the page down (Ali, 2 Oct) */
   var ol = $(".outline"), oc = $(".outline .cur"); if (ol && oc && ol.clientHeight) ol.scrollTop += oc.getBoundingClientRect().top - ol.getBoundingClientRect().top - ol.clientHeight / 2 + oc.offsetHeight / 2;
@@ -1551,23 +1550,11 @@ function runwayHTML(c) {
     bar + '<div class="onclock" id="onclock" hidden><span id="onclockt"></span></div><nav class="outline">' + parts + '</nav></aside>';
 }
 /* a board or picture fills the space between the top bar and the buttons: no scrolling to see the bottom */
-/* question screens without scrolling. "side": question left, answer + verdicts right (wide screens; narrower ones use
-   "float"). "float": the question fills the screen, answer + verdicts in a small card over the bottom-right corner that
-   folds down to just the verdict buttons. Chosen in Settings or from the try-out dot; "classic" is the old page. */
-var LAYOUTS = [["classic", "Classic"], ["side", "Side panel"], ["float", "Floating card"], ["flip", "Flip"]], fitOpen = false, flipOn = false;
-function layoutPick() { return ls("tutor.layout") || "flip"; }
-function layoutOf() { var v = layoutPick(); return v === "side" && window.innerWidth < 1000 ? "float" : v; }
-function layPressed() { $$("[data-layout]").forEach(function (b) { if (b.tagName === "BUTTON") b.setAttribute("aria-pressed", String(b.getAttribute("data-layout") === layoutPick())); }); }
-function applyFit() { var lay = layoutOf(), cur = $(".chunk.cur"); document.body.setAttribute("data-tlayout", lay);
-  if (!cur || lay === "classic" || !/\bt-(question|quiz|drill)\b/.test(cur.className) || $(".slider", cur)) return;
-  if (lay === "flip") return applyFlip(cur);
-  var right = document.createElement("div"), body = document.createElement("div"), left = document.createElement("div");
-  right.className = "fita" + (lay === "float" && !fitOpen ? " min" : ""); body.className = "fita-b"; left.className = "fitq";
-  $$(".tnote", cur).forEach(function (n) { n.open = false; });   // your notes stay with the question (before he starts), folded to one line
-  $$(".ans, details.reveal, .thints, .ctl.big, .items", cur).filter(function (el) { return !el.parentNode.closest(".ans, details.reveal, .thints, .ctl.big, .items"); }).forEach(function (el) { body.appendChild(el); });
-  while (cur.firstChild) left.appendChild(cur.firstChild);
-  if (lay === "float") right.innerHTML = '<button type="button" class="fita-h" data-fitx aria-expanded="' + fitOpen + '"><b>Answer and marking</b><span aria-hidden="true">' + (fitOpen ? "\u25be" : "\u25b4") + '</span></button>';
-  right.appendChild(body); cur.appendChild(left); cur.appendChild(right); cur.classList.add("fit"); fitQ(); }
+/* question screens without scrolling: Flip is the one layout (Ali, 8 Oct: Classic, Side panel and Floating card removed) */
+var flipOn = false;
+function applyFit() { var cur = $(".chunk.cur"); document.body.setAttribute("data-tlayout", "flip");
+  if (!cur || !/\bt-(question|quiz|drill)\b/.test(cur.className) || $(".slider", cur)) return;
+  applyFlip(cur); }
 /* "flip" (Ali, 2 Oct: the side panel shrinks the question, the floating card covers it): the question has the whole
    screen at full size; the verdict buttons sit in a strip in the bottom bar, so nothing covers it; "Show answer" (key A)
    turns the whole screen into the answer and mark scheme at full size, and back */
@@ -1647,9 +1634,7 @@ function fitPics(left, ims) {
   for (var k = 0; k < 6 && left.scrollHeight > left.clientHeight + 1 && per > 90; k++) {
     per = Math.max(90, per - (left.scrollHeight - left.clientHeight + 4) / rows.length); ims.forEach(function (i) { i.style.maxHeight = per + "px"; }); } }
 document.addEventListener("load", function (e) { if (MODE === "teach" && e.target && e.target.tagName === "IMG" && $(".chunk.cur.fit")) fitQ(); }, true);
-document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-fitx]"); if (!t) return; fitOpen = !fitOpen; var f = t.closest(".fita"); f.classList.toggle("min", !fitOpen); t.setAttribute("aria-expanded", String(fitOpen)); t.lastChild.textContent = fitOpen ? "\u25be" : "\u25b4"; });
-document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("button[data-layout]"); if (!b) return; ls("tutor.layout", b.getAttribute("data-layout")); layPressed(); if (MODE === "teach" && L) drawTeach(); toast("Teach layout: " + b.textContent); });
-var layW = null; window.addEventListener("resize", function () { if (MODE !== "teach" || !L) return; var now = layoutOf(); if (layW && layW !== now) drawTeach(); else fitQ(); layW = now; });
+window.addEventListener("resize", function () { if (MODE !== "teach" || !L) return; fitQ(); });
 function fitBoards() { var f = $(".chunk.cur .tfig"), foot = $(".tfoot"); if (!f || !foot) return;
   var cap = f.querySelector("figcaption"), room = window.innerHeight - f.getBoundingClientRect().top - foot.getBoundingClientRect().height - (cap ? cap.offsetHeight + 10 : 0) - 34;
   var im = f.querySelector("img"); if (im) im.style.maxHeight = Math.max(220, room) + "px"; }
@@ -1859,14 +1844,14 @@ $$("[data-trytoggle]").forEach(function (b) { b.textContent = TRY ? "Leave try-o
 /* the try-out marker */
 if (TRY) { document.body.classList.add("tryout");
   var tb = document.createElement("div"); tb.className = "trybar";
-  tb.innerHTML = '<button class="trydot" type="button" id="trydot" aria-expanded="false" aria-label="Try-out mode: nothing is saved. Open to suggest a change" title="Try-out: nothing is saved"></button><div class="trypanel" hidden><b>Try-out</b><span>Nothing is saved in this tab.</span><button class="btn small" type="button" data-suggest>Suggest a change</button><span class="laysw" role="group" aria-label="Teach layout">' + LAYOUTS.map(function (l) { return '<button type="button" class="chip" data-layout="' + l[0] + '">' + l[1] + '</button>'; }).join("") + '</span><span class="laysw" role="group" aria-label="Teach flow">' + FLOWS.map(function (f) { return '<button type="button" class="chip" data-flow="' + f[0] + '">' + f[1] + '</button>'; }).join("") + '</span><button class="btn small" type="button" id="tryleave">Leave try-out</button><button class="btn small" type="button" id="tryx" aria-label="Close">\u00d7</button></div>';
+  tb.innerHTML = '<button class="trydot" type="button" id="trydot" aria-expanded="false" aria-label="Try-out mode: nothing is saved. Open to suggest a change" title="Try-out: nothing is saved"></button><div class="trypanel" hidden><b>Try-out</b><span>Nothing is saved in this tab.</span><button class="btn small" type="button" data-suggest>Suggest a change</button><span class="laysw" role="group" aria-label="Teach flow">' + FLOWS.map(function (f) { return '<button type="button" class="chip" data-flow="' + f[0] + '">' + f[1] + '</button>'; }).join("") + '</span><button class="btn small" type="button" id="tryleave">Leave try-out</button><button class="btn small" type="button" id="tryx" aria-label="Close">\u00d7</button></div>';
   document.body.appendChild(tb);
   var tryOpen = function (on) { tb.querySelector(".trypanel").hidden = !on; tb.classList.toggle("open", on); $("#trydot").setAttribute("aria-expanded", String(on)); };
   $("#trydot").addEventListener("click", function () { tryOpen(tb.querySelector(".trypanel").hidden); });
   $("#tryx").addEventListener("click", function () { tryOpen(false); });
   tb.querySelector("[data-suggest]").addEventListener("click", function () { tryOpen(false); });
   tb.querySelector("#tryleave").addEventListener("click", tryToggle); }
-layPressed(); flowPressed();
+flowPressed();
 
 /* the Exams tab (exams.js) works through these */
 window.TD = { app: app, $: $, $$: $$, esc: esc, clean: clean, ls: ls, toast: toast, maths: maths, CFG: CFG, gh: gh, putB64: putB64, b64enc: b64enc, loadTree: loadTree, shaOf: shaOf, blobBytes: blobBytes, fileJSON: fileJSON, fileURL: fileURL, studentBase: studentBase, isTry: TRY, render: render };
