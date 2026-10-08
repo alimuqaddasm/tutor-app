@@ -24,30 +24,16 @@ try:
         p.evaluate("location.hash = '#/videos'"); p.wait_for_timeout(800)
         check("and the sidebar keeps showing them on other pages", p.locator("#mkside").is_visible())
         c.close()
-        # 3. layouts: no scrolling on the tablet (1280 x 800) and the laptop
-        for lay in ("side", "float"):
-            for w, h in ((1280, 800), (1440, 900)):
-                c = ctx_(b, w, h); c.add_init_script("localStorage.setItem('tutor.layout', '%s')" % lay); p = page(c, "?try#/lesson/" + MA + "/teach")
-                bad = []
-                for tx in ["Set 5 Q6", "Set 6 Q14", "Set 1 Q4", "exact value of tan 75", "Given that tan A"]:
-                    p.evaluate("t => Array.from(document.querySelectorAll('.outline .oc')).find(x => x.textContent.indexOf(t) >= 0).click()", tx); p.wait_for_timeout(1800)
-                    s = p.evaluate("[scrollY, (document.querySelector('.fitq')||{scrollHeight:0,clientHeight:0}).scrollHeight - (document.querySelector('.fitq')||{clientHeight:0}).clientHeight, !!document.querySelector('.chunk.cur.fit')]")
-                    if s[0] > 0 or s[1] > 2 or not s[2]: bad.append((tx, s))
-                check("%s layout at %dx%d: question screens need no scrolling" % (lay, w, h), not bad, bad)
-                if lay == "float" and w == 1280:
-                    check("floating card starts folded to the three verdict buttons", p.locator(".fita.min").count() == 1 and p.locator(".fita .vb").first.is_visible() and not p.locator(".fita .ans").is_visible())
-                    p.locator("[data-fitx]").click(); p.wait_for_timeout(300)
-                    check("it opens to show the answer", p.locator(".fita .ans").is_visible())
-                if lay == "side" and w == 1280:
-                    p.locator('.fita .vb[data-v="right"]').click(); p.wait_for_timeout(300)
-                    check("side panel: a verdict still records", p.locator('.fita .vb[data-v="right"]').get_attribute("aria-pressed") == "true")
-                    p.evaluate("t => Array.from(document.querySelectorAll('.outline .oc')).find(x => x.textContent.indexOf(t) >= 0).click()", "Set 5 Q6"); p.wait_for_timeout(800)
-                    p.fill(".fita input[data-mk]", "6"); p.wait_for_timeout(300)
-                    check("exam question: the marks box sits with the big verdict buttons", p.locator(".fita .ctl.big input[data-mk]").input_value() == "6")
-                    p.screenshot(path=os.path.join(R.OUT, "r14-side.png"))
-                c.close()
-        c = ctx_(b, 1280, 800); p = page(c, "?try#/settings", "#setform"); p.locator('#setform button[data-layout="float"]').click(); p.wait_for_timeout(200)
-        check("Settings switches the layout", p.evaluate("localStorage.getItem('tutor.layout')") == "float"); c.close()
+        # 3. Flip (the one layout since 8 Oct): no scrolling on the tablet (1280 x 800) and the laptop
+        for w, h in ((1280, 800), (1440, 900)):
+            c = ctx_(b, w, h); p = page(c, "?try#/lesson/" + MA + "/teach")
+            bad = []
+            for tx in ["Set 5 Q6", "Set 6 Q14", "Set 1 Q4", "exact value of tan 75", "Given that tan A"]:
+                p.evaluate("t => Array.from(document.querySelectorAll('.outline .oc')).find(x => x.textContent.indexOf(t) >= 0).click()", tx); p.wait_for_timeout(1800)
+                s = p.evaluate("[scrollY, (document.querySelector('.fitq')||{scrollHeight:0,clientHeight:0}).scrollHeight - (document.querySelector('.fitq')||{clientHeight:0}).clientHeight, !!document.querySelector('.chunk.cur.fit')]")
+                if s[0] > 0 or s[1] > 2 or not s[2]: bad.append((tx, s))
+            check("flip at %dx%d: question screens need no scrolling" % (w, h), not bad, bad)
+            c.close()
         b.close()
 finally:
     R.srv.kill()

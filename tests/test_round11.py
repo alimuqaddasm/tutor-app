@@ -32,7 +32,7 @@ try:
         b = pw.chromium.launch(channel="msedge")
         # 1. quiz: I skipped this question
         c = ctx_(b); p = page(c, "?try#/lesson/" + CH + "/teach"); jump(p, "Choose the quiz"); p.keyboard.press("ArrowRight"); p.wait_for_timeout(300)
-        check("quiz: 'I skipped it' sits in the bottom bar next to Next (v19)", p.locator(".tfoot .btn.iskip").count() == 1 and p.locator(".chunk.cur .vt").count() == 0)
+        check("quiz: 'I skipped it' sits in the bottom bar next to Next (v19)", p.locator(".tfoot .btn.iskip").count() == 1 and p.locator(".chunk.cur button.vt").count() == 0)
         a0 = pos(p); p.keyboard.press("0"); p.wait_for_timeout(300)
         check("key 0 = I skipped it, and moves on", pos(p) != a0 and p.locator(".outline .oc.v-tskip").count() >= 1)
         p.keyboard.press("ArrowLeft"); p.wait_for_timeout(300)

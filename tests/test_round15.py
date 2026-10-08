@@ -34,8 +34,6 @@ try:
                 p.screenshot(path=os.path.join(R.OUT, "r15-flip.png"))
                 p.locator(".tfoot .btn.next").click(); p.wait_for_timeout(500)
                 check("the next screen starts on the question again", p.locator(".chunk.cur.flipped").count() == 0)
-                p.click("#trydot"); p.wait_for_timeout(200)
-                check("the try-out dot offers all four layouts", p.locator(".trypanel button[data-layout]").count() == 4 and p.locator('.trypanel button[data-layout="flip"]').get_attribute("aria-pressed") == "true")
             c.close()
         b.close()
 finally:
