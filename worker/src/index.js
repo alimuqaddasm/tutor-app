@@ -27,7 +27,7 @@ export async function handle(request, env, now) {
   const cors = allowed.includes(origin) ? {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Exam-Password, X-Exam-Token, X-Phone-Token, X-Upload-Source",
+    "Access-Control-Allow-Headers": "Content-Type, X-Exam-Password, X-Loader-Key, X-Exam-Token, X-Phone-Token, X-Upload-Source",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin"
   } : { "Vary": "Origin" };
@@ -82,12 +82,18 @@ const toBytes = (v) => (v instanceof Uint8Array ? v : new Uint8Array(v));
 
 async function sha256(s) { return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))); }
 
+async function same(x, y) {
+  const a = await sha256(x), b = await sha256(y);
+  let diff = 0; for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+/* Ali's exam password, or the loader key (Worker secret LOADER_KEY, set with wrangler by Claude) so Claude can load
+   exams and assignments straight from a cloud machine instead of through Ali's laptop (Ali, 8 Oct: too slow). */
 async function requireTeacher(request, env) {
   if (!env.TEACHER_PASSWORD) fail(503, "The exam password is not set on the server yet.");
-  const given = request.headers.get("X-Exam-Password") || "";
-  const a = await sha256(given), b = await sha256(env.TEACHER_PASSWORD);
-  let diff = 0; for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
-  if (diff !== 0) fail(401, "Wrong exam password.");
+  const key = request.headers.get("X-Loader-Key") || "";
+  if (key && env.LOADER_KEY && key.length >= 32 && await same(key, env.LOADER_KEY)) return;
+  if (!(await same(request.headers.get("X-Exam-Password") || "", env.TEACHER_PASSWORD))) fail(401, "Wrong exam password.");
 }
 
 async function examByToken(env, token) {

@@ -100,3 +100,14 @@ describe("ticked marks", () => {
     expect(f.headers.get("Cache-Control")).toMatch(/immutable/);
   });
 });
+
+describe("loader key", () => {
+  it("lets Claude load exams without the password; a wrong or short key does not", async () => {
+    const { call: c } = await import("./helpers.js");
+    const body = { title: "Loaded by Claude", questions: [{ id: "q1", marks: 1 }] };
+    const ok = await c(T0, "POST", "/api/t/exams", { json: body, headers: { "X-Loader-Key": "loader-key-for-tests-0123456789abcdef" } });
+    expect(ok.status).toBe(201);
+    expect((await c(T0, "POST", "/api/t/exams", { json: body, headers: { "X-Loader-Key": "loader-key-for-tests-0123456789abcdeX" } })).status).toBe(401);
+    expect((await c(T0, "POST", "/api/t/exams", { json: body, headers: { "X-Loader-Key": "short" } })).status).toBe(401);
+  });
+});

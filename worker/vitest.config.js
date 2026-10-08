@@ -6,7 +6,7 @@ export default defineConfig(async () => {
   return {
     plugins: [cloudflareTest({
       wrangler: { configPath: "./wrangler.toml" },
-      miniflare: { bindings: { TEACHER_PASSWORD: "test-password", TEST_MIGRATIONS: migrations } }
+      miniflare: { bindings: { TEACHER_PASSWORD: "test-password", LOADER_KEY: "loader-key-for-tests-0123456789abcdef", TEST_MIGRATIONS: migrations } }
     })],
     test: { setupFiles: ["./test/apply-migrations.js"] }
   };
