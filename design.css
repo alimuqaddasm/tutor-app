@@ -272,7 +272,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:15px}
    Paper black on paper white in every theme: this is a replica of the printed page. */
 .pp{color:#000;background:#fff;line-height:1.35;text-align:left}
 .pp.aqa{font-family:var(--font-aqa)}
-.pp.edx{font-family:var(--font-edexcel);line-height:1.45}
+.pp.edx{font-family:var(--font-edexcel);line-height:1.45;font-size:1.09em}   /* Edexcel prints 12 pt Times, AQA 11 pt Arial */
 .pp-row{display:grid;grid-template-columns:6.4em minmax(0,1fr);column-gap:.9em;margin-top:1.1em}
 .pp-row:first-child{margin-top:0}
 .pp.edx .pp-row{grid-template-columns:2.4em minmax(0,1fr);column-gap:.5em}
