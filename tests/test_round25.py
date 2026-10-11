@@ -64,7 +64,9 @@ with sync_playwright() as p:
         wait_for(pg, lambda: pg.locator(".xq-look").count() == qs, 15)
         check(name + ": every question shows on the exam page", pg.locator(".xq-look").count() == qs)
         figs = pg.locator(".xq-look img")
-        check(name + ": typed questions show text and figure", wait_for(pg, lambda: figs.count() >= 2 and figs.nth(1).evaluate("i => i.naturalWidth > 0")) is not None)
+        wait_for(pg, lambda: figs.count() >= 2)
+        # the figures are loading="lazy": one further down loads only near the screen, so scroll to it first
+        check(name + ": typed questions show text and figure", wait_for(pg, lambda: figs.count() >= 2 and figs.nth(1).evaluate("i => { i.scrollIntoView({block: 'center'}); return i.naturalWidth > 0; }")) is not None, pg.evaluate("Array.from(document.querySelectorAll('.xq-look img')).map(function(i){return (i.getAttribute('data-xsrc')||'').split('/').slice(-2).join('/')+'='+i.naturalWidth}).join(', ')"))
         figs.nth(0).click()
         wait_for(pg, lambda: pg.locator("#zoom").is_visible())
         first = pg.get_attribute("#zimg", "src")

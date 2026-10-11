@@ -136,7 +136,7 @@ with sync_playwright() as p:
     tp.goto(APP + "?try#/exams")
     check("Try-out: the real pack offers a Practice copy", wait_for(lambda: tp.locator('[data-praccopy="%s"]' % real).count() == 1, 15) is not None, tp.inner_text("#app")[:400])
     tp.click('[data-praccopy="%s"]' % real)
-    check("  ...the copy opens at once, as a practice assignment", wait_for(lambda: tp.locator("#xt-btns").count() == 1 and "Practice:" in tp.inner_text("h2"), 15) is not None)
+    check("  ...the copy opens at once, as a practice assignment", wait_for(lambda: tp.locator("#xt-btns").count() == 1 and "Practice" in tp.inner_text(".xt-head"), 15) is not None, tp.inner_text(".xt-head")[:300] if tp.locator(".xt-head").count() else tp.inner_text("#app")[:300])
     prac = tp.evaluate("location.hash").split("/")[2]
     check("  ...and it can be changed (not look-only)", tp.locator("[data-newlink]").count() == 1 and not tp.locator("[data-newlink]").is_disabled())
     tp.click("[data-newlink]")
@@ -146,7 +146,7 @@ with sync_playwright() as p:
     st = sctx.new_page()
     st.on("pageerror", lambda e: errs.append("student: " + str(e)))
     st.goto(link)
-    check("its student link shows the real interface, with pictures", wait_for(lambda: "Day 1 is open" in st.inner_text("#ex"), 15) is not None)
+    check("its student link shows the real interface, with pictures", wait_for(lambda: st.locator('.a-dayb[data-a-day="1"]:not([disabled])').count() == 1 and st.locator("section.a-sec").count() >= 1, 15) is not None, st.inner_text("#ex")[:300])   # the .a-home2 home since 10 Oct
     st.click('[data-a-sec="d1-chem"]')
     wait_for(lambda: st.locator("#ans").count() == 1, 8)
     st.fill("#ans", "1 B, 2 C")
