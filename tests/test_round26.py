@@ -76,7 +76,7 @@ with sync_playwright() as p:
         st = sctx.new_page()
         st.goto(link)
         wait_for(st, lambda: st.locator(".ex-qtext").count() == 1, 20)
-        for qn in ([1, 2, 3, 4, 5, 6] if name == "chem" else [1, 2, 3, 4, 5]):
+        for qn in ([1, 2, 3, 4, 5, 6, 8] if name == "chem" else [1, 2, 3, 4, 5]):
             st.set_viewport_size({"width": 1440, "height": 900})
             st.click('[data-go="%d"]' % (qn - 1))
             st.wait_for_timeout(500)
