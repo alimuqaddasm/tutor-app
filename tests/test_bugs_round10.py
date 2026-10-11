@@ -57,6 +57,13 @@ def page(c, url, sel=".teach3"):
 
 def jump_ic(p, ic, n=0): p.evaluate("([ic, n]) => Array.from(document.querySelectorAll('.outline .oc')).filter(b => b.querySelector('.ic').textContent == ic)[n].click()", [ic, n]); p.wait_for_timeout(500)
 def jump(p, f): p.evaluate("f => Array.from(document.querySelectorAll('.outline .oc')).find(x => x.querySelector('.tx').textContent.indexOf(f) >= 0).click()", f); p.wait_for_timeout(500)
+# the lesson pages (His work, Times, After the lesson) are in Teach's ⋯ menu since Prepare replaced the Plan page (11 Oct)
+def lesson_page(p, ph):
+    p.evaluate("location.hash = '#/lesson/%s/teach'" % CH); p.wait_for_selector(".teach3"); p.wait_for_timeout(300)
+    if p.locator("#ckask").count(): p.locator("#ckask [data-ck]").last.click()
+    p.locator("[data-tmore]").click(); p.locator('.tmenu [data-phase="%s"]' % ph).click(); p.wait_for_selector("h1.t-title"); p.wait_for_timeout(400)
+
+
 def pos(p): return "/".join(__import__("re").findall(r"\d+", p.locator(".tmini .num").inner_text()))   # "Step 21 of 144" reads as "21/144"
 def wide(p): return p.evaluate("document.documentElement.scrollWidth") - p.evaluate("document.documentElement.clientWidth")
 COVER = """() => Array.from(document.querySelectorAll('.tfoot button')).filter(b => { const r = b.getBoundingClientRect(); const h = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return h && h.closest('.trybar'); }).map(b => b.textContent.trim().slice(0, 12))"""
@@ -72,7 +79,7 @@ try:
             check("Teach page has no sideways scroll at %d px" % w, wide(p) <= 0, wide(p))
             if w == 390:
                 p.screenshot(path=os.path.join(OUT, "r10-phone-try-teach.png"))
-                p.evaluate("location.hash = '#/lesson/%s'" % CH); p.wait_for_selector(".rail"); p.locator('.rail button[data-phase="_work"]').dispatch_event("click"); p.wait_for_timeout(500)
+                lesson_page(p, "_work")
                 check("phone 'His work' page has no sideways scroll", wide(p) <= 0, wide(p))
             c.close()
         # 3-4. reload on a question, then Show him and Start: both use the part on screen
@@ -82,9 +89,10 @@ try:
         got = p.evaluate("(document.querySelector('#sh-body img') || {dataset: {}}).dataset.src")
         check("Show him after a reload shows this question", got == want, (want, got)); p.keyboard.press("Escape"); p.wait_for_timeout(300)
         part = p.locator(".tcrumb b").inner_text(); p.click("#clkgo"); p.wait_for_timeout(1200)
-        p.evaluate("location.hash = '#/lesson/%s'" % CH); p.wait_for_selector(".rail"); p.wait_for_timeout(500)
-        live = p.locator(".rail button.live .nm").all_inner_texts()
-        check("Start after a reload counts time for the part on screen", len(live) == 1 and live[0].lower() in part.lower(), (part, live))  # the rail shows the part name without its kind (Clear Desk, 8 Oct); c.close()
+        lesson_page(p, "_time"); p.locator("details.fold summary").filter(has_text="Clock history").click(); p.wait_for_timeout(300)
+        hist = p.locator("details.fold .list").inner_text()   # "Started · <part>": the clock counts for the part on screen
+        last = [l for l in hist.split("\n") if l.startswith(("Started", "Resumed"))][-1:]   # the tap just made is the last start
+        check("Start after a reload counts time for the part on screen", last and part.lower().split(" (")[0] in last[0].lower(), (part, last))  # the rail shows the part name without its kind (Clear Desk, 8 Oct); c.close()
         # 5. Ctrl/Alt + keys do nothing; 6. nothing moves behind a zoomed picture
         c = ctx_(b); p = page(c, "?try#/lesson/" + CH + "/teach"); jump(p, "Choose the quiz"); p.keyboard.press("ArrowRight"); p.wait_for_timeout(300)
         v0 = p.locator(".chunk.cur .ctl.big [aria-pressed=true]").all_inner_texts(); p.keyboard.press("Control+1"); p.keyboard.press("Alt+2"); p.wait_for_timeout(200); a = pos(p); p.keyboard.press("Control+ArrowRight"); p.wait_for_timeout(200)
@@ -98,24 +106,24 @@ try:
         c.close(); c = ctx_(b); p = page(c, "#/lesson/" + CH + "/teach"); jump(p, "Choose the quiz"); p.locator(".chunk.cur .chip").filter(has_text="All").first.click(); p.wait_for_timeout(300)
         jump(p, "Bromoethane to ethanol"); a = (pos(p), p.locator(".chunk.cur .qtext").inner_text())
         p.reload(); p.wait_for_selector(".teach3"); p.wait_for_timeout(800); r1 = (pos(p), p.locator(".chunk.cur .qtext").inner_text() if p.locator(".chunk.cur .qtext").count() else "")
-        p.locator(".tbar a.back").click(); p.wait_for_selector(".rail"); p.wait_for_timeout(300); p.locator(".modes a").filter(has_text="Teach").click(); p.wait_for_selector(".teach3"); p.wait_for_timeout(600)
+        p.locator(".tbar a.back").click(); p.wait_for_selector("body.prep .teach3"); p.wait_for_timeout(300); p.locator(".tmini > a[href$='/teach']").click(); p.wait_for_selector("body:not(.prep) .teach3"); p.wait_for_timeout(600)
         r2 = (pos(p), p.locator(".chunk.cur .qtext").inner_text() if p.locator(".chunk.cur .qtext").count() else "")
-        check("quiz set 'All' and the place survive a reload and Plan and back", r1 == a and r2 == a, (a, r1, r2))
+        check("quiz set 'All' and the place survive a reload and Prepare and back", r1 == a and r2 == a, (a, r1, r2))
         # 8. a double tap on Next moves one chunk
         p.locator(".tfoot .btn.next").dblclick(); p.wait_for_timeout(300); n0 = int(a[0].split("/")[0]); n1 = int(pos(p).split("/")[0])
         check("double tap on Next moves one chunk", n1 == n0 + 1, (n0, n1))
         # 9. keyboard: Enter on Next, then Enter again, keeps going
         p.evaluate("document.querySelector('.tfoot .btn.next').focus()"); p.keyboard.press("Enter"); p.wait_for_timeout(200); p.keyboard.press("Enter"); p.wait_for_timeout(200)
         check("Enter, Enter on Next moves two chunks (focus stays on the button)", int(pos(p).split("/")[0]) == n1 + 2, (n1, pos(p))); c.close()
-        # 10. try-out: Teach -> Plan keeps the clock and ticks of this tab
+        # 10. try-out: Teach -> Prepare -> Teach keeps the clock and ticks of this tab
         c = ctx_(b); p = page(c, "?try#/lesson/" + CH + "/teach"); p.click("#clkgo"); p.wait_for_timeout(300)
         for i in range(3): p.locator(".tfoot .btn.next").dispatch_event("click"); p.wait_for_timeout(200)
-        p.locator(".tbar a.back").click(); p.wait_for_selector(".rail"); p.wait_for_timeout(800)
-        check("try-out: Plan still shows the running clock after Teach", p.locator("#clkgo").inner_text() == "Pause", p.locator("#clkgo").inner_text())
-        p.locator(".modes a").filter(has_text="Teach").click(); p.wait_for_selector(".teach3"); p.wait_for_timeout(500)
-        check("try-out: ticks kept after Plan and back", p.evaluate("document.querySelectorAll('.outline .oc.done').length") >= 1)
+        p.locator(".tbar a.back").click(); p.wait_for_selector("body.prep .teach3"); p.wait_for_timeout(800)
+        p.locator(".tmini > a[href$='/teach']").click(); p.wait_for_selector("body:not(.prep) .teach3"); p.wait_for_timeout(500)
+        check("try-out: the clock still runs after Prepare and back", p.locator("#clkgo").inner_text() == "Pause", p.locator("#clkgo").inner_text())
+        check("try-out: ticks kept after Prepare and back", p.evaluate("document.querySelectorAll('.outline .oc.done').length") >= 1)
         # 11. Finish in try-out does not claim it saved
-        p.evaluate("location.hash = '#/lesson/%s'" % CH); p.wait_for_selector(".rail"); p.locator('.rail button[data-phase="_after"]').dispatch_event("click"); p.wait_for_timeout(400)
+        lesson_page(p, "_after")
         p.locator("#fbform button[type=submit]").dispatch_event("click"); p.wait_for_timeout(600)
         check("try-out Finish does not say 'saved to GitHub'", "GitHub" not in p.locator("#toast").inner_text(), p.locator("#toast").inner_text()); c.close()
         # 12. offline Finish says it is kept on the device; online Finish saves for real (to the pretend GitHub)
@@ -128,12 +136,12 @@ try:
         check("online Finish saves and says so", p.locator("#toast").inner_text() == "Lesson saved to GitHub" and F.session(CH)["status"] == "finished", p.locator("#toast").inner_text())
         p.evaluate("Object.keys(localStorage).filter(k => k.indexOf('tutor.s.') == 0).forEach(k => localStorage.removeItem(k))"); c.close()
         # 13. two tabs on one lesson: the second tab sees the running clock and the saved file keeps it running
-        F = FakeGH(); c = ctx_(b, fake=F); A = page(c, "#/lesson/" + CH + "/teach"); P2 = page(c, "#/lesson/" + CH, "[data-phase]")
+        F = FakeGH(); c = ctx_(b, fake=F); A = page(c, "#/lesson/" + CH + "/teach"); P2 = page(c, "#/lesson/" + CH + "/teach")   # a second Teach tab (the Plan page is gone since 11 Oct)
         A.bring_to_front(); A.click("#clkgo"); A.wait_for_timeout(300)
         for i in range(3): A.locator(".tfoot .btn.next").dispatch_event("click"); A.wait_for_timeout(200)
         P2.bring_to_front(); P2.wait_for_timeout(1500)
         check("second tab shows the clock running", P2.locator("#clkgo").inner_text() == "Pause", P2.locator("#clkgo").inner_text())
-        P2.locator('button[data-phase]:not([data-phase^="_"])').first.dispatch_event("click"); P2.wait_for_timeout(300); P2.locator('#phasebox [data-v="right"]').first.dispatch_event("click"); P2.wait_for_timeout(6000)
+        jump(P2, "Choose the quiz"); P2.keyboard.press("ArrowRight"); P2.wait_for_timeout(400); P2.keyboard.press("1"); P2.wait_for_timeout(6000)
         A.bring_to_front(); A.wait_for_timeout(6000); s = F.session(CH)
         check("both tabs' work saved: clock running, ticks and the verdict", [e["e"] for e in s["time"]["log"]][:1] == ["start"] and s["time"]["log"][-1]["e"] not in ("pause", "end") and sum(1 for d in s["done"].values() if not d.get("off")) >= 1 and any(a.get("v") == "right" for a in s["answers"].values()),
               ([e["e"] for e in s["time"]["log"]], sum(1 for d in s["done"].values() if not d.get("off")), [a.get("v") for a in s["answers"].values()]))

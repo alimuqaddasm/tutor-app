@@ -26,14 +26,14 @@ def click_icon(p, ic): p.evaluate("ic => Array.from(document.querySelectorAll('.
 try:
     with sync_playwright() as pw:
         b = pw.chromium.launch(channel="msedge"); c = ctx_(b, 1400, 900); p = c.new_page(); watch(p)
-        # 1. plan: the "show" step no longer covers the page
-        p.goto(B + "#/lesson/" + L); p.wait_for_selector(".rail", timeout=60000); p.click('.rail button[data-phase="c2"]'); time.sleep(1)
-        print("1 overlay on plan:", p.locator(".showov").count(), "| show label position:", p.evaluate("getComputedStyle(document.querySelector('span.kind.show')).position"))
-        p.locator('[data-show="*"]').click(); time.sleep(1.5); print("  Show him overlay opens:", p.locator(".showov").count(), "imgs", p.locator(".showov img").count())
-        p.screenshot(path=O + "1-showhim.png"); p.keyboard.press("Escape"); time.sleep(.3)
-        # 2. teach preview
-        p.evaluate("Object.keys(localStorage).filter(k=>k.indexOf('tutor.tpos')==0).forEach(k=>localStorage.removeItem(k))")
-        p.goto(B + "#/lesson/" + L + "/teach"); p.wait_for_selector(".teach3", timeout=60000); time.sleep(.5)
+        # 1. Prepare (11 Oct, replaced the Plan page): the Teach screens, nothing to record
+        p.goto(B); p.evaluate("Object.keys(localStorage).filter(k=>k.indexOf('tutor.tpos')==0).forEach(k=>localStorage.removeItem(k))")
+        p.goto(B + "#/lesson/" + L); p.wait_for_selector(".teach3, .crumb button[data-phase]", timeout=60000)
+        if p.locator(".teach3").count() == 0: p.click(".crumb button[data-phase]")   # a finished lesson opens on After the lesson; the crumb goes to its screens
+        p.wait_for_selector(".teach3", timeout=60000); time.sleep(1)
+        print("1 Prepare:", p.evaluate("document.body.classList.contains('prep')"), "| clock buttons:", p.locator("#clkgo").count(), "| Show him buttons:", p.locator(".tfoot [data-show]").count())
+        p.screenshot(path=O + "1-prepare.png")
+        # 2. going through it before the lesson: Prepare, so nothing is ticked
         print("2 preview banner:", p.locator(".preview").count(), "| ticks before:", ticks(p))
         for i in range(6): p.keyboard.press("ArrowRight"); time.sleep(.15)
         print("  after 6 Next in preview, ticks:", ticks(p), "| at", pos(p))
@@ -48,7 +48,8 @@ try:
         print("  figure chunk imgs:", p.locator(".chunk.cur .tfig img").count(), "| current top px:", round(p.evaluate("document.querySelector('.chunk.cur').getBoundingClientRect().top")))
         p.screenshot(path=O + "3-figure.png")
         print("4 'End of' chunks:", p.evaluate("Array.from(document.querySelectorAll('.outline .tx')).filter(x => x.textContent.startsWith('End of')).length"))
-        # 5. live: start the clock, Taught ticks, Skip does not
+        # 5. live (Teach): start the clock, Taught ticks, Skip does not
+        p.goto(B + "#/lesson/" + L + "/teach"); p.wait_for_selector(".teach3", timeout=60000); time.sleep(.5)
         p.evaluate("Array.from(document.querySelectorAll('.outline .om')).find(b => b.textContent.indexOf('3b') == 0).click()"); time.sleep(.4); p.keyboard.press("ArrowRight"); time.sleep(.3)
         p.click("#clkgo"); time.sleep(.6); print("5 preview banner after start:", p.locator(".preview").count(), "| buttons:", p.locator(".tfoot .btn").all_inner_texts())
         t0 = ticks(p); p.click(".tfoot .btn.next"); time.sleep(.3); t1 = ticks(p); p.click(".tfoot .btn.skip"); time.sleep(.3); t2 = ticks(p)
@@ -75,8 +76,10 @@ try:
         p.locator(".opart").nth(2).locator("summary").click(); time.sleep(.2); p.locator(".opart").nth(2).locator(".oc").nth(3).click(); time.sleep(.5)
         print("  after jump, drawer open:", p.evaluate("document.body.classList.contains('toc-open')"), pos(p), "| scrollWidth", p.evaluate("document.documentElement.scrollWidth"))
         p.screenshot(path=O + "9b-phone-teach.png")
-        p.goto(B + "#/lesson/2026-09-30-maths"); p.wait_for_selector(".rail", timeout=60000); time.sleep(1)
-        print("10 30-Sep maths rail:", p.locator(".rail").inner_text().replace("\n", " | ")[:220])
+        p.goto(B + "#/lesson/2026-09-30-maths"); p.wait_for_selector(".teach3, .crumb button[data-phase]", timeout=60000)
+        if p.locator(".teach3").count() == 0: p.click(".crumb button[data-phase]")
+        p.wait_for_selector(".teach3", timeout=60000); time.sleep(1)
+        p.click("#toc"); time.sleep(.4); print("10 30-Sep maths in Prepare, outline:", p.locator(".outline").inner_text().replace("\n", " | ")[:220])
         b.close()
 finally:
     srv.terminate()

@@ -143,8 +143,11 @@ with sync_playwright() as p:
     st = sctx.new_page()
     st.on("pageerror", lambda e: errs.append("student: " + str(e)))
     st.goto(link)
-    check("home: Day 1 is open, with its two subjects", wait_for(lambda: "Day 1 is open" in st.inner_text("#ex") and st.locator(".a-card").count() == 2, 15) is not None, st.inner_text("#ex")[:400] + " | cards=" + str(st.locator(".a-card").count()) + " | " + str(errs[-3:]) + " | " + st.inner_html("#ex")[:600])
-    check("  ...Day 2 waits: opens 12 h after he opens Day 1", "Day 2 · opens 12 h after you open Day 1" in st.inner_text(".a-soon"))
+    # since 10 Oct the home is .a-home2: days are .a-dayb buttons down the side, the picked day's subjects are section.a-sec cards
+    check("home: Day 1 is open, with its two subjects", wait_for(lambda: st.locator('.a-dayb[data-a-day="1"][aria-current="true"]:not([disabled])').count() == 1 and st.locator("section.a-sec").count() == 2
+          and "Maths" in st.inner_text('section.a-sec[data-subject="maths"]') and "Chemistry" in st.inner_text('section.a-sec[data-subject="chem"]'), 15) is not None, st.inner_text("#ex")[:400] + " | " + str(errs[-3:]))
+    d2 = st.locator('.a-dayb[data-a-day="2"]')
+    check("  ...Day 2 waits: its day button is shut and says when it opens", d2.count() == 1 and d2.is_disabled() and "Opens" in d2.inner_text(), d2.inner_text() if d2.count() else "no Day 2 button")
     check("  ...one QR code for the phone", wait_for(lambda: st.locator(".a-qr svg").count() == 1, 8) is not None)
     st.screenshot(path=os.path.join(SHOTS, "r22-1-home.png"))
     st.click('[data-a-sec="d1-math"]')
@@ -156,7 +159,7 @@ with sync_playwright() as p:
     st.fill("#ans", "f(x) = |x|")
     check("  ...typing marks the question as typed", wait_for(lambda: "typed" in st.inner_text(".a-qbtn >> nth=0"), 5) is not None)
 
-    check("the exam page sees Day 1 opened and Day 2's time", wait_for(lambda: "Opened" in pg.inner_text('[data-secst="d1-math"]') and "Opens" in pg.inner_text('[data-secst="d2-math"]'), 15) is not None, pg.inner_text(".xt-qs"))
+    check("the exam page sees Day 1 opened and Day 2's time", wait_for(lambda: "Opened" in pg.inner_text('[data-secst="d1-math"]') and "Opens" in pg.inner_text('[data-secst="d2-math"]'), 15) is not None, " | ".join(pg.locator("[data-secst]").all_inner_texts()))
 
     tok = st.evaluate("Object.keys(localStorage).filter(k => k.slice(-6) === '.phone').map(k => localStorage.getItem(k))[0]")
     ph = sctx.new_page()
@@ -203,8 +206,13 @@ with sync_playwright() as p:
     wait_for(lambda: pg.locator('[data-release="d2-math"]').count() == 1, 10)
     pg.click('[data-release="d2-math"]')
     st.click("[data-a-home]")
-    check("Open this day now: Day 2 opens for him", wait_for(lambda: "Day 2 is open" in st.inner_text("#ex"), 15) is not None)
-    check("  ...Day 1 stays open below, with Ali's note", "earlier days stay open" in st.inner_text("#ex").lower() and "1 note from Ali" in st.inner_text("#ex"))
+    # since 10 Oct: the newest open day is picked on his home, with its subject cards; earlier days stay as buttons he can open
+    check("Open this day now: Day 2's button opens for him", wait_for(lambda: st.locator('.a-dayb[data-a-day="2"]:not([disabled])').count() == 1, 15) is not None, st.inner_text("#ex")[:300])
+    st.click('.a-dayb[data-a-day="2"]')
+    check("  ...and Day 2 shows its section", wait_for(lambda: st.locator('section.a-sec[data-subject="maths"] [data-a-sec="d2-math"]').count() >= 1, 8) is not None, st.inner_text("#ex")[:300])
+    st.click('.a-dayb[data-a-day="1"]')
+    check("  ...Day 1 stays open, with Ali's note", wait_for(lambda: st.locator('.a-dayb[data-a-day="1"]:not([disabled])').count() == 1 and "1 note from Ali" in st.inner_text("#ex"), 8) is not None, st.inner_text("#ex")[:300])
+    st.click('.a-dayb[data-a-day="2"]')
     st.screenshot(path=os.path.join(SHOTS, "r22-6-day2.png"))
     st.set_viewport_size({"width": 390, "height": 844})
     check("home at phone width: no sideways scrolling", not st.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"))
