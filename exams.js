@@ -425,7 +425,7 @@ function poll() {
     var secSig = function (l) { return JSON.stringify((l || []).map(function (x) { return x.doneAt; })); };
     var changed = d.status !== X.status || d.endAt !== X.endAt || (d.sections && secSig(d.sections) !== secSig(X.sections));
     ["status", "startedAt", "originalEndAt", "endAt", "submittedAt", "lockedAt", "lastSeenAt", "extensions"].forEach(function (k) { X[k] = d[k]; });
-    X.on = d.on; if (d.sections) { X.sections = d.sections; d.sections.forEach(function (x) { var el = $('[data-secst="' + x.id + '"]'); if (el) { var nh = secState(x, true); if (el.getAttribute("data-h") !== nh) { el.innerHTML = nh; el.setAttribute("data-h", nh); } } }); }
+    examLiveMark(); X.on = d.on; if (d.sections) { X.sections = d.sections; d.sections.forEach(function (x) { var el = $('[data-secst="' + x.id + '"]'); if (el) { var nh = secState(x, true); if (el.getAttribute("data-h") !== nh) { el.innerHTML = nh; el.setAttribute("data-h", nh); } } }); }
     drawRun();
     $$("[data-qrow]").forEach(function (tr) { var qid = tr.getAttribute("data-q"), p = d.perQuestion[qid], c = $("[data-saved]", tr); if (!c) return;
       var bits = [];
@@ -440,6 +440,11 @@ function poll() {
   });
 }
 
+/* an exam going on: kept on this device so Teach stops asking about an idle clock and counts the exam as lesson time */
+function examLiveMark() { if (!X || isAsg(X)) return; var on = X.startedAt && (X.status === "running" || X.status === "timeup");
+  var cur = T.ls("tutor.examlive"); try { cur = cur ? JSON.parse(cur) : null; } catch (e) { cur = null; }
+  if (on) T.ls("tutor.examlive", JSON.stringify({ id: X.id, subject: X.subject === "chemistry" ? "chem" : X.subject, startedAt: X.startedAt, endAt: X.endAt }));
+  else if (cur && cur.id === X.id) T.ls("tutor.examlive", JSON.stringify(Object.assign(cur, { doneAt: Date.now() }))); }
 function act(path, body, okMsg) {
   return call("POST", "/api/t/exams/" + X.id + path, body).then(function (r) { if (okMsg) T.toast(okMsg); return call("GET", "/api/t/exams/" + X.id).then(function (full) { X = full; offset = full.serverNow - Date.now(); drawExam(); poll(); return r; }); })
     .catch(function (e) { T.toast(e.message); });
@@ -530,7 +535,7 @@ function drawMark() {
       '</div>' +
       (asg && (q.practiceText || q.uploads.some(function (u) { return u.practice; })) ? '<details class="xt-det xt-after"><summary>He solved it again after finishing (practice, not for marks)</summary>' + (q.practiceText ? '<div class="xt-ans">' + esc(q.practiceText) + '</div>' : "") + '</details>' : "") +
       (asg ? '<div class="xt-notebox"><label for="nt-' + esc(q.id) + '"><b>Note to him</b> <span class="hint">He sees it as soon as it saves' + (studyText(q.study) ? "; if he lost marks he also sees: " + esc(studyText(q.study)) : "") + '</span></label><textarea id="nt-' + esc(q.id) + '" data-note="' + esc(q.id) + '" rows="2"' + (readOnly(R) ? " disabled" : "") + '>' + esc(q.note || "") + '</textarea></div>' : "") +
-      '<div data-tsumline>' + tickSummary(q) + '</div>' + '<div data-cline="' + esc(q.id) + '">' + claudeLine(q) + '</div>' +
+      '<div data-tsumline>' + tickSummary(q) + '</div>' + '<div data-cline="' + esc(q.id) + '" data-ctable>' + claudeLine(q, true) + '</div>' +
       '<div class="xt-markrow"><label>Mark <span class="xt-of"><input type="number" class="xt-score" data-score="' + esc(q.id) + '" min="0" max="' + q.marks + '" step="0.5" value="' + (q.score == null ? "" : q.score) + '"' + (readOnly(R) ? " disabled" : "") + '> / ' + q.marks + '</span></label>' +
         '<label class="xt-grow">Comment <textarea data-comment="' + esc(q.id) + '" rows="2"' + (readOnly(R) ? " disabled" : "") + '>' + esc(q.comment || "") + '</textarea></label><span class="hint" data-mstate="' + esc(q.id) + '"></span></div>' +
     '</section>';
@@ -550,13 +555,13 @@ document.addEventListener("click", function (e) { if (!R || !e.target.closest) r
 function claudeOf(qid) { return claudeMarks && claudeMarks.questions && claudeMarks.questions[qid] || null; }
 function claudeTotal() { return R.questions.reduce(function (a, q) { var c = claudeOf(q.id); return a + (c && c.score != null ? Number(c.score) : 0); }, 0); }
 function sameAsClaude(q) { var c = claudeOf(q.id); return c && q.score != null && Number(c.score) === q.score && (q.comment || "") === (c.comment || ""); }
-function claudeLine(q) {
+function claudeLine(q, table) {
   var c = claudeOf(q.id); if (!c) return "";
-  var sc = schemeOf(q), t = c.ticks && c.ticks.length === sc.list.length ? sc.list.map(function (it, k) { return c.ticks[k] ? (it.code || it.text) + (it.val > 1 && c.ticks[k] < it.val ? " (" + c.ticks[k] + " of " + it.val + ")" : "") : ""; }).filter(Boolean).join(", ") : "";
+  var sc = schemeOf(q), inTable = c.ticks && c.ticks.length === sc.list.length, t = inTable ? "" : c.ticks && c.ticks.length === sc.list.length ? sc.list.map(function (it, k) { return c.ticks[k] ? (it.code || it.text) + (it.val > 1 && c.ticks[k] < it.val ? " (" + c.ticks[k] + " of " + it.val + ")" : "") : ""; }).filter(Boolean).join(", ") : "";
   var done = sameAsClaude(q);
   return '<div class="xt-cmark' + (done ? " ok" : "") + '"><div class="xt-grow"><b>Claude: ' + esc(c.score) + ' / ' + q.marks + '</b>' + (t ? ' <span class="hint">' + esc(t) + '</span>' : "") +
-    (c.comment ? '<div>' + esc(c.comment) + '</div>' : "") + (c.unsure ? '<div class="xt-unsure">Not sure: ' + esc(c.unsure) + '</div>' : "") + '</div>' +
-    (done ? '<span class="xt-now">Accepted</span>' : '<button class="btn small accent" type="button" data-accept="' + esc(q.id) + '"' + (readOnly(R) ? " disabled" : "") + '>Accept Claude\u2019s mark</button>') + '</div>';
+    (c.comment && !(inTable && c.why && c.why.length) ? '<div>' + esc(c.comment) + '</div>' : "") + (c.unsure ? '<div class="xt-unsure">Not sure: ' + esc(c.unsure) + '</div>' : "") + '</div>' +
+    (done ? '<span class="xt-now">Accepted</span>' : '<button class="btn small accent" type="button" data-accept="' + esc(q.id) + '"' + (readOnly(R) ? " disabled" : "") + '>Accept Claude\u2019s mark</button>') + '</div>' + (table && inTable ? tickTable(sc, ticksOf(q, sc), true, c) : "");
 }
 /* put Claude's mark, ticks and comment into the page's fields and save them as Ali's */
 function acceptClaude(qid) {
@@ -566,7 +571,7 @@ function acceptClaude(qid) {
   var ticks = c.ticks && c.ticks.length === schemeOf(q).list.length ? c.ticks.map(Number) : null;
   return saveMark(qid, ticks).then(function () { refreshClaude(qid); if (cmp && R.questions[Number(cmp.getAttribute("data-i"))].id === qid) compare(Number(cmp.getAttribute("data-i"))); });
 }
-function refreshClaude(qid) { var q = R.questions.filter(function (x) { return x.id === qid; })[0]; $$('[data-cline="' + qid + '"]').forEach(function (el) { el.innerHTML = claudeLine(q); }); }
+function refreshClaude(qid) { var q = R.questions.filter(function (x) { return x.id === qid; })[0]; $$('[data-cline="' + qid + '"]').forEach(function (el) { el.innerHTML = claudeLine(q, el.hasAttribute("data-ctable")); }); }
 function acceptAll(btn) {
   var differ = R.questions.filter(function (q) { var c = claudeOf(q.id); return c && q.score != null && Number(c.score) !== q.score; }).length;
   if (differ && !confirm(differ + " question" + (differ === 1 ? " has" : "s have") + " your own mark already. Replace with Claude’s?")) return;
@@ -601,16 +606,33 @@ function tickSummary(q) {
   var sc = schemeOf(q); if (q.ticks.length !== sc.list.length) return "";
   return '<p class="hint xt-tsum">Ticked: ' + sc.list.map(function (it, k) { return q.ticks[k] ? esc((it.code || it.text) + (it.val > 1 && q.ticks[k] < it.val ? " (" + q.ticks[k] + " of " + it.val + ")" : "")) : ""; }).filter(Boolean).join(", ") + '</p>';
 }
-function tickRows(sc, ticks, ro) {
+/* with Claude's marks: one table, a row per mark scheme line (Ali, 11 Oct): the line, Claude's tick or cross,
+   Claude's reason for a cross (claude-marks.json "why", one per line), and Ali's own tick, which overrules */
+function tickTable(sc, ticks, ro, c) {
+  var last = null, why = c.why || [], mine = ticks.some(function (t) { return t > 0; });   // "Yours" only once Ali has ticked
+  var mark = function (v, of) { return v >= of ? T.tag("\u2713", "ok") : v > 0 ? T.tag(v + " of " + of, "partly") : T.tag("\u2715", "bad"); };
+  return '<table class="xt-table xt-mtbl"><thead><tr><th>Mark scheme</th><th>Claude</th><th>Claude\u2019s reason</th><th>You</th></tr></thead><tbody>' + sc.list.map(function (it, k) {
+    var head = it.part && it.part !== last ? '<tr class="xt-tparttr"><td colspan="4" class="xt-tpart" data-tpart="' + esc(partKey(it.part)) + '">' + esc(it.part) + '</td></tr>' : ""; last = it.part || last;
+    var given = ticks[k] || 0, cv = Number(c.ticks[k]) || 0;
+    var ctl = it.val > 1
+      ? '<span class="xt-tvals" role="group" aria-label="Marks for ' + esc(it.code) + '">' + Array.apply(null, Array(it.val + 1)).map(function (_, v) { return '<button type="button" class="chip" data-tickv="' + k + ':' + v + '" aria-pressed="' + (given === v) + '"' + (ro ? " disabled" : "") + '>' + v + '</button>'; }).join("") + '</span>'
+      : '<label class="xt-tme"><input type="checkbox" data-tick="' + k + '"' + (given ? " checked" : "") + (ro ? " disabled" : "") + ' aria-label="' + esc(it.code || it.text) + '"></label>';
+    return head + '<tr class="xt-mrow' + (given ? " on" : "") + (mine && given !== cv ? " over" : "") + '" data-tpartof="' + esc(partKey(it.part)) + '"><td>' + (it.code ? '<b class="xt-tcode">' + esc(it.code) + '</b> ' : "") + '<span class="xt-ttext">' + esc(it.text) + '</span></td>' +
+      '<td>' + mark(cv, it.val) + '</td><td class="xt-why">' + (cv < it.val ? esc(why[k] || "") : "") + '</td><td>' + ctl + (mine && given !== cv ? '<span class="hint xt-overl">Yours</span>' : "") + '</td></tr>';
+  }).join("") + '</tbody></table>';
+}
+function partKey(s) { return window.PaperQ ? PaperQ.partKey(s) : String(s || "").toLowerCase().replace(/[^a-z0-9.]/g, ""); }
+function tickRows(sc, ticks, ro, c) {
+  if (c && c.ticks && c.ticks.length === sc.list.length) return tickTable(sc, ticks, ro, c);
   var last = null;
   return sc.list.map(function (it, k) {
-    var head = it.part && it.part !== last ? '<div class="xt-tpart">' + esc(it.part) + '</div>' : ""; last = it.part || last;
+    var head = it.part && it.part !== last ? '<div class="xt-tpart" data-tpart="' + esc(partKey(it.part)) + '">' + esc(it.part) + '</div>' : ""; last = it.part || last;
     var given = ticks[k] || 0;
     var ctl = it.val > 1
       ? '<span class="xt-tvals" role="group" aria-label="Marks for ' + esc(it.code) + '">' + Array.apply(null, Array(it.val + 1)).map(function (_, v) { return '<button type="button" class="chip" data-tickv="' + k + ':' + v + '" aria-pressed="' + (given === v) + '"' + (ro ? " disabled" : "") + '>' + v + '</button>'; }).join("") + '</span>'
       : '<input type="checkbox" data-tick="' + k + '"' + (given ? " checked" : "") + (ro ? " disabled" : "") + ' aria-label="' + esc(it.code || it.text) + '">';
     var tag = it.val > 1 ? "div" : "label";   // a label would send a click on its text to the first number button
-    return head + '<' + tag + ' class="xt-trow' + (it.val > 1 ? " multi" : "") + (given ? " on" : "") + '">' + ctl + (it.code ? '<b class="xt-tcode">' + esc(it.code) + '</b>' : "") + '<span class="xt-ttext">' + esc(it.text) + '</span></' + tag + '>';
+    return head + '<' + tag + ' class="xt-trow' + (it.val > 1 ? " multi" : "") + (given ? " on" : "") + '" data-tpartof="' + esc(partKey(it.part)) + '">' + ctl + (it.code ? '<b class="xt-tcode">' + esc(it.code) + '</b>' : "") + '<span class="xt-ttext">' + esc(it.text) + '</span></' + tag + '>';
   }).join("");
 }
 
@@ -621,30 +643,55 @@ function compare(i) {
   flatQs(repoExam).forEach(function (x) { rq[x.id] = x; });
   var r = rq[q.id] || {}, ms = (r.msImg || []).map(function (p) { return /^(students|books)\//.test(p) ? p : folder + p; }), ro = readOnly(R);
   var sc = schemeOf(q); cmpTicks = ticksOf(q, sc);
+  var side = cmpSide(), parts = []; sc.list.forEach(function (it) { if (it.part && parts.indexOf(it.part) < 0) parts.push(it.part); });
+  if (Number(cmp && cmp.getAttribute("data-i")) !== i) cmpPart = "";
   if (!cmp) { cmp = document.createElement("div"); cmp.className = "xt-cmp"; cmp.setAttribute("role", "dialog"); cmp.setAttribute("aria-modal", "true"); cmp.setAttribute("aria-label", "Compare answer and mark scheme"); document.body.appendChild(cmp); }
   cmp.setAttribute("data-i", i);
   var subj = /chem/i.test(R.subject || "") ? "chem" : "maths";
   cmp.innerHTML = '<header class="xt-cmphead"><button class="btn sm" type="button" data-cmpx><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>Back to marking</button><div class="tags">' + T.subjTag(subj) + T.tag(esc(shortTitle(R.title))) + T.tag("Side by side") + T.tag(q.marks + " mark" + (q.marks === 1 ? "" : "s")) + (q.seconds ? T.tag(esc(dur(q.seconds)) + " on it") : "") + '</div><span class="xt-grow"></span>' +
       '<div class="seg xt-cmpseg" role="group" aria-label="Questions">' + R.questions.map(function (x, k) { return '<button type="button" data-cmpgo="' + k + '"' + (k === i ? ' aria-pressed="true"' : "") + '>' + esc(x.label || "Q" + (k + 1)) + '</button>'; }).join("") + '</div></header>' +
-    '<details class="xt-cmpq"><summary>The question</summary>' + (isPaper(q) ? paperQ(q, R) : '<div class="xt-qtext">' + T.clean(q.text_html) + '</div>' + (q.has_img ? '<img class="xt-zoomable" alt="Question picture" data-xsrc="/api/t/exams/' + esc(R.id) + '/questions/' + esc(q.id) + '/image">' : "")) + '</details>' +
-    '<div class="xt-cmp2"><section class="xt-col card"><h2 class="t-sec">His work</h2>' +
+    /* his work in the middle; the question opens from the left, the mark scheme from the right (Ali, 11 Oct).
+       A part button opens both at that part; "Whole" shows all of it. */
+    (parts.length > 1 ? '<div class="row s2 xt-cmpparts" role="group" aria-label="Parts"><span class="hint">Part</span><button type="button" class="chip" data-cmppart=""' + (cmpPart ? "" : ' aria-pressed="true"') + '>Whole</button>' + parts.map(function (p) { return '<button type="button" class="chip" data-cmppart="' + esc(partKey(p)) + '"' + (cmpPart === partKey(p) ? ' aria-pressed="true"' : "") + '>' + esc(p) + '</button>'; }).join("") + '</div>' : "") +
+    '<div class="xt-cmp3' + (side.q ? " q-open" : "") + (side.ms ? " ms-open" : "") + '">' +
+      '<aside class="xt-side xt-qside card" aria-label="Question"><button class="xt-sidetab" type="button" data-cmpside="q" aria-expanded="' + !!side.q + '"><span>Question</span></button><div class="xt-sbody">' + (isPaper(q) ? paperQ(q, R) : '<div class="xt-qtext">' + T.clean(q.text_html) + '</div>' + (q.has_img ? '<img class="xt-zoomable" alt="Question picture" data-xsrc="/api/t/exams/' + esc(R.id) + '/questions/' + esc(q.id) + '/image">' : "")) + '</div></aside>' +
+      '<section class="xt-col card xt-work"><h2 class="t-sec">His work</h2>' +
         (q.doneAt != null ? (q.atDone ? '<div class="xt-ans">' + esc(q.atDone) + '</div>' : "") + (q.changedAfterDone ? '<details class="xt-det xt-after"><summary>Changed after Done: not for marks</summary><div class="xt-ans">' + esc(q.final) + '</div></details>' : "")
           : q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : "") +
         q.uploads.map(function (u) { return '<figure class="xt-cmppic"><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '"><figcaption class="hint">' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">Late</span>' : "") + (u.practice ? ' <span class="xt-late">Practice</span>' : "") + '</figcaption></figure>'; }).join("") +
-        (!q.final && !q.uploads.length ? '<p class="hint">No answer and no picture.</p>' : "") + '</section>' +
-      '<section class="xt-col card xt-ticks"><div class="row"><h2 class="t-sec">Mark scheme</h2><span class="hint push" data-tsum></span></div>' + (ms.length ? ms.map(function (p) { return '<img class="xt-zoomable" alt="Mark scheme" data-rsrc="' + esc(p) + '">'; }).join("") : '<p class="hint">No mark scheme picture.</p>') +
-        (r.answer ? '<div class="xt-qtext xt-msans">' + T.clean(r.answer) + '</div>' : "") +
-        (claudeOf(q.id) ? '<div data-cline="' + esc(q.id) + '">' + claudeLine(q) + '</div>' : "") + (sc.generic ? '<p class="hint">No mark list in the exam file: one box per mark.</p>' : "") + '<div data-tlist>' + tickRows(sc, cmpTicks, ro) + '</div>' +
+        (!q.final && !q.uploads.length ? '<p class="hint">No answer and no picture.</p>' : "") +
         '<div class="xt-markrow"><label>Mark <span class="xt-of"><input type="number" class="xt-score" data-cscore="' + esc(q.id) + '" min="0" max="' + q.marks + '" step="0.5" value="' + (q.score == null ? "" : q.score) + '"' + (ro ? " disabled" : "") + '> / ' + q.marks + '</span></label>' +
-        '<label class="xt-grow">Comment <textarea data-ccomment="' + esc(q.id) + '" rows="2"' + (ro ? " disabled" : "") + '>' + esc(q.comment || "") + '</textarea></label><span class="hint" data-cstate></span></div></section></div>';
+        '<label class="xt-grow">Comment <textarea data-ccomment="' + esc(q.id) + '" rows="2"' + (ro ? " disabled" : "") + '>' + esc(q.comment || "") + '</textarea></label><span class="hint" data-cstate></span></div></section>' +
+      '<aside class="xt-side xt-msside card xt-ticks" aria-label="Mark scheme"><button class="xt-sidetab" type="button" data-cmpside="ms" aria-expanded="' + !!side.ms + '"><span>Mark scheme</span></button><div class="xt-sbody"><div class="row"><h2 class="t-sec">Mark scheme</h2><span class="hint push" data-tsum></span></div>' + (ms.length ? ms.map(function (p) { return '<img class="xt-zoomable" alt="Mark scheme" data-rsrc="' + esc(p) + '">'; }).join("") : '<p class="hint">No mark scheme picture.</p>') +
+        (r.answer ? '<div class="xt-qtext xt-msans">' + T.clean(r.answer) + '</div>' : "") +
+        (claudeOf(q.id) ? '<div data-cline="' + esc(q.id) + '">' + claudeLine(q) + '</div>' : "") + (sc.generic ? '<p class="hint">No mark list in the exam file: one box per mark.</p>' : "") + '<div data-tlist>' + tickRows(sc, cmpTicks, ro, claudeOf(q.id)) + '</div></div></aside>' +
+    '</div>';
   showPics(cmp); showRepoPics(cmp); $$(".xt-qtext", cmp).forEach(T.maths);
-  tickTotal();
+  tickTotal(); if (cmpPart) showPart(cmpPart);
   document.documentElement.classList.add("xt-noscroll");
   var f = $("[data-cscore]", cmp); if (f && !ro) f.focus({ preventScroll: true });
 }
+var cmpPart = "";
+/* which side panels are open: remembered on this device; first time, his work alone */
+function cmpSide() { var v = T.ls("tutor.cmpSide"); try { v = v ? JSON.parse(v) : null; } catch (e) { v = null; } return v || { q: false, ms: false }; }
+function setSide(k, on) { var v = cmpSide(); v[k] = on; T.ls("tutor.cmpSide", JSON.stringify(v)); if (!cmp) return;
+  var box = $(".xt-cmp3", cmp); box.classList.toggle(k === "q" ? "q-open" : "ms-open", on); var b = $('[data-cmpside="' + k + '"]', cmp); if (b) b.setAttribute("aria-expanded", on); }
+/* one part: both panels open, scrolled to it, the part lit; "" is the whole question */
+function showPart(key) { cmpPart = key; if (!cmp) return;
+  $$("[data-cmppart]", cmp).forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-cmppart") === key); });
+  $$(".xt-lit", cmp).forEach(function (el) { el.classList.remove("xt-lit"); });
+  if (!key) return;
+  setSide("q", true); setSide("ms", true);
+  var qr = $('.xt-qside [data-part="' + key + '"]', cmp), mr = $('.xt-msside [data-tpart="' + key + '"]', cmp);
+  if (qr) { qr.classList.add("xt-lit"); qr.scrollIntoView({ block: "start" }); }
+  $$('.xt-msside [data-tpartof="' + key + '"]', cmp).forEach(function (el) { el.classList.add("xt-lit"); });
+  if (mr) mr.scrollIntoView({ block: "start" }); window.scrollTo(0, 0); }
+document.addEventListener("click", function (e) { if (!cmp || !e.target.closest) return;
+  var sb = e.target.closest("[data-cmpside]"); if (sb) { var k = sb.getAttribute("data-cmpside"); setSide(k, !cmpSide()[k]); return; }
+  var pb = e.target.closest("[data-cmppart]"); if (pb) showPart(pb.getAttribute("data-cmppart")); });
 function closeCompare() {
   if (!cmp) return;
-  var i = Number(cmp.getAttribute("data-i")); cmp.remove(); cmp = null; document.documentElement.classList.remove("xt-noscroll");
+  var i = Number(cmp.getAttribute("data-i")); cmp.remove(); cmp = null; cmpPart = ""; document.documentElement.classList.remove("xt-noscroll");
   var sec = $$("[data-mq]")[i]; if (sec) sec.scrollIntoView({ block: "start" });
 }
 function tickTotal() { var t = $("[data-tsum]", cmp); if (t) t.textContent = cmpTicks.reduce(function (a, b) { return a + b; }, 0) + " ticked"; }
@@ -653,7 +700,7 @@ function setTick(k, v) {
   if (!cmp || readOnly(R)) return;
   var q = R.questions[Number(cmp.getAttribute("data-i"))], sc = schemeOf(q);
   cmpTicks[k] = Math.max(0, Math.min(sc.list[k].val, v));
-  $("[data-tlist]", cmp).innerHTML = tickRows(sc, cmpTicks, false);
+  $("[data-tlist]", cmp).innerHTML = tickRows(sc, cmpTicks, false, claudeOf(q.id));
   var sum = cmpTicks.reduce(function (a, b) { return a + b; }, 0);
   $('[data-cscore="' + q.id + '"]', cmp).value = Math.min(sum, q.marks);
   tickTotal(); compareSave(q.id, cmpTicks.slice());
@@ -690,7 +737,7 @@ function saveMark(qid, ticks) {
   var ne = $('[data-note="' + qid + '"]'); if (ne) body.note = ne.value;
   return call("PUT", "/api/t/exams/" + R.id + "/marks/" + encodeURIComponent(qid), body).then(function () {
     q.score = score; q.comment = c; st.textContent = "Saved"; if (body.note != null) q.note = body.note;
-    if (ticks) { q.ticks = ticks; var ts = $('[data-mq="' + qid + '"] [data-tsumline]'); if (ts) ts.innerHTML = tickSummary(q); }
+    if (ticks) { q.ticks = ticks; var ts = $('[data-mq="' + qid + '"] [data-tsumline]'); if (ts) ts.innerHTML = tickSummary(q); var ct = $('[data-mq="' + qid + '"] [data-ctable]'); if (ct) ct.innerHTML = claudeLine(q, true); }
     R.total = R.questions.reduce(function (a, x) { return a + (x.score || 0); }, 0); R.marked = R.questions.filter(function (x) { return x.score != null; }).length;
     var tot = $("#xt-total"), mk = $("#xt-marked");   // gone if the marking page was left before the save came back
     if (tot) tot.textContent = r2(R.total) + " / " + R.max; if (mk) mk.textContent = R.marked + " of " + R.questions.length + " marked";
@@ -723,22 +770,18 @@ function saveToRepo(btn) {
     }),
     events: (R.events || []).map(function (e) { return { at: iso(e.at), kind: e.kind, detail: e.detail }; })
   };
-  T.loadTree(true).then(function () {
-    var chain = Promise.resolve();
-    files.forEach(function (f) {
-      chain = chain.then(function () {
-        msg.textContent = "Picture " + (++i) + " of " + files.length;
-        if (T.shaOf(f.path)) return;   // already in the repo
-        return call("GET", "/api/t/files/" + f.u.id).then(function (b) { return b.arrayBuffer(); }).then(function (buf) {
-          var bytes = new Uint8Array(buf), bin = ""; for (var j = 0; j < bytes.length; j += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(j, j + 0x8000));
-          return T.putB64(f.path, btoa(bin), "Exam " + R.title + ": his picture " + f.path.split("/").pop());
-        });
-      });
-    });
-    return chain.then(function () {
-      msg.textContent = "Saving the results";
-      var p = folder + "result.json";
-      return T.putB64(p, T.b64enc(JSON.stringify(result, null, 1) + "\n"), "Exam " + R.title + ": results " + r2(R.total) + "/" + R.max, T.shaOf(p));
+  /* one commit for the pictures and the results; pictures fetched a few at a time (Ali, 11 Oct: the save was very slow) */
+  T.loadTree().then(function () {
+    var need = files.filter(function (f) { return !T.shaOf(f.path); }), got = 0, out = [];
+    msg.textContent = need.length ? "Getting his pictures: 0 of " + need.length : "Saving the results";
+    var fetchOne = function (f) { return call("GET", "/api/t/files/" + f.u.id).then(function (b) { return b.arrayBuffer(); }).then(function (buf) {
+      var bytes = new Uint8Array(buf), bin = ""; for (var j = 0; j < bytes.length; j += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(j, j + 0x8000));
+      out.push({ path: f.path, b64: btoa(bin) }); msg.textContent = "Getting his pictures: " + (++got) + " of " + need.length; }); };
+    var q = need.slice(), worker = function () { var f = q.shift(); return f ? fetchOne(f).then(worker) : Promise.resolve(); }, ws = [];
+    for (var w = 0; w < 4; w++) ws.push(worker());
+    return Promise.all(ws).then(function () {
+      out.push({ path: folder + "result.json", b64: T.b64enc(JSON.stringify(result, null, 1) + "\n") });
+      return T.commitFiles(out, "Exam " + R.title + ": results " + r2(R.total) + "/" + R.max + (need.length ? ", " + need.length + " pictures" : ""), function (n, all) { msg.textContent = "Saving to the repo: " + n + " of " + all; });
     });
   }).then(function () { msg.textContent = "Saved to " + folder + "result.json. Ask Claude to close the exam."; btn.disabled = false; T.toast("Saved to the tutoring repo"); },
     function (e) { msg.textContent = e.message; btn.disabled = false; });

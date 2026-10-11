@@ -104,8 +104,8 @@ with sync_playwright() as p:
         if pg.locator("[data-compare]").count():
             pg.locator("[data-compare]").first.click()
             pg.wait_for_timeout(800)
-            pg.evaluate("document.querySelectorAll('details.xt-cmpq').forEach(d => d.open = true)")
-            check(name + ": Compare shows the question in the paper layout", pg.locator(".xt-cmpq .pp").count() == 1)
+            if pg.get_attribute("[data-cmpside='q']", "aria-expanded") != "true": pg.click("[data-cmpside='q']")   # 11 Oct: the question pulls out from the left (remembered)
+            check(name + ": Compare shows the question in the paper layout", pg.locator(".xt-qside .pp").count() == 1 and pg.locator(".xt-qside .xt-sbody").is_visible())
             pg.screenshot(path=os.path.join(SHOTS, "r26-%s-compare-1440.png" % name), full_page=True)
 
     b.close()

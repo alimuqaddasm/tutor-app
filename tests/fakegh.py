@@ -78,6 +78,30 @@ class FakeGH:
             if b is None or b == b"" and not any(self.sha_of(p) == mm.group(1) for p in list(self.files) + list(self.extra)):
                 return route.fulfill(status=404, body="{}")
             return route.fulfill(status=200, body=b, content_type="application/octet-stream")
+        # one commit for many files (git data API): blobs, tree, commit, ref
+        J = lambda st, o: route.fulfill(status=st, content_type="application/json", body=json.dumps(o))
+        if m == "POST" and path.endswith("/git/blobs"):
+            if self.fail_writes:
+                return J(self.fail_writes, {"message": "pretend write failure"})
+            data = base64.b64decode(json.loads(req.post_data or "{}").get("content", ""))
+            sha = gitsha(data); self.blobcache[sha] = data
+            return J(201, {"sha": sha})
+        if m == "GET" and re.search(r"/git/ref/heads/[^/]+$", path):
+            return J(200, {"object": {"sha": "c" * 40}})
+        if m == "GET" and re.search(r"/git/commits/[0-9a-f]{40}$", path):
+            return J(200, {"sha": "c" * 40, "tree": {"sha": "t" * 40}})
+        if m == "POST" and path.endswith("/git/trees"):
+            body = json.loads(req.post_data or "{}"); self.pending = body.get("tree", [])
+            return J(201, {"sha": "d" * 40})
+        if m == "POST" and path.endswith("/git/commits"):
+            self.commits = getattr(self, "commits", []) + [json.loads(req.post_data or "{}").get("message")]
+            return J(201, {"sha": "e" * 40})
+        if m == "PATCH" and re.search(r"/git/refs/heads/[^/]+$", path):
+            for t in getattr(self, "pending", []):
+                data = self.blobcache.get(t["sha"], b"")
+                self.extra[t["path"]] = data; self.puts[t["path"]] = data
+            self.pending = []
+            return J(200, {"object": {"sha": "e" * 40}})
         mm = re.search(r"/contents/(.+)$", path)
         if mm:
             fpath = urllib.parse.unquote(mm.group(1))
@@ -103,7 +127,7 @@ class FakeGH:
                 self.files.pop(fpath, None)
                 return route.fulfill(status=200, body="{}")
         if m == "GET" and re.search(r"^/repos/[^/]+/[^/]+$", path):
-            return route.fulfill(status=200, content_type="application/json", body=json.dumps({"permissions": {"push": True}, "full_name": "x/y"}))
+            return route.fulfill(status=200, content_type="application/json", body=json.dumps({"permissions": {"push": True}, "full_name": "x/y", "default_branch": "main"}))
         return route.fulfill(status=404, content_type="application/json", body="{}")
 
 
