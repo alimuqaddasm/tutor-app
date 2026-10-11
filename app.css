@@ -1295,3 +1295,9 @@ tr.xt-lit td{background:var(--accent-wash)}
   .xt-sidetab span,.xt-qside .xt-sidetab span{writing-mode:horizontal-tb;transform:none}
   .xt-cmpparts{padding:var(--s3) var(--s3) 0}
 }
+/* parts on his picture: a tap opens that part of the question and the mark scheme */
+.xt-picmap{position:relative}
+.xt-pzone{position:absolute;padding:0;border:2px dashed transparent;border-radius:var(--r-sm);background:transparent;cursor:pointer}
+.xt-pzone .tag{position:absolute;top:var(--s1);right:var(--s1)}
+.xt-pzone:hover,.xt-pzone:focus-visible{border-color:var(--accent)}
+.xt-pzone[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-wash);mix-blend-mode:multiply}

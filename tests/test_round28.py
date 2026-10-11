@@ -64,6 +64,7 @@ fake.extra[FOLDER + "assets/q1-ms.png"] = png(500, 120, (255, 240, 220))
 fake.extra[FOLDER + "claude-marks.json"] = json.dumps({"markedAt": "2026-10-11T21:00:00Z", "summary": "Part (b) sign slip.",
     "questions": {"q1": {"score": 3, "ticks": [1, 1, 1, 0], "comment": "Sign slip at the end", "unsure": "", "why": ["", "", "", "takes tan x positive, x is obtuse"]}}}).encode()
 
+fake.extra[FOLDER + "parts.json"] = json.dumps({"questions": {"q1": [{"part": "(a)", "pic": 0, "box": [0, 0, 1, .5]}, {"part": "(b)", "pic": 0, "box": [0, .5, 1, 1]}]}}).encode()
 TODAY = time.strftime("%Y-%m-%d")
 MA = TODAY + "-maths"
 sc = json.load(open(os.path.join(fake.clone, "students/UK-1/lessons/2026-10-10-maths/script.json")))
@@ -170,6 +171,13 @@ with sync_playwright() as p:
     check("Part (b): both open, the part lit on each side", pg.locator(".xt-qside .xt-sbody").is_visible() and pg.locator(".xt-qside .xt-lit[data-part='b']").count() == 1 and pg.locator(".xt-msside tr.xt-lit").count() == 2,
           [pg.locator(".xt-qside .xt-lit").count(), pg.locator(".xt-msside tr.xt-lit").count()])
     pg.screenshot(path=os.path.join(SHOTS, "r28-side-part-1440.png"))
+    pg.click("[data-cmppart='']")
+    pg.evaluate("localStorage.setItem('tutor.cmpSide', JSON.stringify({q:false,ms:false}))")
+    pg.click('[data-cmpgo="0"]'); pg.wait_for_timeout(300)
+    check("parts.json: his first picture has a zone per part", pg.locator(".xt-work .xt-pzone").count() == 2)
+    pg.click(".xt-work .xt-pzone[data-cmppart='a']")
+    check("  ...a tap on part (a) of his work opens (a) on both sides", pg.locator(".xt-qside .xt-sbody").is_visible() and pg.locator(".xt-qside .xt-lit[data-part='a']").count() == 1 and pg.locator(".xt-msside tr.xt-lit").count() == 2)
+    pg.screenshot(path=os.path.join(SHOTS, "r28-side-zone-1440.png"))
     pg.click("[data-cmppart='']")
     check("  ...Whole clears it", pg.locator(".xt-cmp .xt-lit").count() == 0)
     check("  ...before you mark, no row says Yours", pg.locator(".xt-msside tr.xt-mrow.over").count() == 0)

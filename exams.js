@@ -470,16 +470,16 @@ function useSuggestion() {
 }
 
 /* ===================== marking ===================== */
-var repoExam = null, claudeMarks = null;
+var repoExam = null, claudeMarks = null, partMap = null;
 
 function markView(id) {
   app.innerHTML = '<div class="empty"><h3>Loading</h3></div>';
   call("GET", "/api/t/exams/" + encodeURIComponent(id) + "/review").then(function (r) {
-    R = r; repoExam = null; claudeMarks = null;
+    R = r; repoExam = null; claudeMarks = null; partMap = null;
     if (r.practice && !r.sourcePath) { repoExam = SAMPLE; return drawMark(); }
     // The mark scheme lives in the repo, next to the exam file Claude wrote; so do Claude's marks, once he has marked it.
-    return T.loadTree().then(function () { return r.sourcePath ? Promise.all([T.fileJSON(r.sourcePath), T.fileJSON(examFolder(r.sourcePath) + "claude-marks.json").catch(function () { return null; })]) : [null, null]; })
-      .then(function (j) { repoExam = j[0] && j[0].data; claudeMarks = j[1] && j[1].data; }, function () {}).then(drawMark);
+    return T.loadTree().then(function () { return r.sourcePath ? Promise.all([T.fileJSON(r.sourcePath), T.fileJSON(examFolder(r.sourcePath) + "claude-marks.json").catch(function () { return null; }), T.fileJSON(examFolder(r.sourcePath) + "parts.json").catch(function () { return null; })]) : [null, null, null]; })
+      .then(function (j) { repoExam = j[0] && j[0].data; claudeMarks = j[1] && j[1].data; partMap = j[2] && j[2].data; }, function () {}).then(drawMark);
   }).catch(function (e) { app.innerHTML = '<div class="empty"><h3>Couldn’t open the marking</h3><p>' + esc(e.message) + '</p><p><a href="#/exams">Back to exams</a></p></div>'; });
 }
 
@@ -658,7 +658,7 @@ function compare(i) {
       '<section class="xt-col card xt-work"><h2 class="t-sec">His work</h2>' +
         (q.doneAt != null ? (q.atDone ? '<div class="xt-ans">' + esc(q.atDone) + '</div>' : "") + (q.changedAfterDone ? '<details class="xt-det xt-after"><summary>Changed after Done: not for marks</summary><div class="xt-ans">' + esc(q.final) + '</div></details>' : "")
           : q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : "") +
-        q.uploads.map(function (u) { return '<figure class="xt-cmppic"><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '"><figcaption class="hint">' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">Late</span>' : "") + (u.practice ? ' <span class="xt-late">Practice</span>' : "") + '</figcaption></figure>'; }).join("") +
+        q.uploads.map(function (u, k) { return '<figure class="xt-cmppic"><div class="xt-picmap"><img class="xt-zoomable" alt="His picture" data-xsrc="/api/t/files/' + esc(u.id) + '">' + picParts(q.id, k) + '</div><figcaption class="hint">' + esc(u.source === "phone" ? "Phone" : u.source === "drawing" ? "Drawing" : "Picture") + " " + esc(t12(u.at)) + (u.late ? ' <span class="xt-late">Late</span>' : "") + (u.practice ? ' <span class="xt-late">Practice</span>' : "") + '</figcaption></figure>'; }).join("") +
         (!q.final && !q.uploads.length ? '<p class="hint">No answer and no picture.</p>' : "") +
         '<div class="xt-markrow"><label>Mark <span class="xt-of"><input type="number" class="xt-score" data-cscore="' + esc(q.id) + '" min="0" max="' + q.marks + '" step="0.5" value="' + (q.score == null ? "" : q.score) + '"' + (ro ? " disabled" : "") + '> / ' + q.marks + '</span></label>' +
         '<label class="xt-grow">Comment <textarea data-ccomment="' + esc(q.id) + '" rows="2"' + (ro ? " disabled" : "") + '>' + esc(q.comment || "") + '</textarea></label><span class="hint" data-cstate></span></div></section>' +
@@ -672,6 +672,11 @@ function compare(i) {
   var f = $("[data-cscore]", cmp); if (f && !ro) f.focus({ preventScroll: true });
 }
 var cmpPart = "";
+/* where each part sits on his picture: parts.json next to exam.json, written by Claude when marking (Ali, 12 Oct)
+   {questions: {q1: [{part: "(a)", pic: 0, box: [x0, y0, x1, y1]}]}}, box as fractions of the picture. A tap opens that part. */
+function picParts(qid, k) { var l = (partMap && partMap.questions && partMap.questions[qid]) || [];
+  return l.filter(function (r) { return (r.pic || 0) === k && r.box && r.box.length === 4; }).map(function (r) { var b = r.box.map(Number);
+    return '<button type="button" class="xt-pzone" data-cmppart="' + esc(partKey(r.part)) + '" style="left:' + (b[0] * 100) + '%;top:' + (b[1] * 100) + '%;width:' + ((b[2] - b[0]) * 100) + '%;height:' + ((b[3] - b[1]) * 100) + '%" aria-label="Open part ' + esc(r.part) + '"><span class="tag">' + esc(r.part) + '</span></button>'; }).join(""); }
 /* which side panels are open: remembered on this device; first time, his work alone */
 function cmpSide() { var v = T.ls("tutor.cmpSide"); try { v = v ? JSON.parse(v) : null; } catch (e) { v = null; } return v || { q: false, ms: false }; }
 function setSide(k, on) { var v = cmpSide(); v[k] = on; T.ls("tutor.cmpSide", JSON.stringify(v)); if (!cmp) return;
