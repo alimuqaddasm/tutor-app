@@ -205,7 +205,7 @@ function loadToServer(path, btn, practice) {
     var ratio = Number(e.ratio) || null;
     var base = Number(e.minutes) || (ratio ? Math.ceil(marks * ratio / 5) * 5 : 0);
     var body = { title: e.title, subject: e.subject || "", source_path: path, ratio: ratio, base_minutes: asg ? 0 : base || 0,
-      questions: qs.map(function (q, i) { return { id: q.id || "q" + (i + 1), label: q.label || "", text_html: q.text || "", marks: Number(q.marks) || 0, type: q.type || "long", suggested_min: q.suggestMin == null ? null : q.suggestMin, section_id: q.section_id || null, study: q.study || null, choices: q.choices || null, work: q.work || null }; }) };
+      questions: qs.map(function (q, i) { return { id: q.id || "q" + (i + 1), label: q.label || "", text_html: q.text || "", marks: Number(q.marks) || 0, type: q.type || "long", suggested_min: q.suggestMin == null ? null : q.suggestMin, section_id: q.section_id || null, study: q.study || null, choices: q.choices || null, work: q.work || null, typed: !!q.typed }; }) };
     if (practice) { body.practice = true; body.title = "Practice: " + body.title; }
     if (asg) { body.kind = "assignment"; body.gap_hours = Number(e.gapHours) || 12; body.sections = e.sections.map(function (x) { return { id: x.id, title: x.title, subject: x.subject, day: x.day, date: x.date, suggest_min: x.suggestMin }; }); }
     var full = function (p) { return /^(students|books)\//.test(p) ? p : folder + p; };
@@ -431,7 +431,7 @@ function act(path, body, okMsg) {
 function saveSetup() {
   var qs = X.questions.map(function (q) {
     var tr = $('tr[data-q="' + q.id + '"]');
-    return { id: q.id, label: q.label, text_html: q.text_html, marks: Number($('[data-f="marks"]', tr).value) || 0, type: $('[data-f="type"]', tr).value, suggested_min: Number($('[data-f="suggested_min"]', tr).value), choices: q.choices, work: q.work };
+    return { id: q.id, label: q.label, text_html: q.text_html, marks: Number($('[data-f="marks"]', tr).value) || 0, type: $('[data-f="type"]', tr).value, suggested_min: Number($('[data-f="suggested_min"]', tr).value), choices: q.choices, work: q.work, typed: !!q.typed };
   });
   var body = { questions: qs, ratio: ratioNow() };
   var dur = Number($("#xt-dur") && $("#xt-dur").value); if (dur > 0) body.base_minutes = dur;
@@ -736,7 +736,8 @@ document.addEventListener("click", function (e) {
     /* zoomed in, a swipe or the arrow keys go to the next picture of the same kind on this page (Ali, 11 Oct) */
     var kind = function (im) { return / picture$/.test(im.alt) ? "q" : im.alt; };
     var all = Array.prototype.filter.call(document.querySelectorAll("#app img.xt-zoomable"), function (im) { return im.src && kind(im) === kind(b); });
-    openZoom(all.map(function (im) { return im.src; }), Math.max(0, all.indexOf(b))); return; }
+    var srcs = all.map(function (im) { return im.src; }).filter(function (u, i, l) { return l.indexOf(u) === i; });   // the same picture in two places counts once
+    T.openZoom(srcs, Math.max(0, srcs.indexOf(b.src))); return; }
   if (b.hasAttribute("data-compare")) return compare(Number(b.getAttribute("data-compare")));
   if (b.hasAttribute("data-cmpgo")) return compare(Number(b.getAttribute("data-cmpgo")));
   if (b.hasAttribute("data-cmpx")) return closeCompare();
