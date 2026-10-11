@@ -54,6 +54,29 @@ function putB64(path, b64, msg, sha) {
   return gh("/repos/" + CFG.repo + "/contents/" + enc(path), { method: "PUT", body: { message: msg, content: b64, sha: sha || undefined } })
     .then(function (r) { var nsha = r.json.content.sha; setTreeSha(path, nsha); return nsha; });
 }
+/* many files in one commit (blobs sent a few at a time, then one tree, one commit): far faster than one commit per file.
+   files: [{ path, b64 }]. If someone else pushed in between, it builds again on top of theirs. */
+function commitFiles(files, msg, onStep) {
+  var R0 = "/repos/" + CFG.repo, branch;
+  var pool = function (list, n, fn) { var i = 0, out = []; var next = function () { if (i >= list.length) return Promise.resolve(); var k = i++; return fn(list[k], k).then(function (v) { out[k] = v; return next(); }); };
+    var w = []; for (var j = 0; j < Math.min(n, list.length); j++) w.push(next()); return Promise.all(w).then(function () { return out; }); };
+  var done = 0;
+  return gh(R0).then(function (r) { branch = r.json.default_branch || "main";
+    return pool(files, 4, function (f) { return gh(R0 + "/git/blobs", { method: "POST", body: { content: f.b64, encoding: "base64" } }).then(function (b) { if (b.status === 404) { var e = new Error("no git data"); e.noGit = true; throw e; } if (onStep) onStep(++done, files.length); return b.json.sha; }); });
+  }).catch(function (e) { if (!e.noGit) throw e;   // no git data API here: one file at a time, the old way
+    var ch = Promise.resolve(); files.forEach(function (f, k) { ch = ch.then(function () { if (onStep) onStep(k + 1, files.length); return putB64(f.path, f.b64, msg, shaOf(f.path)); }); }); return ch.then(function () { return null; });
+  }).then(function (shas) { if (!shas) return;
+    var attempt = function (left) {
+      return gh(R0 + "/git/ref/heads/" + enc(branch)).then(function (ref) { var head = ref.json.object.sha;
+        return gh(R0 + "/git/commits/" + head).then(function (c) {
+          return gh(R0 + "/git/trees", { method: "POST", body: { base_tree: c.json.tree.sha, tree: files.map(function (f, k) { return { path: f.path, mode: "100644", type: "blob", sha: shas[k] }; }) } });
+        }).then(function (t) { return gh(R0 + "/git/commits", { method: "POST", body: { message: msg, tree: t.json.sha, parents: [head] } }); })
+          .then(function (nc) { return gh(R0 + "/git/refs/heads/" + enc(branch), { method: "PATCH", body: { sha: nc.json.sha } }); });
+      }).catch(function (e) { if (left > 0 && e.status === 422) return attempt(left - 1); throw e; });
+    };
+    return attempt(3).then(function () { files.forEach(function (f, k) { setTreeSha(f.path, shas[k]); }); });
+  });
+}
 /* the file list: one request, kept for 20 s, remembered on the device for an instant start */
 var TREE = null, treeAt = 0, treeP = null;
 try { TREE = JSON.parse(ls("tutor.tree." + CFG.repo) || "null"); } catch (e) {}
@@ -1931,10 +1954,10 @@ function edgeFlash() { document.body.classList.remove("edgeflash"); void documen
 /* a teaching tap in Teach: kept, and checked against the clock */
 function noteTap() {
   if (MODE !== "teach" || PREP || !L) return;
-  var t = now(), tp = taps(); if (!tp.first) tp.first = t; tp.last = t; tp.n = (tp.n || 0) + 1; ckJSON(tapsKey(L.id), tp);
+  var t = now(), tp = taps(); if (!tp.first) tp.first = t; tp.last = t; tp.n = (tp.n || 0) + 1; tp.ts = (tp.ts || []).concat(t).slice(-400); ckJSON(tapsKey(L.id), tp);
   if (CK.id !== L.id) { CK.id = L.id; ckReset(); }
   if (live() || L.session.status === "finished") { CK.off = 0; CK.offFirst = null; return; }
-  if (Date.now() < CK.quietUntil) return;
+  if (Date.now() < CK.quietUntil || (!L.session.time.log.length && examStartFor(L))) return;
   CK.off++; if (!CK.offFirst) CK.offFirst = t;
   if (CK.off === 1) { chime(); edgeFlash(); }
   if (CK.off >= 3 || Date.now() - Date.parse(CK.offFirst) >= 120000) clockAsk("start");
@@ -1956,7 +1979,7 @@ function nextAfter(id, t) { var p = parseId(id); if (p.subject !== "chem" || p.d
 /* the full-screen question: one at a time; every answer is one tap */
 function clockAsk(kind, o) { o = o || {}; if (CK.ask || $("#ckask")) return; CK.ask = kind; CK.other = null; var x = L && L.session, tp = L ? taps() : {}, h = "", b = [];
   var B = function (act, label, cls) { b.push('<button class="btn' + (cls ? " " + cls : "") + '" type="button" data-ck="' + act + '">' + label + '</button>'); };
-  if (kind === "start") { var never = !(x.time.log || []).length, from = CK.offFirst || tp.first || now(), lg = x.time.log, pz = lg.length ? lg[lg.length - 1] : null;
+  if (kind === "start") { var never = !(x.time.log || []).length, from = CK.offFirst || tapRun(tp).first || now(), lg = x.time.log, pz = lg.length ? lg[lg.length - 1] : null;
     if (never) { h = '<h2>Lesson started?</h2><p>The clock is not running. Your first tap was at <b>' + esc(hhmm(from)) + '</b>.</p>'; B("startfrom", "Start from " + esc(hhmm(from)), "pri"); B("startnow", "Start now"); B("look", "I’m only looking", "quiet"); }
     else { h = '<h2>Back from the break?</h2><p>The clock paused at <b>' + esc(hhmm(pz.t)) + '</b>. You started teaching again at <b>' + esc(hhmm(from)) + '</b>.</p>'; B("startfrom", "Resume from " + esc(hhmm(from)), "pri"); B("startnow", "Resume now"); B("look", "Still on a break", "quiet"); }
     CK.from = from; CK.retry = o.retry || null; }
@@ -1999,13 +2022,22 @@ document.addEventListener("click", function (ev) { var t = ev.target.closest && 
 function clockWatch() { if (!CFG.token || $("#ckask")) return; var tnow = Date.now();
   var bk = ckJSON("tutor.break"); if (bk && L && L.id === bk.id && MODE === "teach" && !PREP && !live() && tnow > bk.until) { if (replay(L.session.time.log).secs && L.session.status !== "finished") return clockAsk("break"); ckJSON("tutor.break", null); }
   var rn = runningLesson();
-  if (rn && CK.keep !== rn.id) { var tp = taps(rn.id), last = [tp.last, rn.at].filter(Boolean).sort().pop(), vid = L && L.id === rn.id && MODE === "teach" && TCH.seq[TCH.pos] && TCH.seq[TCH.pos].t === "video";
+  var xs = L && MODE === "teach" && !PREP && !L.session.time.log.length && L.session.status !== "finished" ? examStartFor(L) : null;
+  if (xs) { var r0 = replay(L.session.time.log); logEventAt("start", L.phase && !(phases().filter(function (p) { return p.id === L.phase; })[0] || {}).sys ? L.phase : (r0.phase || phases()[0].id), xs); wake(); drawLesson(); flush(); toast("Clock started from the exam start, " + hhmm(xs) + ". Exam time counts as lesson time."); return; }
+  if (rn && CK.keep !== rn.id && !examLive()) { var tp = taps(rn.id), last = [tp.last, rn.at].filter(Boolean).sort().pop(), vid = L && L.id === rn.id && MODE === "teach" && TCH.seq[TCH.pos] && TCH.seq[TCH.pos].t === "video";
     if (last && tnow - Date.parse(last) > (vid ? 30 : IDLE_MIN) * 60000) return clockAsk("idle", { id: rn.id, last: last }); }
   var nx = ckJSON("tutor.next"); if (nx && tnow >= nx.at && !nx.shown) { if (L && L.id === nx.id && live()) { ckJSON("tutor.next", null); return; } nx.shown = true; ckJSON("tutor.next", nx); return clockAsk("next", nx); }
   var nb = $(".clocknag.brk"); if (nb && L && MODE === "teach") nb.outerHTML = clockNag(live());
   nextBar(); }
 setInterval(clockWatch, 5000);
 /* the lesson whose clock runs on this device; forgotten if it was stopped on another device or finished */
+/* an exam going on now (set by the Exams tab on this device): until its end time, or until it was handed in */
+function examLive() { var e = ckJSON("tutor.examlive"); if (!e || !e.startedAt) return null; var tnow = Date.now();
+  if (e.doneAt || tnow > Number(e.endAt || 0) + 5 * 60000 || tnow - Number(e.startedAt) > 4 * 3600000) return null; return e; }
+/* an exam taken today in this lesson's subject: exam time is lesson time, so a clock never started counts from the exam's start */
+function examStartFor(l) { var e = ckJSON("tutor.examlive"); if (!e || !e.startedAt || !l) return null; var st = new Date(Number(e.startedAt));
+  if (e.subject !== lessonSubj(l.id) || l.id.indexOf(todayIso()) !== 0) return null;
+  var d = st.getFullYear() + "-" + String(st.getMonth() + 1).padStart(2, "0") + "-" + String(st.getDate()).padStart(2, "0"); return d === todayIso() ? st.toISOString() : null; }
 function runningLesson() { var rn = ckJSON("tutor.running"); if (!rn) return null;
   var rs = L && L.id === rn.id ? L.session : (ckJSON(localKey(rn.id)) || {}).session;
   if (rs && (!replay((rs.time || {}).log).running || rs.status === "finished")) { ckJSON("tutor.running", null); return null; } return rn; }
@@ -2018,7 +2050,10 @@ function nextBar() { var nx = ckJSON("tutor.next"), el = $("#nextbar"); if (!nx 
 function checkOther() { if (PREP || MODE !== "teach" || !L || $("#ckask")) return; var rn = runningLesson(); if (!rn || rn.id === L.id || CK.keep === rn.id) return;
   clockAsk("other", { id: rn.id, since: rn.at, last: taps(rn.id).last }); }
 /* After the lesson: the taps as the times, when the clock missed the lesson */
-function tapTimes() { var x = L.session, tp = taps(); if (!tp.first || !tp.last) return null; var m = Math.round((Date.parse(tp.last) - Date.parse(tp.first)) / 60000);
+/* the run of taps that ends at the last tap: a gap over 45 min (a look at Teach hours before, Ali 11 Oct) starts a new run */
+function tapRun(tp) { var ts = tp.ts; if (!ts || !ts.length) return { first: tp.first, last: tp.last }; var i = ts.length - 1;
+  while (i > 0 && Date.parse(ts[i]) - Date.parse(ts[i - 1]) <= 45 * 60000) i--; return { first: ts[i], last: ts[ts.length - 1] }; }
+function tapTimes() { var x = L.session, tp = tapRun(taps()); if (!tp.first || !tp.last) return null; var m = Math.round((Date.parse(tp.last) - Date.parse(tp.first)) / 60000);
   if (m < 10 || (x.time.minutes || 0) >= m - 5) return null; return { first: tp.first, last: tp.last, m: m }; }
 function tapBanner() { var tt = tapTimes(); if (!tt) return "";
   return '<div class="clocknag tapfix" role="status"><span class="dot" aria-hidden="true"></span><span><b>Your taps show ' + esc(hhmm(tt.first)) + ' to ' + esc(hhmm(tt.last)) + ' (' + tt.m + ' min).</b> The clock says ' + Math.round(L.session.time.minutes || 0) + ' min.</span><button class="btn sm pri" type="button" data-usetaps>Use ' + esc(hhmm(tt.first)) + ' to ' + esc(hhmm(tt.last)) + '</button></div>'; }
@@ -2100,7 +2135,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v55", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v56", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
@@ -2188,7 +2223,7 @@ if (TRY) { document.body.classList.add("tryout");
 flowPressed();
 
 /* the Exams tab (exams.js) works through these */
-window.TD = { cget: cget, cput: cput, tag: tag, subjTag: subjTag, topicStrTag: topicStrTag, refTag: refTag, cap: cap, fmtDate: fmtDate, hmin: hmin, app: app, $: $, $$: $$, esc: esc, clean: clean, ls: ls, toast: toast, maths: maths, CFG: CFG, gh: gh, putB64: putB64, b64enc: b64enc, loadTree: loadTree, shaOf: shaOf, blobBytes: blobBytes, fileJSON: fileJSON, fileURL: fileURL, studentBase: studentBase, isTry: TRY, render: render, openZoom: openZoom };
+window.TD = { cget: cget, cput: cput, tag: tag, subjTag: subjTag, topicStrTag: topicStrTag, refTag: refTag, cap: cap, fmtDate: fmtDate, hmin: hmin, app: app, $: $, $$: $$, esc: esc, clean: clean, ls: ls, toast: toast, maths: maths, CFG: CFG, gh: gh, putB64: putB64, commitFiles: commitFiles, b64enc: b64enc, loadTree: loadTree, shaOf: shaOf, blobBytes: blobBytes, fileJSON: fileJSON, fileURL: fileURL, studentBase: studentBase, isTry: TRY, render: render, openZoom: openZoom };
 
 /* browser tests only (localStorage tutor.test): read the app's state from the test */
 if (ls("tutor.test") === "1") window.__t = function (src) { return eval(src); };   // eslint-disable-line no-eval

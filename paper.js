@@ -15,6 +15,7 @@
   function boxes(num) {   // "02.1" -> [0][2] . [1]
     return '<span class="pp-boxes">' + num.split("").map(function (c) { return c === "." ? '<span class="pp-dot">.</span>' : '<span class="pp-box">' + esc(c) + '</span>'; }).join("") + '</span>';
   }
+  function partKey(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9.]/g, ""); }   // "(a)" -> "a", "02.1" -> "02.1"
   function is(html) { return /<h4[\s>]/i.test(html || ""); }
   function render(html, subj) {
     var aqa = subj === "chem", t = document.createElement("template");
@@ -45,7 +46,7 @@
     });
     return '<div class="pp ' + (aqa ? "aqa" : "edx") + '">' + rows.map(function (r) {
       var lab = !r.lab ? "" : aqa ? boxes(r.lab) : r.kind === "num" ? '<b>' + esc(r.lab) + '</b>' : esc(r.lab);
-      return '<div class="pp-row ' + (r.kind || "cont") + '"><div class="pp-lab">' + lab + '</div><div class="pp-body">' + r.body.join("") + '</div></div>';
+      return '<div class="pp-row ' + (r.kind || "cont") + '"' + (r.lab ? ' data-part="' + esc(partKey(r.lab)) + '"' : "") + '><div class="pp-lab">' + lab + '</div><div class="pp-body">' + r.body.join("") + '</div></div>';
     }).join("") + '</div>';
   }
   /* put the question's picture where <figure> was; with no slot it stays where the page put it */
@@ -53,5 +54,5 @@
     var slot = root.querySelector(".pp-fig"), fig = root.querySelector(".ex-qimg, .a-qimg, .xq-fig");
     if (slot && fig) slot.appendChild(fig);
   }
-  window.PaperQ = { is: is, render: render, placeFig: placeFig };
+  window.PaperQ = { partKey: partKey, is: is, render: render, placeFig: placeFig };
 })();
