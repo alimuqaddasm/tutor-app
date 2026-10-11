@@ -102,7 +102,8 @@ In Teach the verdicts are round buttons down the right edge (`.vrail`; in the ap
 1. Short and plain. A button is a verb and a thing: "Start lesson", "Accept Claude's mark". Never a lone noun like "Open" or "Compare".
 2. Repeated facts are tags. A sentence only when it says something new.
 3. No em or en dashes. Use a colon, a full stop or a middle dot ( · ).
-4. Sentence case: every label, tag, heading, button and status starts with a capital ("Holiday practice", "Today", "Not started"), and only the first word does. Topic names keep the book's capitals. `tag()` capitalises its text for you, so data written in lower case still shows right.
+4. Sentence case: every label, tag, heading, button and status starts with a capital ("Today", "Not started", "Start lesson"), and only the first word does. `tag()` capitalises its text for you, so data written in lower case still shows right.
+4b. Titles are Title Case (Ali, 11 Oct): lesson, part, exam, topic and page titles capitalise every main word; small joining words (and, of, the, to, for, it, in, with) stay small unless first; a trailing qualifier goes in brackets, all small: "Practice: Reciprocal Graphs (left over)", "All Organic (so far)", "Keep it Fresh: Earlier Chapters", "Holiday Practice". Maths and chemistry stay as written ("a cos x + b sin x", "pH"). Use `titleCase()` from `title.js` for any title that comes from data.
 4a. A lesson title is its name only ("Addition formulae"). The section number is a topic tag (7.1) and an exam lesson carries the Exam tag instead of the word "test" (`lessonParts()` in `app.js`).
 5. One name per thing. Use the glossary.
 6. Numbers carry a noun: "10/16 right", "7/10 marks", "47 due today", "45 min", "2 h 38 min", "18:40". A countdown says "left".

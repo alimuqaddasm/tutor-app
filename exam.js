@@ -28,7 +28,7 @@ function parseHash() {
 function $(s, r) { return (r || document).querySelector(s); }
 function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
 /* his screens never show Claude's notes in the title: "Chapters 1 to 6 (revised, 45 min)" shows as "Chapters 1 to 6" */
-function himTitle(t) { return String(t || "").replace(/\s*\([^)]*\)\s*$/, "").trim(); }
+function himTitle(t) { t = String(t || "").replace(/\s*\((?=[^)]*[\d,])[^)]*\)\s*$/, "").trim(); return window.titleCase ? titleCase(t) : t; }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
 function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
 function clockTime(ms) { return new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }

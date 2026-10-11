@@ -1162,7 +1162,8 @@ body[data-subject="maths"] :is(.qtext,.stu-q) .katex{font-size:1.08em}
   .lrow{grid-template-areas:"d t m" "d s m"}
   .inkcard .tags#homerevm{display:none}
   /* Teach: menu, kind tag, step, clock; the verdicts as a row above the buttons */
-  .tcrumb > a,.tcrumb > b,.tcrumb > .hint,.tmini > a.btn,.tmini .preview,.tmini .tmore{display:none}
+  .tcrumb > a,.tcrumb > b,.tcrumb > .hint,.tmini > a.btn,.tmini .preview{display:none}
+  .tmenu{right:0;left:auto;max-width:calc(100vw - 32px)}
   .teach3 .tcrumb{contain:none;flex:1 1 auto;overflow:visible}
   .olab{display:none}
   .tmini .clockpill{min-height:40px;padding:0 var(--s3);font-size:16px}
@@ -1216,3 +1217,36 @@ body[data-subject="maths"] :is(.qtext,.stu-q) .katex{font-size:1.08em}
 .xt-cmp .xt-trow > .xt-ttext{grid-area:text;font-size:var(--fs-sm)}
 .xt-cmp .xt-trow > .xt-tvals,.xt-cmp .xt-trow > input{grid-area:ctl}
 .xt-cmp .xt-tpart{margin-top:var(--s3)}
+/* Prepare (11 Oct): the Teach screens with nothing to record */
+body.prep .ctick,body.prep .ctl:not(.vrail),body.prep [data-show],body.prep .vrail .v,body.prep .vrail .vr-mic,body.prep .vrail .vr-more,body.prep .vrail .vrsep,body.prep .vrail .vrmenu,body.prep .sl-mk,body.prep .addnote,body.prep .iskip,body.prep .bscore,body.prep .bv{display:none!important}
+body.prep .vrail.idle{display:none}
+/* the clock asks (11 Oct): one full-screen question, one tap to answer */
+.ckask{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:var(--s4);background:rgba(27,33,48,.45)}
+.ckcard{width:min(560px,100%);box-sizing:border-box;display:flex;flex-direction:column;gap:var(--s4);padding:var(--s6);border-radius:var(--r-lg);background:var(--surface);color:var(--text);box-shadow:var(--raise-lg);border-top:6px solid var(--live)}
+.ckcard h2{margin:0;font-size:var(--fs-xl);font-weight:700;line-height:1.2}
+.ckcard p{margin:0;font-size:var(--fs-lg);color:var(--text-2)}
+.ckcard .ckdot{width:14px;height:14px;border-radius:50%;background:var(--live);animation:nagpulse 1.4s ease-in-out infinite}
+.ckbtns{display:flex;flex-wrap:wrap;gap:var(--s3)}
+.ckbtns .btn{min-height:var(--tap)}
+body.edgeflash::after{content:"";position:fixed;inset:0;z-index:119;pointer-events:none;box-shadow:inset 0 0 0 8px var(--live);animation:edgeflash .65s ease-in-out 4}
+@keyframes edgeflash{0%,100%{opacity:0}50%{opacity:1}}
+.nextbar{position:fixed;left:50%;bottom:var(--s4);transform:translateX(-50%);z-index:90;display:flex;align-items:center;gap:var(--s3);max-width:calc(100vw - 32px);box-sizing:border-box;padding:var(--s2) var(--s2) var(--s2) var(--s4);border-radius:var(--r-full);background:var(--live-wash);border:1px solid var(--live-line);color:var(--live-ink);box-shadow:var(--raise)}
+.nextbar .dot{width:10px;height:10px;border-radius:50%;background:var(--live);flex:none}
+body.teaching .nextbar{bottom:calc(var(--footh,72px) + var(--s3))}
+.tapfix{margin-bottom:var(--s5);max-width:none}
+@media (prefers-reduced-motion:reduce){body.edgeflash::after,.ckcard .ckdot{animation:none}}
+/* Student view: 1, 2 or 3 questions together (11 Oct) */
+.stu-top .stu-n{opacity:.6}
+.stu-top .stu-n:hover,.stu-top .stu-n:focus-within{opacity:1}
+.stu-many{width:100%;height:100%;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:var(--s4);align-items:stretch}
+.stu-cell{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:safe center;padding:var(--s4);border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line);overflow:auto}
+.stu-cell .stu-cn{position:absolute;top:var(--s2);left:var(--s3);font-size:var(--fs-sm);font-weight:600;color:var(--text-3)}
+.stu-cell .stu-card,.stu-cell .stu-twin{width:100%;padding:var(--s4);border:0;margin:0}
+.stu-cell .stu-card .stu-q{font-size:clamp(1.2rem,2vw,2rem)}
+.stu-cell .stu-fit.one img{max-height:calc(100vh - 200px)}
+@media (max-width:760px){.stu-many{grid-template-columns:1fr;height:auto}}
+/* Add from the Store (11 Oct) */
+.storerow{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line)}
+.storerow > .stack{flex:1 1 260px}
+.storerow.on{background:var(--accent-wash);border-color:transparent}
+.growtag{margin-bottom:var(--s3)}

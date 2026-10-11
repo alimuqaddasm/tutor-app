@@ -124,7 +124,7 @@ with sync_playwright() as p:
     pg.on("dialog", lambda d: d.accept())
 
     pg.goto(APP + "#/exams")
-    check("the pack is under Assignments", wait_for(lambda: "Holiday practice (test)" in pg.inner_text("#app") and "Assignments" in pg.inner_text("#app"), 15) is not None)
+    check("the pack is under Assignments", wait_for(lambda: "Holiday Practice" in pg.inner_text("#app") and "Assignments" in pg.inner_text("#app"), 15) is not None)
     pg.click('[data-load="%sassignment.json"]' % FOLDER)
     check("Load takes it to the exam server", wait_for(lambda: pg.locator("#xt-btns").count() == 1, 30) is not None)
     eid = pg.evaluate("location.hash").split("/")[2]
@@ -143,7 +143,7 @@ with sync_playwright() as p:
     st = sctx.new_page()
     st.on("pageerror", lambda e: errs.append("student: " + str(e)))
     st.goto(link)
-    check("home: Day 1 is open, with its two subjects", wait_for(lambda: "Day 1 is open" in st.inner_text("#ex") and st.locator(".a-card").count() == 2, 15) is not None)
+    check("home: Day 1 is open, with its two subjects", wait_for(lambda: "Day 1 is open" in st.inner_text("#ex") and st.locator(".a-card").count() == 2, 15) is not None, st.inner_text("#ex")[:400] + " | cards=" + str(st.locator(".a-card").count()) + " | " + str(errs[-3:]) + " | " + st.inner_html("#ex")[:600])
     check("  ...Day 2 waits: opens 12 h after he opens Day 1", "Day 2 · opens 12 h after you open Day 1" in st.inner_text(".a-soon"))
     check("  ...one QR code for the phone", wait_for(lambda: st.locator(".a-qr svg").count() == 1, 8) is not None)
     st.screenshot(path=os.path.join(SHOTS, "r22-1-home.png"))
