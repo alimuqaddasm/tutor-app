@@ -520,6 +520,14 @@ body.teaching main,body.student main{max-width:none;padding:0}
 .clockpill i{width:8px;height:8px;border-radius:50%;background:var(--text-4)}
 .clockpill.live i{background:var(--live);box-shadow:0 0 0 4px #FFE3B8}
 .clockpill .t{min-width:4ch}
+/* Teach: the clock is stopped while Ali moves through the script (Ali, 10 Oct) */
+.clocknag{justify-self:center;width:100%;max-width:860px;box-sizing:border-box;display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;padding:var(--s2) var(--s3);border-radius:var(--r-md);background:var(--live-wash);border:1px solid var(--live-line);color:var(--live-ink);font-size:var(--fs-sm)}
+.clocknag > span:nth-child(2){flex:1 1 220px}
+.clocknag .dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--live);animation:nagpulse 1.4s ease-in-out infinite}
+#clkgo.nag{animation:nagring 1.4s ease-in-out infinite}
+@keyframes nagpulse{50%{opacity:.35}}
+@keyframes nagring{50%{box-shadow:0 0 0 5px var(--live-line)}}
+@media (prefers-reduced-motion:reduce){.clocknag .dot,#clkgo.nag{animation:none}}
 .preview{align-self:center;height:26px;padding:0 10px;border:0;border-radius:var(--r-sm);background:var(--live-wash);color:var(--live-ink);font-size:var(--fs-xs);font-weight:600;white-space:nowrap;cursor:help}
 .tmore{position:relative}
 .tmore > .btn{position:relative;min-width:44px;font-size:1.15rem}
@@ -1107,6 +1115,9 @@ html.xt-noscroll,html.xt-noscroll body{overflow:hidden}
 .xfold > summary::-webkit-details-marker{display:none}
 .xq.run{grid-template-columns:auto minmax(0,1fr) auto 220px;padding:var(--s3) var(--s5)}
 .xq.run.xt-here{background:var(--live-soft)}
+.xq-look{grid-column:1/-1}
+.xq-look img{display:block;max-width:100%;max-height:420px;border-radius:var(--r-sm);background:#fff;border:1px solid var(--line-soft);cursor:zoom-in}
+.xt-thumb.xt-zoomable{cursor:zoom-in}
 .xsec{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;padding:var(--s3) var(--s5);background:var(--sunk)}
 .xt-linkrow .input{flex:1 1 100%}
 

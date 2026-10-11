@@ -443,15 +443,16 @@ function question() {
   var q = S.questions[cur], box = $(".ex-q"); if (!box) return;
   var ord = order(), k = ord.indexOf(cur);
   var d = drafts[q.id] || { text: "" }, ro = !writable();
-  var upload = q.type === "upload_required" || q.type === "upload_optional";
-  var input = q.type === "short"
+  var mcq = q.type === "mcq", upload = q.type === "upload_required" || q.type === "upload_optional" || mcq;
+  var input = mcq ? choicesHTML(q, d, ro) : q.type === "short"
     ? '<input type="text" id="ans" class="input" autocomplete="off" spellcheck="false" value="' + esc(d.text) + '"' + (ro ? " disabled" : "") + '>'
     : '<textarea id="ans" class="input" spellcheck="false" placeholder="Working or notes"' + (ro ? " disabled" : "") + '>' + esc(d.text) + '</textarea>';
   box.innerHTML =
     '<div class="row ex-qhead"><span class="tag line lg">Question ' + (k + 1) + ' of ' + ord.length + '</span><span class="tag lg">' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</span>' + (q.type === "upload_required" ? '<span class="tag ask lg push">Photo needed</span>' : "") + '</div>' +
-    '<div class="ex-qtext">' + paperHTML(q.text_html, S.subject) + '</div>' +
+    '<div class="ex-qtext"' + (q.has_img ? " hidden" : "") + '>' + (q.has_img ? "" : paperHTML(q.text_html, S.subject)) + '</div>' +
     (q.has_img ? '<figure class="ex-qimg"><button type="button" data-zoom><img alt="Question ' + (cur + 1) + ' picture"></button></figure>' : "") +
-    (upload ? '<div class="sunk stack ex-work"><span class="lab">Your working</span>' +
+    (mcq ? '<div class="field ex-answer"><span class="lab">Your answer</span>' + input + '</div>' : "") +
+    (upload ? '<div class="sunk stack ex-work"><span class="lab">' + (q.work ? esc(q.work) : mcq ? "Your working (optional)" : "Your working") + '</span>' +
       (PREVIEW ? '<div class="row ex-pvattach"><span class="btn pri">Send from my phone</span><span class="btn">Take a photo here</span><span class="btn">Choose a photo</span><span class="btn">Draw</span></div>' : "") +
       '<div class="row ex-attach"' + (ro ? " hidden" : "") + '>' +
         '<button class="btn pri" type="button" data-phone><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"></rect><path d="M11 18h2"></path></svg>Send from my phone</button>' +
@@ -459,14 +460,16 @@ function question() {
         '<label class="btn"><input type="file" accept="image/*" multiple hidden data-file>Choose a photo</label>' +
         '<button class="btn" type="button" data-draw><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"></path></svg>Draw</button>' +
       '</div><div class="ex-pics"></div></div>' : "") +
-    '<div class="field ex-answer"><label for="ans">' + (upload ? 'Your answer <span class="hint">(optional, the photo is enough)</span>' : "Your answer") + '</label>' + input + '<p class="ex-count hint" hidden></p></div>' +
+    (mcq ? "" : '<div class="field ex-answer"><label for="ans">' + (upload ? 'Your answer <span class="hint">(optional, the photo is enough)</span>' : "Your answer") + '</label>' + input + '<p class="ex-count hint" hidden></p></div>') +
     (upload ? "" : '<div class="row ex-attach ex-more"' + (ro ? " hidden" : "") + '><label class="btn sm"><input type="file" accept="image/*" multiple hidden data-file>Add a photo</label><button class="btn sm" type="button" data-draw>Draw</button><button class="btn sm" type="button" data-phone>Send from my phone</button></div><div class="ex-pics"></div>');
   if (q.has_img) shown($(".ex-qimg img", box), "/api/s/questions/" + encodeURIComponent(q.id) + "/image");
   maths($(".ex-qtext", box));
   var a = $("#ans");
-  a.addEventListener("input", function () { onType(q.id, a.value); count(a); });
-  count(a);
-  a.addEventListener("blur", function () { flush(); });
+  if (a) {
+    a.addEventListener("input", function () { onType(q.id, a.value); count(a); });
+    count(a);
+    a.addEventListener("blur", function () { flush(); });
+  }
   pics();
   var prev = $("[data-prev]"), next = $("[data-next]");
   if (prev) prev.disabled = k <= 0;
@@ -613,7 +616,7 @@ function asgWork(m) {
   var x = secOf(SEC), qs = secQs(SEC);
   if (!qs.some(function (q) { return S.questions.indexOf(q) === cur; })) cur = S.questions.indexOf(qs[0]);
   var q = S.questions[cur], k = qs.indexOf(q), d = drafts[q.id] || { text: "" }, ro = !writable();
-  var input = q.type === "short"
+  var mcq = q.type === "mcq", input = mcq ? choicesHTML(q, d, ro) : q.type === "short"
     ? '<input type="text" id="ans" class="input" autocomplete="off" spellcheck="false" value="' + esc(d.text) + '"' + (ro ? " disabled" : "") + '>'
     : '<textarea id="ans" rows="3" spellcheck="false"' + (ro ? " disabled" : "") + '>' + esc(d.text) + '</textarea>';
   m.innerHTML = '<div class="a-root">' + header(x,
@@ -622,11 +625,12 @@ function asgWork(m) {
       '<nav class="a-qnav" aria-label="Questions"><div class="a-eyebrow">Questions</div><div class="a-qlist"></div><span class="grow"></span>' +
         (ro ? "" : '<button type="button" class="a-finish" data-a-finish>I\'m done with ' + esc(x.title) + '</button>') + '</nav>' +
       '<main class="a-qcard"><div class="a-qhead"><h2>Question ' + (k + 1) + '</h2>' + (q.label && q.label !== "Q" + (k + 1) ? '<span class="a-meta">' + esc(q.label) + '</span>' : "") + '<span class="grow"></span><b>' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</b></div>' +
-        '<div class="a-qtext">' + paperHTML(q.text_html, subjOf(x) === "chem" ? "chem" : "maths") + '</div>' +
+        (q.has_img ? "" : '<div class="a-qtext">' + paperHTML(q.text_html, subjOf(x) === "chem" ? "chem" : "maths") + '</div>') +
         (q.has_img ? '<figure class="a-qimg"><button type="button" data-zoom><img alt="Question ' + (k + 1) + '" data-src="/api/s/questions/' + esc(q.id) + '/image"></button></figure>' : "") +
-        '<div class="a-lab">Your pages for this question</div><div class="a-pages" data-q="' + esc(q.id) + '" data-kind="main"></div>' +
+        (mcq ? '<div class="a-lab">Your answer</div>' + input : "") +
+        '<div class="a-lab">' + (q.work ? esc(q.work) : mcq ? "Your working (optional)" : "Your pages for this question") + '</div><div class="a-pages" data-q="' + esc(q.id) + '" data-kind="main"></div>' +
         (ro ? "" : '<div class="a-attach"><label class="a-btn"><input type="file" accept="image/*" multiple hidden data-file>Choose picture</label><button type="button" class="a-btn" data-draw>Draw</button></div>') +
-        '<label class="a-lab" for="ans">' + (q.type === "short" ? "Your answer" : "Typed answer or note (optional)") + '</label>' + input + '<p class="ex-count hint" hidden></p>' +
+        (mcq ? "" : '<label class="a-lab" for="ans">' + (q.type === "short" ? "Your answer" : "Typed answer or note (optional)") + '</label>' + input + '<p class="ex-count hint" hidden></p>') +
         '<div class="a-qfoot"><button type="button" class="a-btn" data-a-prev' + (k ? "" : " disabled") + '>Previous</button><span class="grow"></span><button type="button" class="a-btn dark" data-a-next' + (k < qs.length - 1 ? "" : " disabled") + '>Next question</button></div>' +
       '</main>' + qrAside(true) +
     '</div></div>';
@@ -685,7 +689,7 @@ function asgNav() {
   var box = $(".a-qlist"); if (!box || !SEC) return;
   box.innerHTML = secQs(SEC).map(function (q, i) {
     var n = mainUps(q.id).length + pending.filter(function (p) { return p.q === q.id; }).length, d = drafts[q.id], typed = d && d.text && d.text.trim();
-    var st = n ? n + " photo" + (n === 1 ? "" : "s") : typed ? "typed" : "empty";
+    var st = q.type === "mcq" && typed ? typed + (n ? " + photo" : "") : n ? n + " photo" + (n === 1 ? "" : "s") : typed ? "typed" : "empty";
     return '<button type="button" class="a-qbtn' + (S.questions.indexOf(q) === cur ? " on" : "") + (n || typed ? " has" : "") + '" data-a-q="' + S.questions.indexOf(q) + '"' + (S.questions.indexOf(q) === cur ? ' aria-current="true"' : "") + '><b>Q' + (i + 1) + '</b><span>' + st + '</span></button>';
   }).join("");
   var f = $(".a-follow"); if (f && SEC) { var qq = S.questions[cur]; if (qq && qq.section === SEC) f.textContent = "Already scanned? Your phone follows this screen: it is on Q" + (secQs(SEC).indexOf(qq) + 1) + " now."; }
@@ -861,6 +865,19 @@ function drawDialog(q) {
   fit();
 }
 
+/* multiple choice: he taps a letter; it saves like a short answer. Tap it again to clear (Ali, 11 Oct) */
+function choicesHTML(q, d, ro) {
+  var pick = (d && d.text || "").trim().toUpperCase();
+  return '<div class="ex-mcq" role="group" aria-label="Choose one">' + String(q.choices || "ABCD").split("").map(function (l) {
+    return '<button type="button" class="ex-pick" data-pick="' + esc(l) + '" aria-pressed="' + (pick === l) + '"' + (ro ? " disabled" : "") + '>' + esc(l) + '</button>'; }).join("") + '</div>';
+}
+function pickLetter(t) {
+  var q = S.questions[cur]; if (!q || q.type !== "mcq" || !writable()) return;
+  var l = t.getAttribute("data-pick"), was = t.getAttribute("aria-pressed") === "true", now = was ? "" : l;
+  $$(".ex-pick").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-pick") === now)); });
+  onType(q.id, now); flush(); if (typeof asgNav === "function") asgNav();
+}
+
 /* ---------- clicks and keys ---------- */
 document.addEventListener("click", function (e) {
   var t = e.target.closest("button,[data-go]"); if (!t || !S || !S.questions) return;
@@ -873,6 +890,7 @@ document.addEventListener("click", function (e) {
   else if (t.hasAttribute("data-phone")) phoneDialog(S.questions[cur]);
   else if (t.hasAttribute("data-rm")) removePicture(t.getAttribute("data-rm"));
   else if (t.hasAttribute("data-zoom")) zoom($("img", t).src);
+  else if (t.hasAttribute("data-pick")) pickLetter(t);
 });
 function moved() {
   flush(); question(); dots(); window.scrollTo(0, 0);

@@ -313,3 +313,11 @@ body.a-body .ex-main{max-width:none;padding:0}
   .a-dayb{width:auto;flex:none}
   .a-qrow{grid-template-columns:44px minmax(0,1fr)}.a-qrow > .tag:not(.line),.a-qrow > .status{grid-column:2}
 }
+
+/* multiple choice: tap a letter (Ali, 11 Oct) */
+.ex-mcq{display:flex;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s2)}
+.ex-pick{font:inherit;font-size:var(--fs-lg);font-weight:700;min-width:64px;min-height:64px;border-radius:var(--r-md);border:2px solid var(--line-strong);background:var(--surface);color:var(--text);cursor:pointer}
+.ex-pick:hover:not(:disabled){border-color:var(--accent)}
+.ex-pick[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.ex-pick:disabled{opacity:.6;cursor:default}
+.ex-pick[aria-pressed="true"]:disabled{opacity:1}

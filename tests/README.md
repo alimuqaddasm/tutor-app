@@ -15,6 +15,7 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/test_round15.py            # round 15 (2 Oct): Flip layout, question and answer screens with no scrolling (8 checks)
     python tests/test_round16.py            # round 16 (2 Oct): Flip is the default; week dots only for taught lessons (2 checks)
     python tests/test_round17.py            # round 17 (6 Oct): fix mic notes (Heard box + editable notes), short lessons ask whose doing it was (18 checks)
+    python tests/runtest.py tests/test_round24.py   # round 24 (11 Oct): Teach clock bar, questions on the exam page, picture-only questions, MCQ letters (29 checks; needs the local exam server)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
 On Windows run with PYTHONIOENCODING=utf-8, or printing ★ crashes the console.
