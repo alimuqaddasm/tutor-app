@@ -9,7 +9,7 @@
 
 import { checkImage } from "./image.js";
 
-const TYPES = ["short", "long", "upload_required", "upload_optional"];
+const TYPES = ["short", "long", "upload_required", "upload_optional", "mcq"];
 const MAX_TEXT = 50000;
 const MAX_UPLOADS_PER_Q = 20;
 const MAX_EXTEND = 600;
@@ -168,11 +168,17 @@ function cleanQuestions(list) {
     const type = q.type || "long";
     if (!TYPES.includes(type)) fail(400, "Question " + id + " has an unknown type.");
     const sm = q.suggested_min == null || q.suggested_min === "" ? null : Number(q.suggested_min);
-    return { id, pos: i, label: String(q.label || "").slice(0, 200), text_html: String(q.text_html || "").slice(0, 100000), marks, type, suggested_min: Number.isFinite(sm) ? sm : null, section_id, study };
+    let choices = null;
+    if (type === "mcq") {
+      choices = [...new Set((Array.isArray(q.choices) ? q.choices.join("") : String(q.choices || "ABCD")).toUpperCase().replace(/[^A-Z]/g, ""))].join("");
+      if (choices.length < 2 || choices.length > 8) fail(400, "Question " + id + " needs 2 to 8 choices (letters A to Z).");
+    }
+    const work = q.work == null || q.work === "" ? null : String(q.work).slice(0, 300);
+    return { id, pos: i, label: String(q.label || "").slice(0, 200), text_html: String(q.text_html || "").slice(0, 100000), marks, type, suggested_min: Number.isFinite(sm) ? sm : null, section_id, study, choices, work };
   });
 }
 
-const questionsQ = (env, examId) => env.DB.prepare("SELECT id, pos, label, text_html, marks, type, suggested_min, section_id, study, img IS NOT NULL AS has_img, ms_img IS NOT NULL AS has_ms FROM questions WHERE exam_id = ? ORDER BY pos").bind(examId);
+const questionsQ = (env, examId) => env.DB.prepare("SELECT id, pos, label, text_html, marks, type, suggested_min, section_id, study, choices, work, img IS NOT NULL AS has_img, ms_img IS NOT NULL AS has_ms FROM questions WHERE exam_id = ? ORDER BY pos").bind(examId);
 const parseJSON = (t) => { if (t == null || t === "") return null; try { return JSON.parse(t); } catch (e) { return null; } };
 const questionList = (rows) => rows.map((q) => ({ ...q, has_img: !!q.has_img, has_ms: !!q.has_ms, study: parseJSON(q.study) }));
 const sectionsQ = (env, examId) => env.DB.prepare("SELECT id, pos, title, subject, day, date, suggest_min, done_at, took_min, opened_at, released_at FROM sections WHERE exam_id = ? ORDER BY pos").bind(examId);
@@ -332,7 +338,7 @@ async function route(request, env, now) {
         const done = new Set(secs.filter((x) => x.doneAt != null).map((x) => x.id)), shut = new Set(secs.filter((x) => !x.open).map((x) => x.id));
         // an assignment: nothing from a day that is not open yet; a mark scheme only once its section is finished
         const qs = questionList(r[1]).filter((q) => !asg || !shut.has(q.section_id)), ids = new Set(qs.map((q) => q.id));
-        out.questions = qs.map((q) => ({ id: q.id, pos: q.pos, label: q.label, text_html: q.text_html, marks: q.marks, type: q.type, suggested_min: q.suggested_min, has_img: q.has_img, section: q.section_id, has_ms: q.has_ms && done.has(q.section_id) }));
+        out.questions = qs.map((q) => ({ id: q.id, pos: q.pos, label: q.label, text_html: q.text_html, marks: q.marks, type: q.type, suggested_min: q.suggested_min, choices: q.choices, work: q.work, has_img: q.has_img, section: q.section_id, has_ms: q.has_ms && done.has(q.section_id) }));
         out.answers = answerMap(r[2]);
         out.uploads = uploadItems(r[3]).filter((u) => ids.has(u.question));
         if (asg) {
@@ -531,7 +537,7 @@ async function route(request, env, now) {
       const stmts = [env.DB.prepare("INSERT INTO exams (id, title, subject, source_path, ratio, base_minutes, practice, kind, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(id, title, String(b.subject || "").slice(0, 40), String(b.source_path || "").slice(0, 300), Number.isFinite(ratio) ? ratio : null, base, b.practice ? 1 : 0, kind, now)];
       for (const x of secs) stmts.push(env.DB.prepare("INSERT INTO sections (exam_id, id, pos, title, subject, day, date, suggest_min) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(id, x.id, x.pos, x.title, x.subject, x.day, x.date, x.suggest_min));
-      for (const q of qs) stmts.push(env.DB.prepare("INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, section_id, study) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(q.id, id, q.pos, q.label, q.text_html, q.marks, q.type, q.suggested_min, q.section_id, q.study));
+      for (const q of qs) stmts.push(env.DB.prepare("INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, section_id, study, choices, work) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(q.id, id, q.pos, q.label, q.text_html, q.marks, q.type, q.suggested_min, q.section_id, q.study, q.choices, q.work));
       const gap = Number(b.gap_hours); if (kind === "assignment" && gap > 0 && gap <= 240) stmts.push(env.DB.prepare("UPDATE exams SET gap_hours = ? WHERE id = ?").bind(gap, id));
       stmts.push(env.DB.prepare("INSERT INTO events (exam_id, at, kind, detail) VALUES (?, ?, 'created', ?)").bind(id, now, String(b.source_path || "")));
       await env.DB.batch(stmts);
@@ -576,9 +582,9 @@ async function route(request, env, now) {
           const keep = qs.map((q) => q.id);
           stmts.push(env.DB.prepare("DELETE FROM questions WHERE exam_id = ? AND id NOT IN (" + keep.map(() => "?").join(",") + ")").bind(exam.id, ...keep));
           for (const q of qs) stmts.push(env.DB.prepare(
-            "INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min) VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
-            "ON CONFLICT (exam_id, id) DO UPDATE SET pos = excluded.pos, label = excluded.label, text_html = excluded.text_html, marks = excluded.marks, type = excluded.type, suggested_min = excluded.suggested_min"
-          ).bind(q.id, exam.id, q.pos, q.label, q.text_html, q.marks, q.type, q.suggested_min));
+            "INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, choices, work) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+            "ON CONFLICT (exam_id, id) DO UPDATE SET pos = excluded.pos, label = excluded.label, text_html = excluded.text_html, marks = excluded.marks, type = excluded.type, suggested_min = excluded.suggested_min, choices = excluded.choices, work = excluded.work"
+          ).bind(q.id, exam.id, q.pos, q.label, q.text_html, q.marks, q.type, q.suggested_min, q.choices, q.work));
         }
         if (stmts.length) await env.DB.batch(stmts);
         return json({ ok: true });
@@ -628,7 +634,7 @@ async function route(request, env, now) {
         const id = randomToken(9);
         await env.DB.batch([
           env.DB.prepare("INSERT INTO exams (id, title, subject, source_path, ratio, base_minutes, practice, kind, gap_hours, created_at) SELECT ?, 'Practice: ' || title, subject, source_path, ratio, base_minutes, 1, kind, gap_hours, ? FROM exams WHERE id = ?").bind(id, now, exam.id),
-          env.DB.prepare("INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, img, img_mime, section_id, ms_img, ms_mime, study) SELECT id, ?, pos, label, text_html, marks, type, suggested_min, img, img_mime, section_id, ms_img, ms_mime, study FROM questions WHERE exam_id = ?").bind(id, exam.id),
+          env.DB.prepare("INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, img, img_mime, section_id, ms_img, ms_mime, study, choices, work) SELECT id, ?, pos, label, text_html, marks, type, suggested_min, img, img_mime, section_id, ms_img, ms_mime, study, choices, work FROM questions WHERE exam_id = ?").bind(id, exam.id),
           env.DB.prepare("INSERT INTO sections (exam_id, id, pos, title, subject, day, date, suggest_min) SELECT ?, id, pos, title, subject, day, date, suggest_min FROM sections WHERE exam_id = ?").bind(id, exam.id),
           env.DB.prepare("INSERT INTO events (exam_id, at, kind, detail) VALUES (?, ?, 'created', ?)").bind(id, now, "practice copy of " + exam.id)
         ]);
@@ -691,7 +697,7 @@ async function route(request, env, now) {
         const [ext, qs, ans, ups, vs, secs] = await reads(env, [extensionsQ(env, exam.id), questionsQ(env, exam.id), answersQ(env, exam.id), uploadsQ(env, exam.id), viewsQ(env, exam.id), sectionsQ(env, exam.id)]);
         const sl = sectionList(secs), done = new Set(sl.filter((x) => x.doneAt != null).map((x) => x.id));
         return json({ title: exam.title, subject: exam.subject, practice: !!exam.practice, kind: exam.kind || "exam", ...clock(exam, now, ext),
-          questions: questionList(qs).map((q) => ({ id: q.id, pos: q.pos, label: q.label, text_html: q.text_html, marks: q.marks, type: q.type, suggested_min: q.suggested_min, has_img: q.has_img, section: q.section_id, has_ms: q.has_ms && done.has(q.section_id) })),
+          questions: questionList(qs).map((q) => ({ id: q.id, pos: q.pos, label: q.label, text_html: q.text_html, marks: q.marks, type: q.type, suggested_min: q.suggested_min, choices: q.choices, work: q.work, has_img: q.has_img, section: q.section_id, has_ms: q.has_ms && done.has(q.section_id) })),
           sections: isAssignment(exam) ? sl : undefined,
           answers: answerMap(ans), uploads: uploadItems(ups), lastSeenAt: exam.last_seen_at, on: timeOn(vs, now).on });
       }

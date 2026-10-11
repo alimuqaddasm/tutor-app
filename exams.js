@@ -60,7 +60,7 @@ function chip(st, kind) { var l = kind === "assignment" && (st === "running" || 
 function isAsg(o) { return o && o.kind === "assignment"; }
 /* an assignment's questions, flat, each knowing its section */
 function flatQs(e) { if (!e) return []; if (!e.sections) return e.questions || []; var out = []; e.sections.forEach(function (x) { (x.questions || []).forEach(function (q) { out.push(Object.assign({ section_id: x.id }, q)); }); }); return out; }
-var TYPES = [["short", "Short answer"], ["long", "Long answer"], ["upload_required", "Picture needed"], ["upload_optional", "Picture optional"]];
+var TYPES = [["short", "Short answer"], ["long", "Long answer"], ["upload_required", "Picture needed"], ["upload_optional", "Picture optional"], ["mcq", "Multiple choice"]];
 
 /* Try-out: practice exams only. They live on the exam server marked "practice", show up only in Try-out,
    and never go to the tutoring repo. Real exams can be looked at in Try-out but not changed. */
@@ -205,7 +205,7 @@ function loadToServer(path, btn, practice) {
     var ratio = Number(e.ratio) || null;
     var base = Number(e.minutes) || (ratio ? Math.ceil(marks * ratio / 5) * 5 : 0);
     var body = { title: e.title, subject: e.subject || "", source_path: path, ratio: ratio, base_minutes: asg ? 0 : base || 0,
-      questions: qs.map(function (q, i) { return { id: q.id || "q" + (i + 1), label: q.label || "", text_html: q.text || "", marks: Number(q.marks) || 0, type: q.type || "long", suggested_min: q.suggestMin == null ? null : q.suggestMin, section_id: q.section_id || null, study: q.study || null }; }) };
+      questions: qs.map(function (q, i) { return { id: q.id || "q" + (i + 1), label: q.label || "", text_html: q.text || "", marks: Number(q.marks) || 0, type: q.type || "long", suggested_min: q.suggestMin == null ? null : q.suggestMin, section_id: q.section_id || null, study: q.study || null, choices: q.choices || null, work: q.work || null }; }) };
     if (practice) { body.practice = true; body.title = "Practice: " + body.title; }
     if (asg) { body.kind = "assignment"; body.gap_hours = Number(e.gapHours) || 12; body.sections = e.sections.map(function (x) { return { id: x.id, title: x.title, subject: x.subject, day: x.day, date: x.date, suggest_min: x.suggestMin }; }); }
     var full = function (p) { return /^(students|books)\//.test(p) ? p : folder + p; };
@@ -287,7 +287,7 @@ function drawExam() {
   var asg = isAsg(X);
   document.body.classList.add("focus");
   var h = '<div class="wrap xexam"><header class="stack s3 xt-head"><div class="crumb"><a href="#/exams">Exams</a><span aria-hidden="true">/</span><span>' + esc(LABEL[st] || T.cap(st)) + '</span></div><div class="head"><div class="stack s2"><div class="tags">' + (X.subject ? T.subjTag(X.subject === "chemistry" ? "chem" : X.subject) : "") + T.tag(X.questions.length + " questions") + T.tag(total + " marks") + (asg ? T.tag((X.sections || []).length + " sections") : "") + '<span id="xt-st">' + chip(st, X.kind) + '</span></div><h1 class="t-title" title="' + esc(X.title) + '">' + esc(shortTitle(X.title)) + '</h1></div>' +
-    '<div class="row s2"><a class="btn sm quiet" href="#/exams">All exams</a>' + svBtn(X.id) + '<a class="btn sm pri" href="#/exams/' + esc(X.id) + '/mark">Mark</a>' + (X.practice ? '<button class="btn sm danger" type="button" data-delprac="' + esc(X.id) + '" data-st="' + esc(st) + '">Delete</button>' : "") + '</div></div></header>';
+    '<div class="row s2"><a class="btn sm quiet" href="#/exams">All exams</a><button class="btn sm quiet" type="button" data-suggest>Suggest a change</button>' + svBtn(X.id) + '<a class="btn sm pri" href="#/exams/' + esc(X.id) + '/mark">Mark</a>' + (X.practice ? '<button class="btn sm danger" type="button" data-delprac="' + esc(X.id) + '" data-st="' + esc(st) + '">Delete</button>' : "") + '</div></div></header>';
   if (readOnly(X)) h += RO_NOTE.replace("Use a practice exam to try things.", 'Make a practice copy to try it as him.</div><div class="xt-acts"><button class="btn accent" type="button" data-praccopy="' + esc(X.id) + '">Practice copy</button>');
   else if (X.practice) h += '<p class="hint">Practice exam: nothing here goes to the tutoring repo.</p>';
 
@@ -317,13 +317,13 @@ function drawExam() {
   if (started) h += '<section class="stack"><h2 class="t-sec">Questions</h2><div class="list">' + X.questions.map(function (q, i) { var head = "";
       if (asg && q.section_id !== lastSec) { lastSec = q.section_id; var sc = (X.sections || []).filter(function (x) { return x.id === q.section_id; })[0] || {};
         head = '<div class="xsec"><b>' + esc(sc.title || q.section_id) + '</b>' + (sc.date ? T.tag(esc(T.fmtDate(sc.date))) : "") + '<span class="hint" data-secst="' + esc(q.section_id) + '">' + secState(sc, true) + '</span></div>'; }
-      return head + '<div class="xq run" data-q="' + esc(q.id) + '" data-qrow><span class="tag line">' + esc(q.label) + '</span><span class="tags">' + T.tag((TYPES.filter(function (x) { return x[0] === q.type; })[0] || ["", ""])[1]) + '</span>' + T.tag(esc(q.marks) + " marks") + '<span class="hint" data-saved>-</span></div>'; }).join("") + '</div></section>';
+      return head + '<div class="xq run" data-q="' + esc(q.id) + '" data-qrow><span class="tag line">' + esc(q.label) + '</span><span class="tags">' + T.tag((TYPES.filter(function (x) { return x[0] === q.type; })[0] || ["", ""])[1]) + '</span>' + T.tag(esc(q.marks) + " marks") + '<span class="hint" data-saved>-</span>' + qLook(q) + '</div>'; }).join("") + '</div></section>';
   else h += '<details class="card pad stack s3 xfold" open><summary class="t-sec">Questions <span class="hint">' + X.questions.length + ' · ' + total + ' marks</span></summary><div class="xt-scroll"><table class="xt-table xt-qs"><thead><tr><th>#</th><th>Question</th><th>Marks</th><th>Type</th><th>Minutes</th><th>Saved, time on it</th></tr></thead><tbody>' +
     X.questions.map(function (q, i) {
       var ro = started ? " disabled" : "", head = "";
       if (asg && q.section_id !== lastSec) { lastSec = q.section_id; var sc = (X.sections || []).filter(function (x) { return x.id === q.section_id; })[0] || {};
         head = '<tr class="xt-secrow"><td colspan="6"><b>' + esc(sc.title || q.section_id) + '</b>' + (sc.date ? ' <span class="hint">' + esc(sc.date) + '</span>' : "") + ' · <span data-secst="' + esc(q.section_id) + '">' + secState(sc, true) + '</span></td></tr>'; }
-      return head + '<tr data-q="' + esc(q.id) + '" data-qrow><td>' + (i + 1) + '</td><td><b>' + esc(q.label) + '</b>' + (q.has_img ? '<div><img class="xt-thumb" alt="Question picture" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>' : "") + '</td>' +
+      return head + '<tr data-q="' + esc(q.id) + '" data-qrow><td>' + (i + 1) + '</td><td><b>' + esc(q.label) + '</b>' + (q.has_img ? '<div><img class="xt-thumb xt-zoomable" alt="Question picture" title="Tap to open large" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>' : "") + '</td>' +
         '<td><input type="number" class="xt-in" data-f="marks" min="0" step="0.5" value="' + esc(q.marks) + '"' + ro + '></td>' +
         '<td><select data-f="type"' + ro + '>' + TYPES.map(function (t) { return '<option value="' + t[0] + '"' + (q.type === t[0] ? " selected" : "") + '>' + t[1] + '</option>'; }).join("") + '</select></td>' +
         '<td><input type="number" class="xt-in" data-f="suggested_min" min="0" step="0.5" value="' + esc(q.suggested_min == null ? r2(q.marks * ratio) : q.suggested_min) + '"' + ro + '></td><td class="hint" data-saved></td></tr>';
@@ -335,6 +335,11 @@ function drawExam() {
   showPics(app); drawRun(); drawLog();
 }
 
+/* the question as he sees it, on the exam page itself: no need to open Student view to read it (Ali, 11 Oct) */
+function qLook(q) {
+  if (q.has_img) return '<div class="xq-look"><img class="xt-zoomable" loading="lazy" alt="' + esc(q.label) + ' picture" title="Tap to open large" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>';
+  return q.text_html ? '<div class="xq-look xt-qtext">' + T.clean(q.text_html) + '</div>' : "";
+}
 function secState(sc, withBtn) {
   if (!sc) return "";
   if (sc.doneAt != null) return "Finished " + esc(day(sc.doneAt)) + " " + esc(t12(sc.doneAt)) + (sc.tookMin != null ? ", stopwatch " + esc(sc.tookMin) + " min" : "");
@@ -425,7 +430,7 @@ function act(path, body, okMsg) {
 function saveSetup() {
   var qs = X.questions.map(function (q) {
     var tr = $('tr[data-q="' + q.id + '"]');
-    return { id: q.id, label: q.label, text_html: q.text_html, marks: Number($('[data-f="marks"]', tr).value) || 0, type: $('[data-f="type"]', tr).value, suggested_min: Number($('[data-f="suggested_min"]', tr).value) };
+    return { id: q.id, label: q.label, text_html: q.text_html, marks: Number($('[data-f="marks"]', tr).value) || 0, type: $('[data-f="type"]', tr).value, suggested_min: Number($('[data-f="suggested_min"]', tr).value), choices: q.choices, work: q.work };
   });
   var body = { questions: qs, ratio: ratioNow() };
   var dur = Number($("#xt-dur") && $("#xt-dur").value); if (dur > 0) body.base_minutes = dur;
@@ -470,7 +475,7 @@ function drawMark() {
   var ext = (R.extensions || []).reduce(function (a, e) { return a + (+e.minutes || 0); }, 0);
   var h = '<div class="xmark"><header class="stack s2 xt-head"><div class="crumb"><a href="#/exams">Exams</a><span aria-hidden="true">/</span><a href="#/exams/' + esc(R.id) + '">' + esc(shortTitle(R.title)) + '</a><span aria-hidden="true">/</span><span>Mark</span></div><div class="head" style="align-items:center"><div class="stack s2"><h1 class="t-title">' + esc(shortTitle(R.title)) + '</h1><div class="tags">' +
     (R.subject ? T.subjTag(R.subject === "chemistry" ? "chem" : R.subject) : "") + chip(R.status, R.kind) + (R.submittedAt ? T.tag("Handed in " + esc(t12(R.submittedAt))) : "") + (ext ? T.tag(ext + " min added") : "") + (R.lockedAt ? T.tag("Locked " + esc(t12(R.lockedAt))) : "") + '</div></div>' +
-    '<div class="row s2">' + (asg ? "" : '<button class="btn sm" type="button" data-compare-cur>Side by side</button>') + (claudeMarks ? '<button class="btn sm accent-soft" type="button" data-acceptall' + (readOnly(R) ? " disabled" : "") + '>Accept all Claude’s marks</button>' : "") + svBtn(R.id) + '</div></div></header>';
+    '<div class="row s2"><button class="btn sm quiet" type="button" data-suggest>Suggest a change</button>' + (asg ? "" : '<button class="btn sm" type="button" data-compare-cur>Side by side</button>') + (claudeMarks ? '<button class="btn sm accent-soft" type="button" data-acceptall' + (readOnly(R) ? " disabled" : "") + '>Accept all Claude’s marks</button>' : "") + svBtn(R.id) + '</div></div></header>';
   /* the footer: total, marked count, previous / next, save */
   var foot = '<footer class="botbar xmfoot"><span class="row s2"><span class="hint">Total</span><b class="num" id="xt-total">' + r2(R.total) + ' / ' + R.max + '</b><span class="tag ok num" id="xt-marked">' + R.marked + ' of ' + R.questions.length + ' marked</span></span><span class="hint" id="xt-repomsg"></span>' +
     '<button class="btn push" type="button" data-mqstep="-1">Previous</button><button class="btn" type="button" data-mqstep="1">Next</button>' +

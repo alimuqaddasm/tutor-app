@@ -876,7 +876,8 @@ document.addEventListener("click", function (ev) {
     L.phase = id; drawLesson();
     /* a new part always starts at its top: jump up if we were scrolled past it */
     var pb = $("#phasebox"); if (pb) { var y = pb.getBoundingClientRect().top + window.scrollY - 12; if (window.innerWidth < 900 || window.scrollY > y) window.scrollTo({ top: Math.max(0, y), behavior: "instant" }); } return; }
-  if (t.id === "clkgo") { var r2 = replay(x.time.log); var cur = phases().filter(function (p) { return p.id === L.phase && !p.sys; })[0];
+  if (t.hasAttribute("data-nagoff")) { TCH.nagOff = true; var nb = t.closest(".clocknag"); if (nb) nb.remove(); return; }
+  if (t.id === "clkgo" || t.hasAttribute("data-clkgo")) { var r2 = replay(x.time.log); var cur = phases().filter(function (p) { return p.id === L.phase && !p.sys; })[0];
     if (r2.running) logEvent("pause"); else { if (x.status === "finished") { x.status = "in-progress"; x.statusAt = now(); } logEvent(r2.secs ? "resume" : "start", cur ? cur.id : (r2.phase || phases()[0].id)); wake(); }
     drawLesson(); return; }
   if (t.id === "clkend") { logEvent("end"); drawLesson(); flush(); toast("Lesson ended. Undo it under Times if that was a mistake."); return; }
@@ -1596,10 +1597,10 @@ function drawTeach() {
       '<span class="tag num"><span class="olab">Step </span>' + (TCH.pos + 1) + ' of ' + TCH.seq.length + '</span>' +
       (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a step by hand.">Preview</button>'
         : '<button type="button" class="preview stopped" data-pvhelp title="The clock is stopped. Taught, Skip and verdicts still count.">Clock stopped</button>') +
-      '<span class="clockpill' + (lv ? " live" : "") + '"><span class="dot"></span><span class="t" id="clk">0:00</span></span><button class="btn sm' + (lv ? "" : " pri") + '" id="clkgo" type="button"></button></div></div>' +
+      '<span class="clockpill' + (lv ? " live" : "") + '"><span class="dot"></span><span class="t" id="clk">0:00</span></span><button class="btn sm' + (lv ? "" : " pri") + (clockNag(lv) ? " nag" : "") + '" id="clkgo" type="button"></button></div></div>' +
     (reals.length > 1 ? '<div class="flow ' + esc(subj) + ' tflow" aria-hidden="true">' + reals.map(function (p) { var on = p === c.p, past = c.p && reals.indexOf(p) < reals.indexOf(c.p);
       return '<span style="flex:' + pw(p) + '"' + (on ? ' class="on"' : "") + '><i' + (on ? ' style="background:linear-gradient(90deg,var(--accent) ' + pf + '%,var(--line) ' + pf + '%)"' : past ? ' style="background:var(--accent);opacity:.45"' : "") + '></i></span>'; }).join("") + '</div>' : '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>') +
-    '</div><div class="tstage">';
+    clockNag(lv) + '</div><div class="tstage">';
   /* the last two chunks of the same section as short grey lines, then the current one */
   var keep = window.innerWidth < 900 ? 1 : 2, start = TCH.pos;
   while (start > 0 && TCH.pos - start < keep && TCH.seq[start - 1].p === c.p && TCH.seq[start - 1].mod === c.mod && TCH.seq[start - 1].t !== "phase") start--;
@@ -1615,6 +1616,13 @@ function drawTeach() {
   var ol = $(".outline"), oc = $(".outline .cur"); if (ol && oc && ol.clientHeight) ol.scrollTop += oc.getBoundingClientRect().top - ol.getBoundingClientRect().top - ol.clientHeight / 2 + oc.offsetHeight / 2;
   if (window.scrollY) window.scrollTo(0, 0);
   ls(tposKey(), String(TCH.pos));
+}
+/* moving through the script with the clock stopped: a bar that stays until the clock runs (Ali, 10 Oct: "sometimes i forget to start it, sometimes i forget to unpause it") */
+function clockNag(lv) {
+  if (lv || !TCH.moved || TCH.nagOff || L.session.status === "finished") return "";
+  var never = !(L.session.time.log || []).length;
+  return '<div class="clocknag" role="status"><span class="dot" aria-hidden="true"></span><span><b>' + (never ? "The clock has not started." : "The clock is paused.") + '</b> ' + (never ? "Nothing is recorded, verdicts included." : "This time is not counted.") + '</span>' +
+    '<button class="btn sm pri" type="button" data-clkgo>' + (never ? "Start lesson" : "Resume") + '</button><button class="btn sm quiet" type="button" data-nagoff>Not now</button></div>';
 }
 function footHTML(c, lv) {
   var taughtable = { step: 1, mod: 1, concept: 1, board: 1 }[c.t] || (c.t === "text" && c.key), mid = "";
@@ -1770,7 +1778,7 @@ function setDone(key, label, on, skip) { var x = L.session; x.done = x.done || {
 /* how: "taught" ticks the chunk you leave (only while the clock runs); "skip" records it as skipped on purpose;
    "next" and "jump" move without recording anything */
 function tmove(d, how) {
-  var c = TCH.seq[TCH.pos], x = L.session; flipOn = false; BOARD = { open: null, near: null };
+  var c = TCH.seq[TCH.pos], x = L.session; flipOn = false; BOARD = { open: null, near: null }; TCH.moved = true;
   if (how === "skip" && !previewing() && c.key && { step: 1, text: 1 }[c.t]) { setDone(c.key, shortOf(c), false, true); touch(); }
   if (how === "taught" && !previewing() && c.key && { step: 1, text: 1 }[c.t] && !isDone(c.key)) { setDone(c.key, shortOf(c), true); touch(); }
   if (how === "taught" && !previewing() && c.t === "mod" && !isDone(c.key)) { setDone(c.key, c.b.name, true); touch(); }
@@ -1883,6 +1891,7 @@ var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
   parts.push(MODE === "teach" ? "Teach" : MODE === "student" ? "Student view" : r.indexOf("/lesson/") === 0 ? "Plan" : (r.split("/")[1] || "home"));
+  if (r.indexOf("/exams/") === 0) parts.push(r.split("/").slice(2).map(decodeURIComponent).join(" · "));
   if (L && r.indexOf("/lesson/") === 0) {
     parts.push(L.id);
     if (MODE === "teach" && TCH.seq[TCH.pos]) { var c = TCH.seq[TCH.pos]; parts.push((c.p ? c.p.name : "") + (c.mod ? " › " + c.mod : "") + " › " + c.t + ": " + shortOf(c, 70)); }
