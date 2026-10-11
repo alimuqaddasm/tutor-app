@@ -81,6 +81,10 @@ function shown(img, path) {
 /* question text set like the real papers (Ali, 5 Oct): parts (a), (b), (i) each on their own line with the label in a
    hanging margin; the marks bold at the right, "(2)" for Edexcel maths and "[2 marks]" for AQA chemistry; for AQA the
    words their papers set in bold (Give two, does not, compound X, Step 4). Same as app.js; fonts and spacing are in app.css (.paper). */
+/* a question typed in the paper's own layout (paper.js) is set out like the paper; older text keeps the simple look */
+function qText(html, subj) { return window.PaperQ && PaperQ.is(html) ? PaperQ.render(html, /^chem/.test(subj || "") ? "chem" : "maths") : paperHTML(html, subj); }
+function ovals(root) { var b = $(".ex-pick[aria-pressed=true]"), on = b ? b.getAttribute("data-pick") : "";
+  $$(".pp-opt", root || document).forEach(function (o) { o.classList.toggle("on", o.getAttribute("data-opt") === on); }); }
 function paperHTML(html, subj, marks) {
   var h = clean(String(html || "")), aqa = subj === "chem";
   var parts = h.split(/<br\s*\/?>|\n/i), out = [], stem = [];
@@ -449,7 +453,7 @@ function question() {
     : '<textarea id="ans" class="input" spellcheck="false" placeholder="Working or notes"' + (ro ? " disabled" : "") + '>' + esc(d.text) + '</textarea>';
   box.innerHTML =
     '<div class="row ex-qhead"><span class="tag line lg">Question ' + (k + 1) + ' of ' + ord.length + '</span><span class="tag lg">' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</span>' + (q.type === "upload_required" ? '<span class="tag ask lg push">Photo needed</span>' : "") + '</div>' +
-    '<div class="ex-qtext"' + (q.has_img && !q.typed ? " hidden" : "") + '>' + (q.has_img && !q.typed ? "" : paperHTML(q.text_html, S.subject)) + '</div>' +
+    '<div class="ex-qtext"' + (q.has_img && !q.typed ? " hidden" : "") + '>' + (q.has_img && !q.typed ? "" : qText(q.text_html, S.subject)) + '</div>' +
     (q.has_img ? '<figure class="ex-qimg"><button type="button" data-zoom><img alt="Question ' + (cur + 1) + ' picture"></button></figure>' : "") +
     (mcq ? '<div class="field ex-answer"><span class="lab">Your answer</span>' + input + '</div>' : "") +
     (upload ? '<div class="sunk stack ex-work"><span class="lab">' + (q.work ? esc(q.work) : mcq ? "Your working (optional)" : "Your working") + '</span>' +
@@ -463,6 +467,7 @@ function question() {
     (mcq ? "" : '<div class="field ex-answer"><label for="ans">' + (upload ? 'Your answer <span class="hint">(optional, the photo is enough)</span>' : "Your answer") + '</label>' + input + '<p class="ex-count hint" hidden></p></div>') +
     (upload ? "" : '<div class="row ex-attach ex-more"' + (ro ? " hidden" : "") + '><label class="btn sm"><input type="file" accept="image/*" multiple hidden data-file>Add a photo</label><button class="btn sm" type="button" data-draw>Draw</button><button class="btn sm" type="button" data-phone>Send from my phone</button></div><div class="ex-pics"></div>');
   if (q.has_img) shown($(".ex-qimg img", box), "/api/s/questions/" + encodeURIComponent(q.id) + "/image");
+  if (window.PaperQ) { PaperQ.placeFig(box); ovals(box); }
   maths($(".ex-qtext", box));
   var a = $("#ans");
   if (a) {
@@ -625,7 +630,7 @@ function asgWork(m) {
       '<nav class="a-qnav" aria-label="Questions"><div class="a-eyebrow">Questions</div><div class="a-qlist"></div><span class="grow"></span>' +
         (ro ? "" : '<button type="button" class="a-finish" data-a-finish>I\'m done with ' + esc(x.title) + '</button>') + '</nav>' +
       '<main class="a-qcard"><div class="a-qhead"><h2>Question ' + (k + 1) + '</h2>' + (q.label && q.label !== "Q" + (k + 1) ? '<span class="a-meta">' + esc(q.label) + '</span>' : "") + '<span class="grow"></span><b>' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</b></div>' +
-        (q.has_img && !q.typed ? "" : '<div class="a-qtext">' + paperHTML(q.text_html, subjOf(x) === "chem" ? "chem" : "maths") + '</div>') +
+        (q.has_img && !q.typed ? "" : '<div class="a-qtext">' + qText(q.text_html, subjOf(x) === "chem" ? "chem" : "maths") + '</div>') +
         (q.has_img ? '<figure class="a-qimg"><button type="button" data-zoom><img alt="Question ' + (k + 1) + '" data-src="/api/s/questions/' + esc(q.id) + '/image"></button></figure>' : "") +
         (mcq ? '<div class="a-lab">Your answer</div>' + input : "") +
         '<div class="a-lab">' + (q.work ? esc(q.work) : mcq ? "Your working (optional)" : "Your pages for this question") + '</div><div class="a-pages" data-q="' + esc(q.id) + '" data-kind="main"></div>' +
@@ -634,6 +639,7 @@ function asgWork(m) {
         '<div class="a-qfoot"><button type="button" class="a-btn" data-a-prev' + (k ? "" : " disabled") + '>Previous</button><span class="grow"></span><button type="button" class="a-btn dark" data-a-next' + (k < qs.length - 1 ? "" : " disabled") + '>Next question</button></div>' +
       '</main>' + qrAside(true) +
     '</div></div>';
+  if (window.PaperQ) { PaperQ.placeFig(m); ovals(m); }
   var a = $("#ans");
   if (a) { a.addEventListener("input", function () { onType(q.id, a.value); count(a); asgNav(); }); a.addEventListener("blur", function () { flush(); }); count(a); }
 }
@@ -875,6 +881,7 @@ function pickLetter(t) {
   var q = S.questions[cur]; if (!q || q.type !== "mcq" || !writable()) return;
   var l = t.getAttribute("data-pick"), was = t.getAttribute("aria-pressed") === "true", now = was ? "" : l;
   $$(".ex-pick").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-pick") === now)); });
+  ovals();
   onType(q.id, now); flush(); if (typeof asgNav === "function") asgNav();
 }
 
@@ -891,6 +898,11 @@ document.addEventListener("click", function (e) {
   else if (t.hasAttribute("data-rm")) removePicture(t.getAttribute("data-rm"));
   else if (t.hasAttribute("data-zoom")) zoom($("img", t).src);
   else if (t.hasAttribute("data-pick")) pickLetter(t);
+});
+/* on a paper-style multiple choice question, tapping an option's line or box picks it too */
+document.addEventListener("click", function (e) {
+  var o = e.target.closest && e.target.closest(".pp-opt[data-opt]"); if (!o) return;
+  var b = $('.ex-pick[data-pick="' + o.getAttribute("data-opt") + '"]'); if (b && !b.disabled) pickLetter(b);
 });
 function moved() {
   flush(); question(); dots(); window.scrollTo(0, 0);

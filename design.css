@@ -258,3 +258,55 @@ table.tbl{width:100%;border-collapse:collapse;font-size:15px}
   .main{padding:var(--s5) var(--s4) var(--s8)}
   .topbar,.botbar{padding-inline:var(--s4)}
 }
+
+/* the papers' fonts on every device: Arimo and Tinos have Arial's and Times New Roman's exact letter widths
+   (Android tablets have neither Arial nor Times) */
+@font-face{font-family:Arimo;font-weight:400;font-display:swap;src:url(vendor/fonts/arimo-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:Arimo;font-weight:700;font-display:swap;src:url(vendor/fonts/arimo-latin-700-normal.woff2) format("woff2")}
+@font-face{font-family:Tinos;font-weight:400;font-display:swap;src:url(vendor/fonts/tinos-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:Tinos;font-weight:400;font-style:italic;font-display:swap;src:url(vendor/fonts/tinos-latin-400-italic.woff2) format("woff2")}
+@font-face{font-family:Tinos;font-weight:700;font-display:swap;src:url(vendor/fonts/tinos-latin-700-normal.woff2) format("woff2")}
+@font-face{font-family:Tinos;font-weight:400;font-display:swap;unicode-range:U+0370-03FF;src:url(vendor/fonts/tinos-greek-400-normal.woff2) format("woff2")}
+@font-face{font-family:Tinos;font-weight:400;font-style:italic;font-display:swap;unicode-range:U+0370-03FF;src:url(vendor/fonts/tinos-greek-400-italic.woff2) format("woff2")}
+/* ---------- a typed question set out like the paper (paper.js; Ali, 11 Oct: copy everything) ----------
+   Paper black on paper white in every theme: this is a replica of the printed page. */
+.pp{color:#000;background:#fff;line-height:1.35;text-align:left}
+.pp.aqa{font-family:var(--font-aqa)}
+.pp.edx{font-family:var(--font-edexcel);line-height:1.45;font-size:1.09em}   /* Edexcel prints 12 pt Times, AQA 11 pt Arial */
+.pp-row{display:grid;grid-template-columns:6.4em minmax(0,1fr);column-gap:.9em;margin-top:1.1em}
+.pp-row:first-child{margin-top:0}
+.pp.edx .pp-row{grid-template-columns:2.4em minmax(0,1fr);column-gap:.5em}
+.pp.edx .pp-row.part{margin-left:2.9em;margin-top:.9em}
+.pp.edx .pp-row.cont{margin-left:2.9em}
+.pp-boxes{display:inline-flex;align-items:center;white-space:nowrap}
+.pp-box{display:inline-block;width:1.5em;height:1.5em;line-height:1.45em;text-align:center;border:1px solid #000;font-weight:700}
+.pp-box+.pp-box{margin-left:-1px}
+.pp-dot{font-weight:700;padding:0 .2em}
+.pp-lab{padding-top:.05em}
+.pp-l{margin:0 0 .45em}
+.pp-l:last-child{margin-bottom:0}
+.pp-mk{text-align:right;font-weight:700;margin:.15em 0 .5em}
+.pp-fig{margin:.7em 0;text-align:center}
+.pp-fig figure{margin:0}
+.pp-fig img{max-width:100%;height:auto;border:0;border-radius:0;background:#fff}
+.pp-fig button{border:0;background:none;padding:0;cursor:zoom-in}
+.pp-mcq{margin:.4em 0 0}
+.pp-opt{display:grid;grid-template-columns:1.7em minmax(0,1fr) 2.6em;align-items:center;column-gap:.3em;margin:.75em 0}
+.pp-ob{justify-self:end;width:2.4em;height:1.7em;border:1px solid #000;display:flex;align-items:center;justify-content:center}
+.pp-oval{width:1em;height:.6em;border:1px solid #000;border-radius:50%}
+.pp-opt.on .pp-oval{background:#000}
+.pp-note{font-family:var(--font);font-style:italic;font-size:.85em;color:#000;opacity:.7;margin:.2em 0 .5em}
+.pp-ans{display:flex;align-items:flex-end;gap:.4em;margin:.5em 0 .3em}
+.pp-rule{flex:1;max-width:14em;border-bottom:1px solid #000;height:1em}
+.pp ol.steps{list-style:none;margin:.2em 0 0;padding:0 0 0 1.2em}
+.pp ol.steps li{display:grid;grid-template-columns:1.3em minmax(0,1fr);column-gap:.4em;align-items:baseline;padding:0;margin:0 0 .45em;border-radius:0}
+.pp sub,.pp sup{font-size:.72em;line-height:0}
+.pp ul.given{margin:.3em 0 .5em;padding-left:1.6em}
+.pp ul.given li{margin:.35em 0}
+.pp.edx .pp-fig img{max-width:min(100%,30em)}
+.pp.aqa .pp-fig img{max-width:min(100%,46em)}
+@media (max-width:560px){
+  .pp-row,.pp.edx .pp-row{grid-template-columns:minmax(0,1fr);row-gap:.5em}
+  .pp.edx .pp-row.part,.pp.edx .pp-row.cont{margin-left:1.2em}
+  .pp-rule{max-width:none}
+}

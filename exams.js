@@ -323,7 +323,7 @@ function drawExam() {
       var ro = started ? " disabled" : "", head = "";
       if (asg && q.section_id !== lastSec) { lastSec = q.section_id; var sc = (X.sections || []).filter(function (x) { return x.id === q.section_id; })[0] || {};
         head = '<tr class="xt-secrow"><td colspan="6"><b>' + esc(sc.title || q.section_id) + '</b>' + (sc.date ? ' <span class="hint">' + esc(sc.date) + '</span>' : "") + ' · <span data-secst="' + esc(q.section_id) + '">' + secState(sc, true) + '</span></td></tr>'; }
-      return head + '<tr data-q="' + esc(q.id) + '" data-qrow><td>' + (i + 1) + '</td><td><b>' + esc(q.label) + '</b>' + (q.has_img ? '<div><img class="xt-thumb xt-zoomable" alt="Question picture" title="Tap to open large" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>' : "") + '</td>' +
+      return head + '<tr data-q="' + esc(q.id) + '" data-qrow><td>' + (i + 1) + '</td><td><b>' + esc(q.label) + '</b>' + (window.PaperQ && PaperQ.is(q.text_html) ? qLook(q) : q.has_img ? '<div><img class="xt-thumb xt-zoomable" alt="Question picture" title="Tap to open large" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>' : q.text_html ? '<div class="xq-look xt-qtext">' + T.clean(q.text_html) + '</div>' : "") + '</td>' +
         '<td><input type="number" class="xt-in" data-f="marks" min="0" step="0.5" value="' + esc(q.marks) + '"' + ro + '></td>' +
         '<td><select data-f="type"' + ro + '>' + TYPES.map(function (t) { return '<option value="' + t[0] + '"' + (q.type === t[0] ? " selected" : "") + '>' + t[1] + '</option>'; }).join("") + '</select></td>' +
         '<td><input type="number" class="xt-in" data-f="suggested_min" min="0" step="0.5" value="' + esc(q.suggested_min == null ? r2(q.marks * ratio) : q.suggested_min) + '"' + ro + '></td><td class="hint" data-saved></td></tr>';
@@ -337,6 +337,11 @@ function drawExam() {
 
 /* the question as he sees it, on the exam page itself: no need to open Student view to read it (Ali, 11 Oct) */
 function qLook(q) {
+  if (window.PaperQ && PaperQ.is(q.text_html)) {   // typed like the paper: the paper layout, picture in its place
+    var fig = q.has_img ? '<img class="xt-zoomable xq-fig" loading="lazy" alt="' + esc(q.label) + ' picture" title="Tap to open large" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image">' : "";
+    var h = PaperQ.render(q.text_html, /^chem/.test(X.subject || "") ? "chem" : "maths");
+    return '<div class="xq-look">' + (fig && h.indexOf("pp-fig") >= 0 ? h.replace('<div class="pp-fig"></div>', '<div class="pp-fig">' + fig + '</div>') : h + fig) + '</div>';
+  }
   if (q.has_img && q.typed) return '<div class="xq-look xt-qtext">' + T.clean(q.text_html) + '<img class="xt-zoomable" loading="lazy" alt="' + esc(q.label) + ' picture" title="Tap to open large" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>';
   if (q.has_img) return '<div class="xq-look"><img class="xt-zoomable" loading="lazy" alt="' + esc(q.label) + ' picture" title="Tap to open large" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>';
   return q.text_html ? '<div class="xq-look xt-qtext">' + T.clean(q.text_html) + '</div>' : "";

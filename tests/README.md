@@ -17,6 +17,7 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/test_round17.py            # round 17 (6 Oct): fix mic notes (Heard box + editable notes), short lessons ask whose doing it was (18 checks)
     python tests/runtest.py tests/test_round24.py   # round 24 (11 Oct): Teach clock bar, questions on the exam page, picture-only questions, MCQ letters (29 checks; needs the local exam server)
     python tests/runtest.py tests/test_round25.py   # round 25 (11 Oct): typed questions with cropped figures, swipe between zoomed questions on the exam page (12 checks; needs the local exam server)
+    python tests/runtest.py tests/test_round26.py   # round 26 (11 Oct): typed questions set out like the paper (number boxes, marks, option boxes, Edexcel parts, figure in place), on the Exams page before the start too (29 checks)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
 On Windows run with PYTHONIOENCODING=utf-8, or printing ★ crashes the console.
