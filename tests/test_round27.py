@@ -169,7 +169,7 @@ with sync_playwright() as p:
     check("  ...the countdown is gone", pg.evaluate("__t(\"ckJSON('tutor.next')\")") is None)
 
     # ---------- another lesson's clock still on ----------
-    pg.evaluate("__t(\"ckJSON('tutor.running', {id: '%s', at: new Date(Date.now()-3600000).toISOString()})\")" % CH)
+    pg.evaluate("s => __t(s)", "var k = localKey('%s'), o = ckJSON(k); o.session.time.log.push({t: new Date().toISOString(), e: 'resume', d: 'test'}); o.session.status = 'in-progress'; ckJSON(k, o); ckJSON('tutor.running', {id: '%s', at: new Date(Date.now()-3600000).toISOString()})" % (CH, CH))
     pg.goto(APP + "#/lesson/" + MA + "/teach"); pg.reload()
     check("Opening maths with chemistry's clock on: it asks", wait_for(pg, lambda: "Chemistry clock still on" in pg.inner_text("#ckask"), 20) is not None)
     pg.click("#ckask [data-ck='keep']")
@@ -192,11 +192,15 @@ with sync_playwright() as p:
     # ---------- the store ----------
     pg.goto(APP + "#/lesson/" + MA + "/teach")
     wait_for(pg, lambda: pg.locator(".tfoot").count() == 1, 25)
-    if pg.locator("#ckask").count(): pg.click("#ckask [data-ck]")
+    pg.wait_for_timeout(600)
+    for _ in range(3):   # the clock may ask something first (the earlier checks leave lessons running): the quiet answer
+        if pg.locator("#ckask").count(): pg.locator("#ckask [data-ck]").last.click(); pg.wait_for_timeout(300)
+    pg.evaluate("s => __t(s)", "CK.quietUntil = Date.now() + 3600000; CK.keep = (ckJSON('tutor.running') || {}).id; ckJSON('tutor.next', null)")
     pg.click("[data-tmore]"); pg.click(".tmenu [data-store]")
-    check("Teach: Add from the Store lists the sections", wait_for(pg, lambda: pg.locator(".storerow").count() == 2, 10) is not None)
+    check("Teach: Add from the Store lists the sections", wait_for(pg, lambda: pg.locator(".storerow [data-stadd^='students/UK-1/store/maths-test/']").count() == 2, 10) is not None, pg.inner_text("#stobox") if pg.locator("#stobox").count() else "no panel")
+    check("  ...the real chapter 7 store is there too, 7 sections", pg.locator(".storerow [data-stadd^='students/UK-1/store/maths-y2-7/']").count() == 7 or "maths-y2-7" not in str(fake.files.keys()))
     shot(pg, "store-1440")
-    pg.click(".storerow [data-stadd$='#s72']")
+    pg.click(".storerow [data-stadd='students/UK-1/store/maths-test/store.json#s72']")
     check("  ...adding jumps to the new section", wait_for(pg, lambda: "Double Angle Formulae" in pg.inner_text(".tbar"), 5) is not None, pg.inner_text(".tbar") if pg.locator(".tbar").count() else "")
     check("  ...it is recorded in the lesson", pg.evaluate("__t('L.session.added.map(function(a){return a.part}).join()')") == "s72")
     check("  ...it shows in the outline", "Double Angle Formulae" in pg.inner_text(".runway"))

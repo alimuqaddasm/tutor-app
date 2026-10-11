@@ -955,6 +955,8 @@ document.addEventListener("submit", function (ev) {
     if (replay(x.time.log).running) logEvent("end");
     if (shortBy(x) === undefined) { shortAsk(f, x); return; }
     x.status = "finished"; x.statusAt = now(); touch(); var mine = L;
+    var lg0 = x.time.log, rr = ckJSON("tutor.running"); if (rr && rr.id === L.id) ckJSON("tutor.running", null); ckJSON("tutor.break", null);
+    if (lg0.length && !ckJSON("tutor.next")) nextAfter(L.id, lg0[lg0.length - 1].t);   // finished while paused: maths still counts from when the clock stopped
     flush().then(function () { toast(TRY ? "Try-out: nothing was saved" : !mine.dirty ? "Lesson saved to GitHub" : navigator.onLine ? "Not saved yet: kept on this device, it retries by itself" : "Offline: kept on this device, it saves when you are back online"); if (L === mine) drawLesson(); }); return; }
   if (f.id === "wkform") uploadWork();
 });
@@ -1562,7 +1564,7 @@ function chunkKey(c) { return c.t === "quiz" ? c.it.id : c.t === "drill" ? c.key
 /* LaTeX as plain text for short labels (outline, grey lines, up next): a cut-off \( … \) would show raw code */
 function texPlain(t) { return String(t).replace(/\\\(|\\\)|\\\[|\\\]/g, "").replace(/\\d?frac\{([^{}]*)\}\{([^{}]*)\}/g, "$1/$2").replace(/\\sqrt\{?([0-9a-z]+)\}?/g, "\u221a$1")
   .replace(/\\(sin|cos|tan|sec|cosec|cot|ln|log)\b/g, " $1 ").replace(/\\(theta|alpha|beta|pi)\b/g, function (m, g) { return { theta: "\u03b8", alpha: "\u03b1", beta: "\u03b2", pi: "\u03c0" }[g]; })
-  .replace(/\\(,|;|!| )/g, " ").replace(/\\(left|right)/g, "").replace(/[{}]/g, "").replace(/\s+/g, " ").replace(/\b(sin|cos|tan|sec|cosec|cot|ln|log) \(/g, "$1(").trim(); }
+  .replace(/\\(,|;|!| )/g, " ").replace(/\\(left|right)/g, "").replace(/\^\{?2\}?/g, "\u00b2").replace(/\^\{?3\}?/g, "\u00b3").replace(/[{}]/g, "").replace(/\s+/g, " ").replace(/\b(sin|cos|tan|sec|cosec|cot|ln|log) \(/g, "$1(").trim(); }
 function shortOf(c, n) { n = n || 90; var t = c.t === "phase" ? c.p.name : c.t === "mod" ? c.b.name : c.t === "step" ? plain(c.it.html) : c.t === "text" ? plain(c.b.html) :
     c.t === "quizpick" ? "Choose the quiz questions" : c.t === "quiz" ? plain(c.it.q) : c.t === "drill" ? plain(c.d[0]) : c.t === "question" ? (c.b.label || "Exam question") :
     c.t === "fig" ? (plain(c.b.caption) || "Picture") : c.t === "board" ? (c.kind === "quiz" ? "Oral quiz: " : (c.title || "Quick questions") + ": ") + c.items.length + " questions" :
@@ -1615,7 +1617,7 @@ function drawTeach() {
   var h = '<div class="teach3">' + runwayHTML(c) + '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
     '<button class="btn sm outl" type="button" id="toc" aria-label="Outline">☰<span class="olab"> Outline</span></button>' + (PREP ? '<a class="btn sm quiet back" href="#/">Lessons</a>' : '<a class="btn sm quiet back" href="#/lesson/' + encodeURIComponent(L.id) + '" title="Prepare: the same screens, nothing recorded">Prepare</a>') + '' + (pk ? tag(esc(pk), pk === "If time" ? "dash" : "line") : "") + '<b>' + esc(c.p ? (partTitle(c.p.name)) : "End") + '</b>' + (c.mod ? '<span class="hint">· ' + esc(c.mod) + '</span>' : "") + '</div>' +
     '<div class="tmini"><span class="tmore"><button class="btn sm" type="button" data-tmore aria-expanded="false" aria-label="More: warm-up, suggest a change, try-out">⋯<span class="tdot" id="wudot" hidden></span></button>' +
-      '<div class="tmenu" hidden><button class="btn sm" type="button" data-store>Add from the Store</button><button class="btn sm" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn sm" type="button" data-suggest>Suggest a change</button><button class="btn sm trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button>' + LPAGES.map(function (q) { return '<button class="btn sm" type="button" data-phase="' + q[0] + '" data-real="">' + q[1] + '</button>'; }).join("") + '</div></span>' +
+      '<div class="tmenu" hidden>' + (PREP ? '<a class="btn sm pri" href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach this lesson</a>' : "") + '<button class="btn sm" type="button" data-store>Add from the Store</button><button class="btn sm" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn sm" type="button" data-suggest>Suggest a change</button><button class="btn sm trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button>' + LPAGES.map(function (q) { return '<button class="btn sm" type="button" data-phase="' + q[0] + '" data-real="">' + q[1] + '</button>'; }).join("") + '</div></span>' +
       '<a class="btn sm" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"></path></svg></a>' +
       '<span class="tag num"><span class="olab">Step </span>' + (TCH.pos + 1) + ' of ' + TCH.seq.length + '</span>' +
       (PREP ? tag("Prepare", "line") + '<a class="btn sm pri" href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach</a></div></div>' : (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a step by hand.">Preview</button>'
@@ -1996,19 +1998,24 @@ document.addEventListener("click", function (ev) { var t = ev.target.closest && 
 /* every few seconds: the break, a forgotten clock, and the next lesson */
 function clockWatch() { if (!CFG.token || $("#ckask")) return; var tnow = Date.now();
   var bk = ckJSON("tutor.break"); if (bk && L && L.id === bk.id && MODE === "teach" && !PREP && !live() && tnow > bk.until) { if (replay(L.session.time.log).secs && L.session.status !== "finished") return clockAsk("break"); ckJSON("tutor.break", null); }
-  var rn = ckJSON("tutor.running"); if (rn && CK.keep !== rn.id) { var tp = taps(rn.id), last = [tp.last, rn.at].filter(Boolean).sort().pop(), vid = L && L.id === rn.id && MODE === "teach" && TCH.seq[TCH.pos] && TCH.seq[TCH.pos].t === "video";
+  var rn = runningLesson();
+  if (rn && CK.keep !== rn.id) { var tp = taps(rn.id), last = [tp.last, rn.at].filter(Boolean).sort().pop(), vid = L && L.id === rn.id && MODE === "teach" && TCH.seq[TCH.pos] && TCH.seq[TCH.pos].t === "video";
     if (last && tnow - Date.parse(last) > (vid ? 30 : IDLE_MIN) * 60000) return clockAsk("idle", { id: rn.id, last: last }); }
   var nx = ckJSON("tutor.next"); if (nx && tnow >= nx.at && !nx.shown) { if (L && L.id === nx.id && live()) { ckJSON("tutor.next", null); return; } nx.shown = true; ckJSON("tutor.next", nx); return clockAsk("next", nx); }
   var nb = $(".clocknag.brk"); if (nb && L && MODE === "teach") nb.outerHTML = clockNag(live());
   nextBar(); }
 setInterval(clockWatch, 5000);
+/* the lesson whose clock runs on this device; forgotten if it was stopped on another device or finished */
+function runningLesson() { var rn = ckJSON("tutor.running"); if (!rn) return null;
+  var rs = L && L.id === rn.id ? L.session : (ckJSON(localKey(rn.id)) || {}).session;
+  if (rs && (!replay((rs.time || {}).log).running || rs.status === "finished")) { ckJSON("tutor.running", null); return null; } return rn; }
 /* the countdown to the next lesson, small, at the bottom of every page */
 function nextBar() { var nx = ckJSON("tutor.next"), el = $("#nextbar"); if (!nx || nx.shown) { if (el) el.remove(); return; }
   if (!el) { el = document.createElement("div"); el.id = "nextbar"; el.className = "nextbar"; el.setAttribute("role", "status"); document.body.appendChild(el); }
   var left = Math.max(0, Math.ceil((nx.at - Date.now()) / 60000));
   el.innerHTML = '<span class="dot" aria-hidden="true"></span><span><b>' + esc(subjWord(nx.id)) + ' at ' + esc(hhmm(new Date(nx.at).toISOString())) + '</b> · ' + left + ' min</span><button class="btn sm" type="button" data-ck="nottoday">Not today</button>'; CK.other = nx.id; }
 /* opening Teach while another lesson's clock still runs */
-function checkOther() { if (PREP || MODE !== "teach" || !L || $("#ckask")) return; var rn = ckJSON("tutor.running"); if (!rn || rn.id === L.id || CK.keep === rn.id) return;
+function checkOther() { if (PREP || MODE !== "teach" || !L || $("#ckask")) return; var rn = runningLesson(); if (!rn || rn.id === L.id || CK.keep === rn.id) return;
   clockAsk("other", { id: rn.id, since: rn.at, last: taps(rn.id).last }); }
 /* After the lesson: the taps as the times, when the clock missed the lesson */
 function tapTimes() { var x = L.session, tp = taps(); if (!tp.first || !tp.last) return null; var m = Math.round((Date.parse(tp.last) - Date.parse(tp.first)) / 60000);

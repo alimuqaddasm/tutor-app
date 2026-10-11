@@ -121,7 +121,9 @@ with sync_playwright() as p:
     # 1. the tab lists Claude's exam with its reason
     pg.goto(APP + "#/exams")
     check("Exams is in the menu and opens", wait_for(lambda: "from Claude" in pg.inner_text("#app"), 15) is not None, pg.inner_text("#app")[:200])
-    check("Claude's exam shows with why it is due", "Chapter 5 finished" in pg.inner_text("#app"))
+    # since 10 Oct the reason sits folded under "Notes from Claude" on the card: open it, then it must show
+    pg.click('details.xnotes > summary')
+    check("Claude's exam shows with why it is due", wait_for(lambda: "Chapter 5 finished" in pg.inner_text("details.xnotes"), 4) is not None, pg.inner_text("#app")[:400])
     pg.screenshot(path=os.path.join(SHOTS, "exams-1-list.png"))
 
     # 2. load it to the exam server
@@ -135,7 +137,9 @@ with sync_playwright() as p:
     check("suggestion uses the past papers' minutes per mark", "1.17 min per mark" in sugg and "10 min" in sugg, sugg)
     pg.click("[data-rmode=number]")
     pg.fill("#xt-ratio", "2")
-    pg.dispatch_event("#xt-ratio", "change")
+    # leave the box as a user does (Tab fires the real change). A dispatched change on top of the real one
+    # re-drew the page twice inside one blur and raised a test-only script error.
+    pg.press("#xt-ratio", "Tab")
     # 8 marks x 2 = 16, rounded up to the next 5 minutes
     check("my own number changes the suggestion", wait_for(lambda: "20 min suggested" in pg.inner_text(".xt-sugg")) is not None, pg.inner_text(".xt-sugg"))
     pg.click("[data-usesugg]")
@@ -155,7 +159,7 @@ with sync_playwright() as p:
     pg.click("[data-start]")
     check("Start runs the clock", wait_for(lambda: re.match(r"^1[89]:\d\d$|^20:00$", pg.inner_text("#xt-left")), 8) is not None, pg.inner_text("#xt-left"))
     sapi("PUT", "/api/s/answers/q1", token, {"text": "5pi/6", "seq": 1})
-    check("live: his save shows against the question", wait_for(lambda: "Text" in pg.inner_text('tr[data-q="q1"] [data-saved]'), 8) is not None)
+    check("live: his save shows against the question", wait_for(lambda: "Text" in pg.inner_text('[data-qrow][data-q="q1"] [data-saved]'), 8) is not None)
 
     # 5. + minutes, logged with the time
     pg.click('[data-ext="5"]')
@@ -163,6 +167,7 @@ with sync_playwright() as p:
     pg.fill("#xt-custom", "3")
     pg.click("[data-extc]")
     check("custom +3 min moves the clock", wait_for(lambda: pg.inner_text("#xt-left").startswith("2") and int(pg.inner_text("#xt-left").split(":")[0]) >= 26, 8) is not None, pg.inner_text("#xt-left"))
+    pg.click('details:has(#xt-log) > summary')  # the log is folded since 10 Oct
     log = pg.inner_text("#xt-log")
     check("the log shows each extension with its time", re.search(r"\+5 min at \d{1,2}:\d\d [ap]m", log) and re.search(r"\+3 min at", log), log)
     pg.screenshot(path=os.path.join(SHOTS, "exams-3-live.png"), full_page=True)
@@ -181,6 +186,7 @@ with sync_playwright() as p:
     pg.dispatch_event('[data-score="q1"]', "change")
     pg.fill('[data-comment="q1"]', "Needs exact form")
     check("partial marks save and the total updates", wait_for(lambda: pg.inner_text("#xt-total") == "2.5 / 8", 6) is not None, pg.inner_text("#xt-total"))
+    pg.click('[data-mqgo="1"]')  # the Mark page shows one question at a time since 10 Oct
     pg.fill('[data-score="q2"]', "9")
     pg.dispatch_event('[data-score="q2"]', "change")
     check("a mark above the maximum is refused", wait_for(lambda: "0 to 5" in pg.inner_text('[data-mstate="q2"]'), 4) is not None)

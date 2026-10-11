@@ -1162,7 +1162,8 @@ body[data-subject="maths"] :is(.qtext,.stu-q) .katex{font-size:1.08em}
   .lrow{grid-template-areas:"d t m" "d s m"}
   .inkcard .tags#homerevm{display:none}
   /* Teach: menu, kind tag, step, clock; the verdicts as a row above the buttons */
-  .tcrumb > a,.tcrumb > b,.tcrumb > .hint,.tmini > a.btn,.tmini .preview,.tmini .tmore{display:none}
+  .tcrumb > a,.tcrumb > b,.tcrumb > .hint,.tmini > a.btn,.tmini .preview{display:none}
+  .tmenu{right:0;left:auto;max-width:calc(100vw - 32px)}
   .teach3 .tcrumb{contain:none;flex:1 1 auto;overflow:visible}
   .olab{display:none}
   .tmini .clockpill{min-height:40px;padding:0 var(--s3);font-size:16px}
