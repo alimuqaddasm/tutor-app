@@ -41,8 +41,17 @@ function call(method, path, body, extra) {
   });
 }
 var blobs = {};
-function picUrl(path) { if (blobs[path]) return Promise.resolve(blobs[path]); return call("GET", path).then(function (b) { return (blobs[path] = URL.createObjectURL(b)); }); }
-function showPics(root) { $$("img[data-xsrc]", root).forEach(function (im) { picUrl(im.getAttribute("data-xsrc")).then(function (u) { im.src = u; }, function () { im.alt = "Picture could not load"; }); }); }
+/* question and mark-scheme pictures never change once an exam is loaded (a new load is a new exam id), so they are kept
+   on this device: an exam page opens from the tablet, not from the server in America (Ali, 11 Oct: "exam section is
+   particularly slow"). */
+var KEEP = /^\/api\/t\/exams\/[^/]+\/questions\/[^/]+\/(img|ms)$/;
+function picUrl(path) { if (blobs[path]) return Promise.resolve(blobs[path]);
+  var keep = KEEP.test(path) && T.cget;
+  return (keep ? T.cget("x:" + path) : Promise.resolve(null)).then(function (hit) {
+    if (hit) return (blobs[path] = URL.createObjectURL(hit));
+    return call("GET", path).then(function (b) { if (keep && b && b.size) T.cput("x:" + path, b); return (blobs[path] = URL.createObjectURL(b)); }); }); }
+function loadPic(im) { picUrl(im.getAttribute("data-xsrc")).then(function (u) { im.src = u; }, function () { im.alt = "Picture could not load"; }); }
+function showPics(root) { $$("img[data-xsrc]", root).forEach(loadPic); }
 function showRepoPics(root) { $$("img[data-rsrc]", root).forEach(function (im) { T.fileURL(im.getAttribute("data-rsrc")).then(function (u) { if (u) im.src = u; else im.alt = "Not in the repo"; }); }); }
 
 /* "4:32 pm" */
@@ -122,11 +131,11 @@ function listView() {
   Promise.all([repoP, serverP]).then(function (res) { done = true; if ((location.hash || "") === "#/exams") drawList(res[0], res[1]); })
     .catch(function (e) { app.innerHTML = '<div class="wrap exams">' + listHead() + '<div class="empty"><b class="t-card">Couldn’t load exams</b><span class="hint">' + esc(e.message) + '. Check the exam server and password in <a href="#/settings">Settings</a>.</span></div></div>'; });
 }
-function listHead() { return '<header class="head"><div class="stack s2"><h1 class="t-page">Exams and assignments</h1><div class="tags">' + T.tag("Exam: timed, on his tablet") + T.tag("Assignment: no clock") + '</div></div>' +
+function listHead() { return '<header class="head"><div class="stack s2"><h1 class="t-page">Exams and Assignments</h1><div class="tags">' + T.tag("Exam: timed, on his tablet") + T.tag("Assignment: no clock") + '</div></div>' +
   (T.isTry ? '<button class="btn pri" type="button" data-practice>Make a practice exam</button>' : "") + '</header>'; }
 /* "Chapters 1 to 6 (revised, 45 min)" is "Chapters 1 to 6"; "Holiday practice, 23 to 30 Oct" is "Holiday practice": dates and notes are tags */
 function rq0(res) { var q = res.questions || []; return q.length && q.every(function (x) { return x.score != null; }); }
-function shortTitle(s) { return String(s || "").replace(/\s*\([^)]*\)\s*$/, "").replace(/,\s*\d{1,2}(\s+\w+)?\s+to\s+\d{1,2}\s+\w+$/, "").trim(); }
+function shortTitle(s) { return titleCase(String(s || "").replace(/\s*\((?=[^)]*[\d,])[^)]*\)\s*$/, "").replace(/,\s*\d{1,2}(\s+\w+)?\s+to\s+\d{1,2}\s+\w+$/, "").trim()); }
 function dmy(iso) { return iso ? T.fmtDate(iso) : ""; }
 function addDay(iso, n) { var p = String(iso).split("-"), d = new Date(+p[0], +p[1] - 1, +p[2] + n); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function drawList(repo, all) {
@@ -158,8 +167,8 @@ function drawList(repo, all) {
         '<h2 class="t-card" title="' + esc(e.title || "") + '">' + esc(shortTitle(e.title || r.path)) + '</h2>' + (mixTags ? '<div class="tags">' + mixTags + '</div>' : "") + '</div>' +
         (res && res.total != null ? '<div class="stack" style="align-items:flex-end;gap:0"><span class="xscore num"><b>' + esc(res.total) + '</b>/' + esc(res.max || marks) + '</span><span class="hint">' + Math.round(100 * res.total / (res.max || marks)) + '% · marks</span></div>' : "") +
         '<div class="stack s2" style="align-items:stretch">' + actions(r, st, on) + '</div></div>' +
-        (rq.length ? '<div class="xqs">' + rq.map(function (q) { var src = (qs.filter(function (x) { return x.id === q.id; })[0] || {}).source, f = q.marks ? q.score / q.marks : 0, weak = q === worst && f < 0.6;
-          return '<div class="xq' + (weak ? " weak" : "") + '"><span class="tag line">' + esc(q.label || q.id) + '</span><span class="tags">' + (src ? T.refTag(src) : "") + (weak ? tag("Weakest", "live") : "") + '</span><span class="bar' + (weak ? " live" : "") + '"><i style="width:' + Math.round(100 * f) + '%"></i></span><b class="num">' + (q.score != null ? esc(q.score) : "-") + '/' + esc(q.marks) + '</b></div>'; }).join("") + '</div>' : "") +
+        (rq.length ? '<details class="fold xqfold"><summary>Questions and marks <span class="hint">' + rq.length + ' questions' + (worst && worst.marks && worst.score / worst.marks < 0.6 ? ' \u00b7 weakest ' + esc(worst.label || worst.id) : "") + '</span></summary><div class="xqs">' + rq.map(function (q) { var src = (qs.filter(function (x) { return x.id === q.id; })[0] || {}).source, f = q.marks ? q.score / q.marks : 0, weak = q === worst && f < 0.6;
+          return '<div class="xq' + (weak ? " weak" : "") + '"><span class="tag line">' + esc(q.label || q.id) + '</span><span class="tags">' + (src ? T.refTag(src) : "") + (weak ? tag("Weakest", "live") : "") + '</span><span class="bar' + (weak ? " live" : "") + '"><i style="width:' + Math.round(100 * f) + '%"></i></span><b class="num">' + (q.score != null ? esc(q.score) : "-") + '/' + esc(q.marks) + '</b></div>'; }).join("") + '</div></details>' : "") +
         notes(e) + '</section>'; };
     var asgCard = function (r) {
       if (r.error) return '<div class="card pad"><b>' + esc(r.path) + '</b><span class="hint">' + esc(r.error) + '</span></div>';
@@ -743,9 +752,11 @@ document.addEventListener("click", function (e) {
   if (b.tagName === "IMG") { if (!b.src) return;
     /* zoomed in, a swipe or the arrow keys go to the next picture of the same kind on this page (Ali, 11 Oct) */
     var kind = function (im) { return / picture$/.test(im.alt) ? "q" : im.alt; };
-    var all = Array.prototype.filter.call(document.querySelectorAll("#app img.xt-zoomable"), function (im) { return im.src && kind(im) === kind(b); });
-    var srcs = all.map(function (im) { return im.src; }).filter(function (u, i, l) { return l.indexOf(u) === i; });   // the same picture in two places counts once
-    T.openZoom(srcs, Math.max(0, srcs.indexOf(b.src))); return; }
+    var all = Array.prototype.filter.call(document.querySelectorAll("#app img.xt-zoomable"), function (im) { return (im.src || im.getAttribute("data-xsrc")) && kind(im) === kind(b); });
+    var idOf = function (im) { return im.getAttribute("data-xsrc") || im.src; }, seen = {}, list = [], at = 0;   // the same picture in two places counts once
+    all.forEach(function (im) { var k = idOf(im); if (seen[k]) return; seen[k] = 1; if (k === idOf(b)) at = list.length;
+      list.push(im.src ? im.src : function () { return picUrl(im.getAttribute("data-xsrc")); }); });   // one not loaded yet (off screen) loads when it is reached
+    T.openZoom(list, at); return; }
   if (b.hasAttribute("data-compare")) return compare(Number(b.getAttribute("data-compare")));
   if (b.hasAttribute("data-cmpgo")) return compare(Number(b.getAttribute("data-cmpgo")));
   if (b.hasAttribute("data-cmpx")) return closeCompare();

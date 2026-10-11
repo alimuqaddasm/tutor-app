@@ -15,10 +15,11 @@ The lesson app for Ali's tutoring. Static site on GitHub Pages (`main` is live a
 
 | File | What |
 |---|---|
-| `index.html`, `app.js`, `app.css` | the teacher app (Lessons, Plan, Teach, Student view, Warm-up, Videos, Record, Settings) |
+| `index.html`, `app.js`, `app.css` | the teacher app (Lessons, Prepare, Teach, Student view, Warm-up, Videos, Record, Settings) |
 | `exams.js` | the Exams tab inside the teacher app |
 | `exam.html`, `exam.js`, `exam.css` | his exam and assignment pages, and his phone page |
 | `design.css` | the design system |
+| `title.js` | `titleCase()` for titles, on both the teacher app and his pages |
 | `sw.js` | offline shell. Bump `SHELL` and the `?v=` numbers in `index.html`/`exam.html` when a file changes |
 | `worker/` | exam server. `cd worker && npx vitest run` |
 | `tests/` | Playwright browser tests (see `tests/README.md`). They serve this folder on :8765 and never write to the real repo |

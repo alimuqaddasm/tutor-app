@@ -141,6 +141,8 @@ function merge(local, remote) {
   if (String(local.feedback.at) > String(out.feedback.at)) out.feedback = local.feedback;
   if (String(local.statusAt || "") > String(out.statusAt || "")) { out.status = local.status; out.statusAt = local.statusAt; }
   if (String(local.makeupAt || "") > String(out.makeupAt || "")) { out.makeup = local.makeup; out.makeupAt = local.makeupAt; }
+  var ad = {}; (out.added || []).concat(local.added || []).forEach(function (a) { var o = ad[a.part]; if (!o || String(a.at) > String(o.at)) ad[a.part] = a; });
+  out.added = Object.keys(ad).map(function (k) { return ad[k]; }).sort(function (a, b) { return String(a.at).localeCompare(String(b.at)); });
   ["title", "subject", "date"].forEach(function (k) { if (!out[k] && local[k]) out[k] = local[k]; });
   finalizeTime(out); return out;
 }
@@ -191,10 +193,10 @@ function nav(r) { var k = r.indexOf("/record") === 0 ? "record" : r.indexOf("/se
   $$("[data-nav]").forEach(function (a) { if (a.getAttribute("data-nav") === k) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   $("#who").textContent = CFG.token ? CFG.student + " · " + CFG.device : ""; if (typeof subjSync === "function") subjSync(); }
 function render() {
-  var r = route(); nav(r); document.body.removeAttribute("data-subject"); document.body.classList.remove("teaching", "student", "toc-open", "focus");
+  var r = route(); nav(r); document.body.removeAttribute("data-subject"); document.body.classList.remove("teaching", "student", "toc-open", "focus", "prep");
   if (!CFG.token && r.indexOf("/settings") !== 0) { location.hash = "#/settings"; return; }
   if (r.indexOf("/settings") === 0) return settingsView();
-  if (r.indexOf("/lesson/") === 0) { var rest = decodeURIComponent(r.slice(8)), mm = /\/(teach|student)$/.exec(rest); MODE = mm ? mm[1] : "plan"; return lessonView(rest.replace(/\/(teach|student)$/, "")); }
+  if (r.indexOf("/lesson/") === 0) { var rest = decodeURIComponent(r.slice(8)), mm = /\/(teach|student)$/.exec(rest); MODE = mm ? mm[1] : "teach"; PREP = !mm; return lessonView(rest.replace(/\/(teach|student)$/, "")); }
   if (r.indexOf("/new") === 0) return newView();
   if (r.indexOf("/record") === 0) return recordView();
   if (r.indexOf("/revise") === 0) return reviseView();
@@ -219,7 +221,8 @@ function settingsView() {
       '<button class="choice" type="button" data-flow="steps" aria-pressed="' + (fl === "steps") + '"><b>Step by step</b><span class="tags">' + tag("Title screens") + tag("One point at a time") + '</span></button>' +
       '<button class="choice" type="button" data-flow="quick" aria-pressed="' + (fl === "quick") + '"><b>Quick flow</b><span class="tags">' + tag("Points beside the picture") + tag("Quiz as one list") + '</span></button></div>' +
       '<div class="tags"><span class="lab">Questions</span>' + tag("Question fills the screen") + tag("Verdicts on the right edge") + tag("A turns to the answer") + '</div></div>' +
-      '<div class="field"><span class="fl">Hints in Teach</span><label class="check"><input type="checkbox" data-fold="maths"' + (foldOn("maths") ? " checked" : "") + '>Maths: fold the hints under each question</label><label class="check"><input type="checkbox" data-fold="chem"' + (foldOn("chem") ? " checked" : "") + '>Chemistry: fold the hints the same way</label></div></div>') +
+      '<div class="field"><span class="fl">Hints in Teach</span><label class="check"><input type="checkbox" data-fold="maths"' + (foldOn("maths") ? " checked" : "") + '>Maths: fold the hints under each question</label><label class="check"><input type="checkbox" data-fold="chem"' + (foldOn("chem") ? " checked" : "") + '>Chemistry: fold the hints the same way</label></div>' +
+      '<div class="field"><span class="fl">Clock reminders</span><label class="check"><input type="checkbox" id="s-chime"' + (ls("tutor.chime") === "off" ? "" : " checked") + '>Chime when the clock needs you <span class="hint">The screen still flashes when it is off</span></label></div></div>') +
     grp("s4", "Font", "Questions always keep the exam board’s font.", '<div class="card pad cols3" role="group" aria-label="Font"><input type="hidden" id="s-font" value="' + esc(f) + '">' + fonts.map(function (o) {
       return '<button class="choice" type="button" data-fontpick="' + o[0] + '" aria-pressed="' + (f === o[0]) + '"><span style="font-family:\'' + o[1] + '\',sans-serif;font-size:26px;font-weight:600;line-height:1.2">Aa</span><b>' + o[1].replace(" Next", "") + '</b><span class="hint">' + o[2] + '</span></button>'; }).join("") + '</div>') +
     grp("s5", "This device", "Install, cache and key.", '<div class="card pad stack"><div class="row"><button class="btn" type="button" id="s-install" hidden>Install on this device</button><div class="tags">' + tag("Opens full screen") + tag("Works offline") + '</div></div>' +
@@ -271,7 +274,7 @@ function card(it) {
   var sc = x ? score(x) : { n: 0 };
   return '<a class="card lesson-card" data-subject="' + esc(subj) + '" href="#/lesson/' + encodeURIComponent(it.id) + '"><div class="meta"><span class="pill ' + esc(subj) + '">' + esc(SUBJ[subj] || subj) + '</span><span>' + esc(fmtDate(s.date || (x && x.date) || p.date)) + '</span>' + st +
     (x && x.makeup ? '<span class="pill warn">Make-up</span>' : "") + (x && x.time && x.time.minutes ? '<span class="pill">' + esc(x.time.minutes) + ' min</span>' : "") + (sc.n ? '<span class="pill">' + sc.r + '/' + sc.n + ' right</span>' : "") + (it.marking ? '<span class="pill ok">Marked</span>' : it.work ? '<span class="pill warn">' + it.work + ' photo' + (it.work > 1 ? "s" : "") + '</span>' : "") + '</div>' +
-    '<h3>' + esc(s.title || (x && x.title) || "Lesson") + '</h3>' + (s.summary ? '<div class="hint">' + clean(s.summary) + '</div>' : "") + '</a>';
+    '<h3>' + esc(lessonTitle(s, x)) + '</h3>' + (s.summary ? '<div class="hint">' + clean(s.summary) + '</div>' : "") + '</a>';
 }
 function score(x) { var r = 0, n = 0; Object.keys(x.answers || {}).forEach(function (k) { var v = x.answers[k].v; if (!asked(v) || v === "skipped") return; n++; if (v === "right") r++; }); (x.extra || []).forEach(function (e) { if (!asked(e.v) || e.v === "skipped") return; n++; if (e.v === "right") r++; }); return { r: r, n: n }; }
 
@@ -289,11 +292,11 @@ function partsOf(s, x) { if (!s || !s.phases) return [];
 /* a tag starts with a capital (Ali, 8 Oct), whatever the data says; "pH" and the like stay as they are */
 function tag(txt, cls) { txt = String(txt); if (/^[a-z][a-z]/.test(txt)) txt = txt.charAt(0).toUpperCase() + txt.slice(1); return '<span class="tag' + (cls ? " " + cls : "") + '">' + txt + '</span>'; }
 function subjTag(sj) { return tag('<span class="dot"></span>' + esc(SUBJ[sj] || sj), esc(sj)); }
-function topicTag(s) { var tp = s && s.topic; if (!tp || !(tp.code || tp.name)) return ""; return tag((tp.code ? '<b>' + esc(tp.code) + '</b>' : "") + esc(tp.name || ""), "topic"); }
+function topicTag(s) { var tp = s && s.topic; if (!tp || !(tp.code || tp.name)) return ""; return tag((tp.code ? '<b>' + esc(tp.code) + '</b>' : "") + esc(titleCase(tp.name || "")), "topic"); }
 /* first letter upper case on every label (Ali, 8 Oct) */
 function cap(s) { s = String(s == null ? "" : s); return s.charAt(0).toUpperCase() + s.slice(1); }
 /* "4 binomial expansion" or "3.3.7 optical isomerism" as a topic tag: the number bold, the name after it */
-function topicStrTag(s) { var m = /^(\d+(?:\.\d+)*)\s+(.+)$/.exec(String(s || "").trim()); if (!m) return s ? tag(esc(cap(s)), "topic") : ""; return tag('<b>' + esc(m[1]) + '</b>' + esc(cap(m[2])), "topic"); }
+function topicStrTag(s) { var m = /^(\d+(?:\.\d+)*)\s+(.+)$/.exec(String(s || "").trim()); if (!m) return s ? tag(esc(titleCase(s)), "topic") : ""; return tag('<b>' + esc(m[1]) + '</b>' + esc(titleCase(m[2])), "topic"); }
 /* "Edexcel C3 January 2010 Q8" as a source reference: publisher | paper | question */
 var PUBS = ["Maths Genie", "Chemistry Tutor", "Solomon", "Edexcel", "AQA", "OCR", "CGP", "Pearson", "Physics and Maths Tutor", "PMT"];
 function refTag(src) { src = String(src || "").replace(/\s*\((?![a-z]{1,4}\))[^)]*\)/g, "").replace(/Trigonometry Worksheet/g, "Trig").replace(/,\s*(?=Q\d)/, " ").trim(); if (!src) return "";
@@ -312,7 +315,7 @@ function kindOf(name) { name = String(name || "").trim(); for (var i = 0; i < KI
 function partKinds(s) { var seen = {}; return ((s && s.phases) || []).map(function (p) { return kindOf(p.name); }).filter(function (k) { if (!k || k === "If time" || k === "Bank" || k === "Recycle" || k === "Homework" || seen[k]) return false; seen[k] = 1; return true; }); }
 function kindsHTML(s) { var ks = partKinds(s); return ks.length ? '<span class="kinds">' + ks.map(function (k) { return '<span class="k' + (k === "If time" ? " opt" : "") + '">' + esc(k) + '</span>'; }).join("") + '</span>' : ""; }
 /* a part's name without its kind ("Practice: Set 6, Q15 to Q18" shows as "Set 6, Q15 to Q18" under a Practice tag) */
-function partTitle(name) { var k = kindOf(name), m = /^[^:]{2,24}:\s*(.+)$/.exec(String(name || "")); return k && m ? m[1].charAt(0).toUpperCase() + m[1].slice(1) : name; }
+function partTitle(name) { var k = kindOf(name), m = /^[^:]{2,24}:\s*(.+)$/.exec(String(name || "")); return titleCase(k && m ? m[1] : name); }
 /* the lesson's title is its main topic. Older titles list the parts ("Hard quiz, then Tollens'"): show the part after "then" */
 function lessonTitle(s, x) { return lessonParts(s, x).name; }
 /* "7.1 Addition formulae" splits into a topic tag (7.1) and the name; "the chapters 1 to 6 test" into an Exam tag and "Chapters 1 to 6" (Ali, 8 Oct) */
@@ -320,7 +323,7 @@ function lessonParts(s, x) { var t = (s && s.title) || (x && x.title) || "Lesson
   if (!(s && s.topic)) { var m = /,\s*then\s+(?:the\s+)?(.+)$/i.exec(t); if (m) t = m[1]; t = t.replace(/,\s*after\s+.+$/i, ""); }
   var c = /^(\d+(?:\.\d+)+)\s+(.+)$/.exec(t), code = c ? c[1] : ""; if (c) t = c[2];
   var e = /^(.+?)\s+(test|exam|mock)$/i.exec(t), exam = !!e; if (e) t = e[1];
-  return { name: cap(t), code: code, exam: exam }; }
+  return { name: titleCase(t), code: code, exam: exam }; }
 /* the tags a lesson title carries: its section number (when the topic tag doesn't show it already) and Exam */
 function lessonTags(s, x) { var p = lessonParts(s, x), tp = s && s.topic; return (p.code && !(tp && tp.code) ? tag('<b>' + esc(p.code) + '</b>', "topic") : "") + (p.exam ? tag("Exam", "live") : ""); }
 /* ---------------- missed lessons and make-up time ----------------
@@ -408,7 +411,7 @@ function homeHTML(items) {
       var flow = ps.length ? '<div class="flow ' + esc(sj) + '">' + ps.filter(function (p) { var k = kindOf(p.name); return k !== "Bank" && k !== "Recycle" && k !== "If time"; }).map(function (p, i) { var k = kindOf(p.name) || p.name; if (k === "Keep it fresh") k = "Fresh";
         return '<span style="flex:' + p.w + '"' + (i === cur ? ' class="on"' : k === "If time" ? ' class="opt"' : "") + ' title="' + esc(p.name) + '"><i></i><em>' + esc(k) + '</em></span>'; }).join("") + '</div>' : "";
       return '<article class="tile" data-subject="' + sj + '"><div class="tags">' + subjTag(sj) + topicTag(s) + lessonTags(s, x) + st + when + '</div><h2>' + esc(lessonTitle(s, x)) + '</h2>' + flow +
-        '<div class="acts"><a class="btn go" href="#/lesson/' + encodeURIComponent(up.id) + '/teach">Teach ▶</a><a class="btn" href="#/lesson/' + encodeURIComponent(up.id) + '">Open the plan</a>' + tag(mins + " min") + '</div></article>'; }
+        '<div class="acts"><a class="btn go" href="#/lesson/' + encodeURIComponent(up.id) + '/teach">Teach ▶</a><a class="btn" href="#/lesson/' + encodeURIComponent(up.id) + '">Prepare</a>' + tag(mins + " min") + '</div></article>'; }
     return '<article class="tile none" data-subject="' + sj + '"><div class="tags">' + subjTag(sj) + tag("No script yet", "dash") + '</div><h2>Next ' + esc(SUBJ[sj].toLowerCase()) + ' lesson</h2>' +
       (last ? '<div class="tags"><span class="hint">Last</span>' + tag(esc(fmtDate(dateOf(last)))) + tag(esc(lessonTitle(last.s, last.x)), "line") + '</div>' : '<p>Ask Claude to draft the first script.</p>') +
       '<div class="acts"><button class="btn go" type="button" data-askclaude="' + sj + '">Draft it with Claude</button><a class="btn quiet" href="#/new">Log without a script</a></div></article>';
@@ -462,7 +465,7 @@ document.addEventListener("click", function (e) { var b = e.target.closest && e.
 /* ---------------- new unscripted lesson ---------------- */
 function newView() {
   var sj = subjPick() === "maths" ? "maths" : "chem";
-  app.innerHTML = '<div class="wrap narrow" style="max-width:640px"><header class="stack s3"><div class="crumb"><a href="#/">Lessons</a><span aria-hidden="true">/</span><span>New</span></div><h1 class="t-title">Log a lesson without a script</h1><div class="tags">' + tag("Add notes, photos and times after") + '</div></header>' +
+  app.innerHTML = '<div class="wrap narrow" style="max-width:640px"><header class="stack s3"><div class="crumb"><a href="#/">Lessons</a><span aria-hidden="true">/</span><span>New</span></div><h1 class="t-title">Log a Lesson Without a Script</h1><div class="tags">' + tag("Add notes, photos and times after") + '</div></header>' +
     '<form class="card pad-l stack s5" id="newform"><input type="hidden" id="n-subj" value="' + sj + '"><div class="field"><span class="fl">Subject</span><div class="row" role="group" aria-label="Subject">' +
     [["chem", "Chemistry"], ["maths", "Maths"]].map(function (o) { return '<button class="pick" type="button" data-subject="' + o[0] + '" data-npick="' + o[0] + '" aria-pressed="' + (sj === o[0]) + '"><span class="dot ' + o[0] + '"></span>' + o[1] + '</button>'; }).join("") + '</div></div>' +
     '<div class="field"><label for="n-date">Date</label><input class="input" type="date" id="n-date" value="' + todayIso() + '" required></div>' +
@@ -502,7 +505,7 @@ function lessonView(id) {
       var ph = (L && L.id === id) ? L.phase : OPENAT && OPENAT.id === id ? OPENAT.phase : null; OPENAT = null;
       L = { id: id, script: script, session: session, sha: sha, dirty: dirty, marking: marking, phase: ph, filter: null, rev: 0 };
       if (dirty) flush();
-      drawLesson();
+      return loadStores().then(function () { if (L && L.id === id) drawLesson(); });
     });
   }
   if (TRY && L && L.id === id) { drawLesson(); return; }
@@ -518,10 +521,13 @@ function phases() {
     if ((s.quiz || []).length) ps.push({ id: "quiz", name: "Oral quiz", blocks: [{ type: "quiz", id: "quiz", items: s.quiz }] });
     if ((s.questions || []).length) ps.push({ id: "qs", name: "Questions", blocks: s.questions.map(function (q) { return Object.assign({ type: "question" }, q); }) });
   } else ps.push({ id: "lesson", name: "Lesson", blocks: [{ type: "text", html: "<p>No script for this lesson. Use <b>Extra questions</b> to log what he answered, and <b>After the lesson</b> for notes.</p>" }] });
+  addedParts().forEach(function (a) { var at = -1; ps.forEach(function (p, i) { if (p.id === a.after) at = i; });
+    if (at < 0) ps.push(a.part); else { while (at + 1 < ps.length && ps[at + 1].fromStore && ps[at + 1].after === a.after) at++; ps.splice(at + 1, 0, a.part); } });
   ps.push({ id: "_revise", name: "Mistakes warm-up", sys: 1 }, { id: "_extra", name: "Extra questions", sys: 1 }, { id: "_work", name: "His work", sys: 1 }, { id: "_time", name: "Times", sys: 1 }, { id: "_after", name: "After the lesson", sys: 1 });
   return ps;
 }
 function drawLesson() {
+  if (PREP) { if (!L.phase && L.session.status === "finished") L.phase = "_after"; MODE = /^_/.test(L.phase || "") ? "plan" : "teach"; }
   if (MODE === "teach") return drawTeach();
   if (MODE === "student") return drawStudent();
   var s = L.script || {}, x = L.session, subj = s.subject || x.subject;
@@ -547,7 +553,7 @@ function drawLesson() {
     var tm = p.sys ? ({ _revise: REV ? dueList(x.subject).length + " " + (SUBJ[x.subject] || "").toLowerCase() + " due" : "His old mistakes", _extra: x.extra.length ? x.extra.length + " logged" : "None yet", _work: live ? live + (live > 1 ? " photos" : " photo") : "No photos yet", _time: x.time.minutes != null ? Math.round(x.time.minutes) + " min" + (x.time.started ? " · " + hhmm(x.time.started) + (x.time.ended ? " to " + hhmm(x.time.ended) : "") : "") : "Not recorded yet", _after: x.feedback && x.feedback.at ? "Saved " + hhmm(x.feedback.at) : "Notes and finish" })[p.id]
       : [planned, pm ? "took " + pm + " min" : "", phaseCount(p)].filter(Boolean).join(" · ");
     var kd = p.sys ? "" : kindOf(p.name);
-    return (p.id === "_revise" ? '<div class="sep"></div><div class="railh">Around the lesson</div>' : i === 0 ? '<div class="railh">Parts</div>' : "") + '<button type="button" class="' + (kd === "If time" ? "opt" : "") + '" data-phase="' + esc(p.id) + '" data-real="' + (p.sys ? "" : "1") + '"' + (p.id === L.phase ? ' aria-current="step"' : "") + '><span class="n">' + (p.sys ? '<svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true">' + ICO[p.id] + '</svg>' : i + 1) + '</span>' + (kd ? '<span class="tags">' + tag(esc(kd), kd === "If time" ? "dash" : "line") + '</span>' : "") + '<span class="nm">' + esc(kd ? partTitle(p.name) : p.name) + '</span><span class="tm num">' + esc(cap(tm)) + '</span></button>';
+    return (p.id === "_revise" ? '<div class="sep"></div><div class="railh">Around the lesson</div>' : i === 0 ? '<div class="railh">Parts</div>' : "") + '<button type="button" class="' + (kd === "If time" ? "opt" : "") + '" data-phase="' + esc(p.id) + '" data-real="' + (p.sys ? "" : "1") + '"' + (p.id === L.phase ? ' aria-current="step"' : "") + '><span class="n">' + (p.sys ? '<svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true">' + ICO[p.id] + '</svg>' : i + 1) + '</span>' + (kd ? '<span class="tags">' + tag(esc(kd), kd === "If time" ? "dash" : "line") + '</span>' : "") + '<span class="nm">' + esc(partTitle(p.name)) + '</span><span class="tm num">' + esc(cap(tm)) + '</span></button>';
   }).join("") + '</nav><section class="page" id="phasebox"></section></div>';
   app.innerHTML = h; drawPhase(); tick(); prefetchLesson(); if (STARTCLOCK === L.id) { STARTCLOCK = null; var cg = $("#clkgo"); if (cg) cg.click(); }
 }
@@ -558,7 +564,7 @@ function railCount() { var p = phases().filter(function (q) { return q.id === L.
 function drawPhase() {
   var ps = phases(), p = ps.filter(function (q) { return q.id === L.phase; })[0], box = $("#phasebox"), h = "";
     var nq = slidesOf(p).length, kd = kindOf(p.name), real2 = ps.filter(function (q) { return !q.sys; });
-    h += '<div class="head" style="align-items:center"><div class="stack s2"><div class="tags">' + tag("Part " + (real2.indexOf(p) + 1)) + (kd ? tag(esc(kd), kd === "If time" ? "dash" : "line") : "") + (p.start != null ? tag(p.start + " to " + p.end + " min", "num") : "") + '</div><h2 class="t-title" style="font-size:28px">' + esc(kd ? partTitle(p.name) : p.name) + '</h2></div>' + (nq ? '<button class="btn accent-soft" type="button" data-show="*">Show him all ' + nq + '</button>' : "") + '</div>';
+    h += '<div class="head" style="align-items:center"><div class="stack s2"><div class="tags">' + tag("Part " + (real2.indexOf(p) + 1)) + (kd ? tag(esc(kd), kd === "If time" ? "dash" : "line") : "") + (p.start != null ? tag(p.start + " to " + p.end + " min", "num") : "") + '</div><h2 class="t-title" style="font-size:28px">' + esc(partTitle(p.name)) + '</h2></div>' + (nq ? '<button class="btn accent-soft" type="button" data-show="*">Show him all ' + nq + '</button>' : "") + '</div>';
     if (p.show) h += '<div class="screen"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg><div class="stack" style="gap:2px"><span class="lab">On his screen</span><div>' + clean(p.show) + '</div></div></div>';
     h += blocks(p.blocks || []);
     var i = ps.indexOf(p), nx = ps[i + 1]; if (nx) h += '<div class="row" style="justify-content:flex-end"><button class="btn accent" type="button" data-phase="' + esc(nx.id) + '" data-real="' + (nx.sys ? "" : "1") + '">Next: ' + esc(nx.sys ? nx.name : partTitle(nx.name)) + ' <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button></div>';
@@ -737,7 +743,7 @@ function prefetchAhead(chunks) { var first = [];
 function sysPage(id) { return id === "_extra" ? extraView() : id === "_work" ? workView() : id === "_time" ? timeView() : id === "_after" ? afterView() : reviseLesson(); }
 function pageHead(title, hint, right) { var s = L.script || {}, x = L.session, subj = s.subject || x.subject, first = phases()[0];
   return '<header class="stack s3"><div class="crumb"><button type="button" data-phase="' + esc(first.id) + '" data-real="">' + esc(lessonTitle(s, x)) + '</button><span aria-hidden="true">/</span><span>' + esc(title) + '</span></div>' +
-    '<div class="head"><div class="stack s2"><div class="tags">' + subjTag(subj) + tag(esc(fmtDate(x.date || s.date))) + topicTag(s) + '</div><h1 class="t-title">' + esc(title) + '</h1>' + (hint ? '<span class="hint">' + hint + '</span>' : "") + '</div>' + (right || "") + '</div></header>'; }
+    '<div class="head"><div class="stack s2"><div class="tags">' + subjTag(subj) + tag(esc(fmtDate(x.date || s.date))) + topicTag(s) + '</div><h1 class="t-title">' + esc(titleCase(title)) + '</h1>' + (hint ? '<span class="hint">' + hint + '</span>' : "") + '</div>' + (right || "") + '</div></header>'; }
 function reviseLesson() { return pageHead("Mistakes warm-up", "His old mistakes, back on day 1, 3, 7, 14 and 30 until he gets them right.", '<div id="revseg"></div>') + '<div class="tags" id="revtags"></div><div id="revbox" class="stack s5" style="max-width:840px"></div>'; }
 function extraView() {
   var x = L.session;
@@ -785,7 +791,7 @@ function timeView() {
   var h = pageHead("Part times", "Change anything. Leave a box empty to use the clock’s time.");
   h += '<div class="card pad-l stack s5" style="max-width:860px">' + timeFields(x, true);
   var real = phases().filter(function (p) { return !p.sys; });
-  h += '<div class="field"><span class="fl">Minutes per part</span><div class="cols3">' + real.map(function (p) { var e = (ed.phaseMinutes || {})[p.id], k = kindOf(p.name); return '<div class="field"><label for="tp-' + esc(p.id) + '" class="row s2">' + (k ? tag(esc(k), "line") : "") + '<span>' + esc(k ? partTitle(p.name) : p.name) + '</span></label><input class="input" type="number" id="tp-' + esc(p.id) + '" data-tp="' + esc(p.id) + '" min="0" step="0.5" inputmode="decimal" value="' + esc(e != null ? e : "") + '" placeholder="' + esc((a.phaseMinutes || {})[p.id] != null ? a.phaseMinutes[p.id] : "") + '"></div>'; }).join("") + '</div></div>';
+  h += '<div class="field"><span class="fl">Minutes per part</span><div class="cols3">' + real.map(function (p) { var e = (ed.phaseMinutes || {})[p.id], k = kindOf(p.name); return '<div class="field"><label for="tp-' + esc(p.id) + '" class="row s2">' + (k ? tag(esc(k), "line") : "") + '<span>' + esc(partTitle(p.name)) + '</span></label><input class="input" type="number" id="tp-' + esc(p.id) + '" data-tp="' + esc(p.id) + '" min="0" step="0.5" inputmode="decimal" value="' + esc(e != null ? e : "") + '" placeholder="' + esc((a.phaseMinutes || {})[p.id] != null ? a.phaseMinutes[p.id] : "") + '"></div>'; }).join("") + '</div></div>';
   h += '<div class="row">' + (ended ? '<button class="btn" type="button" id="tm-undo">Undo “End lesson”</button>' : "") + '<button class="btn" type="button" id="tm-clear">Clear typed times</button><button class="btn danger" type="button" id="tm-reset">Reset the clock</button></div></div>';
   if (t.log.length) h += '<details class="fold" style="max-width:860px"><summary>Clock history (' + t.log.length + ' taps)</summary><div class="list">' + t.log.map(function (e, i) { var pn = e.p ? (phases().filter(function (p) { return p.id === e.p; })[0] || {}).name : "";
     return '<div class="row" style="padding:var(--s2) var(--s4)"><span class="num" style="min-width:3.5em">' + esc(hhmm(e.t)) + '</span><span>' + esc({ start: "Started", pause: "Paused", resume: "Resumed", phase: "Moved to", end: "Ended" }[e.e] || cap(e.e)) + (pn ? " · " + esc(pn) : "") + '</span><span class="hint">' + esc(cap(e.d || "")) + '</span><button class="btn sm danger push" type="button" data-logdel="' + i + '">Delete</button></div>'; }).join("") + '</div></details>';
@@ -826,7 +832,7 @@ function afterView() {
     return '<li data-item="' + esc(k) + '"><div class="tags"><b>' + esc(labelOf(k)) + '</b>' + (a.v && VTAG[a.v] ? tag(VTAG[a.v][0], VTAG[a.v][1]) : "") + '</div>' + noteBox(a.note) + '</li>'; })
     .concat(x.extra.filter(function (e) { return e.note; }).map(function (e) { return '<li data-item="x:' + esc(e.id) + '"><b>' + esc(e.q) + '</b>' + noteBox(e.note) + '</li>'; }));
   function fld(id, label, key, ph, area, def, extra) { var v = fb[key] != null ? fb[key] : (def || ""); return '<div class="field"><label for="' + id + '">' + esc(label) + '</label>' + (extra || "") + (area ? '<textarea class="input" style="min-height:72px" id="' + id + '" data-fb="' + key + '" placeholder="' + esc(ph || "") + '">' + esc(v) + '</textarea>' : '<input class="input" type="text" id="' + id + '" data-fb="' + key + '" value="' + esc(v) + '" placeholder="' + esc(ph || "") + '">') + '</div>'; }
-  h += '<div class="split"><form class="grow card pad-l stack s5" id="fbform">' +
+  h += tapBanner() + '<div class="split"><form class="grow card pad-l stack s5" id="fbform">' +
     fld("fb-cov", "What you actually covered", "covered", "e.g. Got to 3c, skipped the NaBH₄ drill", true, covTxt.join("\n"), cov.length ? '<div class="tags">' + cov.join("") + '</div>' : "") +
     (fb.at ? "" : '<span class="hint" style="margin-top:-12px">Filled in from your ticks. Change anything.</span>') +
     fld("fb-stuck", "Where he got stuck", "stuck", "", true, stuckTxt.join("\n")) +
@@ -853,7 +859,7 @@ function tick() {
   if (MODE === "teach") runwayTick(r);
 }
 setInterval(function () { if (L && replay(L.session.time.log).running) tick(); }, 1000);
-function logEvent(e, p) { L.session.time.log.push({ t: now(), e: e, p: p || undefined, d: CFG.device }); L.session.time.editAt = now(); touch(); }
+function logEvent(e, p) { var t = now(); L.session.time.log.push({ t: t, e: e, p: p || undefined, d: CFG.device }); L.session.time.editAt = now(); clockState(e, t); touch(); }
 
 /* ---------------- events ---------------- */
 var armed = null;
@@ -872,6 +878,7 @@ document.addEventListener("click", function (ev) {
     x.done[k] = on ? { at: now(), d: CFG.device, label: t.getAttribute("data-lab") } : { off: true, at: now(), label: t.getAttribute("data-lab") };
     t.setAttribute("aria-pressed", String(on)); var host = t.closest("[data-tk]"); if (host) host.classList.toggle("done", on); touch(); railCount(); return; }
   if (t.hasAttribute("data-phase")) { var id = t.getAttribute("data-phase"); var r = replay(x.time.log);
+    if (MODE === "teach" && !PREP) { L.phase = id; location.hash = "#/lesson/" + encodeURIComponent(L.id); return; }
     if (t.getAttribute("data-real") && r.running && r.phase !== id) logEvent("phase", id);
     L.phase = id; drawLesson();
     /* a new part always starts at its top: jump up if we were scrolled past it */
@@ -890,7 +897,9 @@ document.addEventListener("click", function (ev) {
   if (t.id === "reopen") { x.status = "in-progress"; x.statusAt = now(); touch(); drawLesson(); return; }
   if (t.hasAttribute("data-qf")) { L.filter = t.getAttribute("data-qf"); ls(qfKey(), L.filter); if (MODE === "teach") drawTeach(); else drawPhase(); return; }
   if (t.hasAttribute("data-ans")) { var qa = t.parentNode.querySelector(".qa"); qa.hidden = !qa.hidden; t.textContent = qa.hidden ? "Show answer" : "Hide answer"; return; }
-  if (t.hasAttribute("data-v") && !t.hasAttribute("data-rev") && previewing()) { toast("Preview: press Start lesson first to record verdicts"); return; }
+  if (t.hasAttribute("data-v") && !t.hasAttribute("data-rev") && PREP && MODE === "teach") return;
+  if (t.hasAttribute("data-v") && !t.hasAttribute("data-rev") && previewing()) { noteTap(); CK.off = Math.max(CK.off, 3); if (!$("#ckask")) clockAsk("start", { retry: t }); else toast("Start the lesson first to record verdicts"); return; }
+  if (t.hasAttribute("data-v") && !t.hasAttribute("data-rev") && MODE === "teach") noteTap();
   if (t.hasAttribute("data-v")) { var box = t.closest("[data-item]"), iid = box.getAttribute("data-item"), v = t.getAttribute("data-v"), a = target(iid);
     if (a.v === v && a.at && Date.now() - Date.parse(a.at) < 600) return;   // a nervous double tap keeps the mark
     if (v === "right" && box.classList.contains("vrail") && BOARD.jumped && Date.now() - BOARD.jumped < 450) return;   // a double tap on ✓ must not mark the question that just opened
@@ -936,7 +945,7 @@ document.addEventListener("submit", function (ev) {
     if (taken(id)) { if (confirm("There is already a " + ($("#n-subj").value === "chem" ? "chemistry" : "maths") + " lesson on this date.\n\nOK: open that lesson.\nCancel: log a separate lesson.")) { location.hash = "#/lesson/" + encodeURIComponent(id); return; }
       for (var n = 2; taken(id + "-" + n); n++) {} id = id + "-" + n; }
     var sess = newSession(id, null); sess.title = $("#n-title").value.trim(); sess.subject = $("#n-subj").value; sess.date = $("#n-date").value; if ($("#n-makeup").checked) { sess.makeup = true; sess.makeupAt = now(); }
-    ls(localKey(id), JSON.stringify({ session: sess, sha: null, dirty: true })); STARTCLOCK = NEWCLOCK ? id : null; location.hash = "#/lesson/" + encodeURIComponent(id); return; }
+    ls(localKey(id), JSON.stringify({ session: sess, sha: null, dirty: true })); STARTCLOCK = NEWCLOCK ? id : null; location.hash = "#/lesson/" + encodeURIComponent(id) + (NEWCLOCK ? "/teach" : ""); return; }
   if (f.id === "tsform") return saveTest();
   if (!L) return; var x = L.session;
   if (f.id === "exform") { var q = $("#ex-q").value.trim(); if (!q) return; var sel = $("[data-exv][aria-pressed='true']");
@@ -1107,7 +1116,10 @@ function loadRevise(force) {
 }
 function dueList(subject) { if (!REV) return []; var t = todayIso();
   return REV.ms.filter(function (m) { var r = REV.rv[m.key]; if (m.fixed && !r) return false; if (r && r.box >= GAPS.length) return false; if (subject && m.subject && m.subject !== subject) return false; return !r || r.due <= t; })
-    .sort(function (a, b) { var ra = REV.rv[a.key], rb = REV.rv[b.key]; return String(ra ? ra.due : a.date).localeCompare(String(rb ? rb.due : b.date)); }); }
+    .sort(function (a, b) { return shufKey(a.key).localeCompare(shufKey(b.key)); }); }
+/* the order is shuffled each day, and again with Shuffle (Ali, 11 Oct: "randomize warm up mistakes on every 24 hours") */
+function revSeed(bump) { var t = todayIso(), o = null; try { o = JSON.parse(ls("tutor.revseed") || "null"); } catch (e) {} if (!o || o.d !== t) o = { d: t, s: 0 }; if (bump) { o.s++; ls("tutor.revseed", JSON.stringify(o)); } return o.s; }
+function shufKey(k) { return hkey(k + "|" + todayIso() + "|" + revSeed()); }
 function markRevise(key, ok) { var r = REV.rv[key] || { box: 0, history: [] }, t = todayIso();
   r.box = ok ? r.box + 1 : 0;
   r.due = !ok ? addDays(t, 1) : r.box >= GAPS.length ? "done" : addDays(t, GAPS[r.box - 1]);
@@ -1138,7 +1150,7 @@ function drawRevise() {
   if (!due.length) { box.innerHTML = seg + '<div class="empty"><b class="t-card">Nothing due today</b><span class="hint">' + (all ? "Every mistake is either mastered or comes back on a later day." : "No mistakes logged yet. They arrive when Claude closes a lesson.") + '</span></div>'; return; }
   if (revState.i >= due.length) revState.i = 0;
   var m = due[revState.i], r = REV.rv[m.key], bx = r ? r.box : 0, vt = VTAG[m.type];
-  box.innerHTML = seg + '<div class="row"><b class="num" style="font-size:15px">Card ' + (revState.i + 1) + ' of ' + due.length + '</b><div class="bar live" style="flex:1"><i style="width:' + Math.max(2, Math.round(100 * (revState.i + 1) / due.length)) + '%"></i></div></div>' +
+  box.innerHTML = seg + '<div class="row"><b class="num" style="font-size:15px">Card ' + (revState.i + 1) + ' of ' + due.length + '</b><div class="bar live" style="flex:1"><i style="width:' + Math.max(2, Math.round(100 * (revState.i + 1) / due.length)) + '%"></i></div><button class="btn sm" type="button" data-rev="shuffle" title="A new order. It also changes by itself every day.">Shuffle</button></div>' +
     '<article class="card raised stack s6 revcard"><div class="row"><div class="tags">' + (m.subject ? subjTag(m.subject) : "") + topicStrTag(m.topic) + (vt ? tag(vt[0], vt[1]) : "") + '</div>' +
     '<div class="row s2 push" aria-label="Review ' + (bx + 1) + ' of ' + GAPS.length + ', day ' + GAPS[Math.min(bx, GAPS.length - 1)] + '">' + GAPS.map(function (g, k) { return '<span class="box' + (k < bx ? " done" : k === bx ? " on" : "") + '"><i></i>' + g + '</span>'; }).join("") + '</div></div>' +
     '<div class="stack s3"><span class="lab">Ask him</span><div class="rev-q ' + (m.subject === "maths" ? "q-edexcel" : "q-aqa") + '">' + clean(m.ask || ("What’s the correct version of this? “" + (m.text || m.what || "") + "”")) + '</div></div>' +
@@ -1147,11 +1159,12 @@ function drawRevise() {
     '<div class="tags" style="justify-content:center">' + tag("Got it: back on day " + GAPS[Math.min(bx + 1, GAPS.length - 1)]) + tag("Still wrong: day 1 again") + tag("Done after day 30") + '</div>';
   maths(box);
 }
-function reviseView() { app.innerHTML = '<div class="wrap narrow" style="max-width:840px"><header class="head"><div class="stack s2"><h1 class="t-title">Mistakes warm-up</h1><div class="tags" id="revtags"></div></div><div id="revseg"></div></header><div id="revbox" class="stack s5"></div></div>'; reviseInto($("#revbox"), subjPick() === "all" ? null : subjPick()); }
+function reviseView() { app.innerHTML = '<div class="wrap narrow" style="max-width:840px"><header class="head"><div class="stack s2"><h1 class="t-title">Mistakes Warm-up</h1><div class="tags" id="revtags"></div></div><div id="revseg"></div></header><div id="revbox" class="stack s5"></div></div>'; reviseInto($("#revbox"), subjPick() === "all" ? null : subjPick()); }
 document.addEventListener("click", function (e) { var t = e.target.closest("button, summary[data-rev]"); if (!t || !REV || !revState.box || !revState.box.isConnected) return;
   if (t.hasAttribute("data-rsub")) { revState.subj = t.getAttribute("data-rsub") || null; revState.i = 0; revState.open = false; drawRevise(); return; }
   var a = t.getAttribute("data-rev"); if (!a) return; e.stopPropagation(); var due = dueList(revState.subj), m = due[revState.i];
   if (a === "open") { e.preventDefault(); revState.open = !revState.open; drawRevise(); return; }
+  if (a === "shuffle") { for (var sh = 0; sh < 12; sh++) { revSeed(true); var nd2 = dueList(revState.subj); if (nd2.length < 2 || nd2[0] !== m) break; } revState.i = 0; revState.open = false; drawRevise(); toast("Shuffled"); return; }
   if (a === "skip") { revState.i = (revState.i + 1) % Math.max(1, due.length); revState.open = false; drawRevise(); return; }
   if (m) { markRevise(m.key, a === "ok"); var nd = REV.rv[m.key].due; toast(a === "ok" ? (nd === "done" ? "Mastered" : "Back on " + fmtDate(nd)) : "Back tomorrow"); }
   revState.open = false; drawRevise(); }, true);
@@ -1242,6 +1255,9 @@ function maths(el) { if (!el || !/\\\(|\\\[|\$\$/.test(el.textContent)) return; 
    and moves on, "Next" only moves on (to look ahead), "Skip" records that you skipped it on purpose.
    Every chunk can be reached from the outline. */
 var MODE = "plan", TCH = { id: null, pos: 0, seq: [], open: {} };
+/* Prepare (Ali, 11 Oct): "Open" shows the same screens as Teach, in the same order and layout, with nothing to record:
+   no clock, no ticks, no verdicts, no Show him, no reminders. Its place in the script is kept apart from Teach's. */
+var PREP = false;
 function quizOn(it, f) { return f === "all" || (f === "star" && it.star) || f === it.kind || ("t:" + it.topic) === f; }
 function quizChoices(items) { var hasStar = items.some(function (i) { return i.star; }), topics = {};
   items.forEach(function (i) { if (i.topic) topics[i.topic] = 1; });
@@ -1270,6 +1286,13 @@ function teachSeq() {
     })(p.blocks, null);
   });
   seq.push({ t: "end" });
+  /* a board that grows click by click (questions in a row with the same "Board: ..." label, or "grow": true): Ali sees
+     the full board on every click, his screen still builds up (Ali, 11 Oct) */
+  var run = [];
+  seq.concat([{ t: "end" }]).forEach(function (c) { var g = c.t === "question" && (c.b.img || []).length && (c.b.grow || /^board\b/i.test(c.b.label || "")) ? c : null;
+    if (g && run.length && (run[0].p !== g.p || run[0].mod !== g.mod || run[0].b.label !== g.b.label)) { done(); }
+    if (g) run.push(g); else if (c.t === "question" || c.t === "phase" || c.t === "mod" || c.t === "end") done(); });
+  function done() { if (run.length > 1) { var last = run[run.length - 1].b.img; run.slice(0, -1).forEach(function (c, i) { c.full = last; c.click = [i + 1, run.length]; }); } run = []; }
   /* hints: the steps and notes right after a question fold into that question's screen, closed (Ali, 2 Oct:
      "he is good at maths, keep them hidden until I want them"). On by default for maths; Settings switches it. */
   if (foldOn((L.script && L.script.subject) || L.session.subject)) { var fs = [], host = null;
@@ -1527,10 +1550,10 @@ document.addEventListener("keydown", function (e) { if ((e.key !== "m" && e.key 
   var ae = document.activeElement; if (ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) return;
   var box = $(".chunk.cur .vrail[data-item]") || $(".chunk.cur .ctl.big:not(.vrail), .tfoot .ctl.big"); if (box && SR) { e.preventDefault(); if (!MIC) micStart(box); } });
 document.addEventListener("keyup", function (e) { if ((e.key === "m" || e.key === "M") && MIC) micStop(); });
-function tposKey() { return "tutor.tpos." + CFG.student + "." + L.id; }
+function tposKey() { return "tutor.tpos." + CFG.student + "." + L.id + (PREP ? ".prep" : ""); }
 function live() { return replay(L.session.time.log).running; }
 /* Teach before the clock has ever started: rehearsing, so verdict taps are not recorded */
-function previewing() { return MODE === "teach" && L && !(L.session.time.log || []).length && L.session.status !== "finished"; }
+function previewing() { return MODE === "teach" && L && (PREP || !(L.session.time.log || []).length && L.session.status !== "finished"); }
 var TLTAG = { q: "ask", ask: "ask", check: "ok", draw: "bad", say: "chem", show: "maths", core: "line", deep: "dash", "do": "line" };
 function tlabel(kind, ic, text) { return '<div class="tlabel k-' + kind + '"><span class="tag lg ' + (TLTAG[kind] || "line") + '">' + esc(cap(text)) + '</span></div>'; }
 var KIC = { say: "S", draw: "D", ask: "?", show: "▣", check: "✓" };
@@ -1552,7 +1575,7 @@ function iconOf(c) { return c.t === "step" ? (KIC[c.it.kind] || "→") : c.t ===
 function chunkHTML(c) {
   var k = chunkKey(c), tk = k && { step: 1, text: 1, mod: 1 }[c.t] ? '<span class="ctick">' + tick_(k, shortOf(c)) + '</span>' : "";
   switch (c.t) {
-    case "phase": var pk = kindOf(c.p.name); return '<div class="tphase stack s4"><div class="tags">' + tag("Part " + (phases().indexOf(c.p) + 1)) + (pk ? tag(esc(pk), pk === "If time" ? "dash" : "line") : "") + (c.p.start != null ? tag(c.p.start + " to " + c.p.end + " min", "num") : "") + '</div><h2>' + esc(pk ? partTitle(c.p.name) : c.p.name) + '</h2>' + (c.p.show ? '<div class="screen"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg><div class="stack" style="gap:2px"><span class="lab">On his screen</span><div>' + clean(c.p.show) + '</div></div></div>' : "") + (L.script && L.script.focus && phases()[0] === c.p ? focusTable(L.script.focus) : "") + phasePages(c.p) + '</div>';
+    case "phase": var pk = kindOf(c.p.name); return '<div class="tphase stack s4"><div class="tags">' + tag("Part " + (phases().indexOf(c.p) + 1)) + (pk ? tag(esc(pk), pk === "If time" ? "dash" : "line") : "") + (c.p.start != null ? tag(c.p.start + " to " + c.p.end + " min", "num") : "") + '</div><h2>' + esc(partTitle(c.p.name)) + '</h2>' + (c.p.show ? '<div class="screen"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg><div class="stack" style="gap:2px"><span class="lab">On his screen</span><div>' + clean(c.p.show) + '</div></div></div>' : "") + (L.script && L.script.focus && phases()[0] === c.p ? focusTable(L.script.focus) : "") + phasePages(c.p) + '</div>';
     case "mod": return tk + tlabel(c.b.level === "deep" ? "deep" : "core", c.b.level === "deep" ? "D" : "C", (c.b.level === "deep" ? "If time" : "Core") + (c.b.minutes ? " · " + c.b.minutes + " min" : "")) + '<h2 style="font-size:var(--fs-xl)">' + esc(c.b.name) + '</h2>';
     case "step": var kd = c.it.kind || "do"; return tk + tlabel(kd, KIC[kd] || "\u2192", KIND[kd] || kd) + '<div class="big prose">' + clean(c.it.html) + '</div>' + warmBtn(c);
     case "text": var g2 = gradeRows(clean(c.b.html)); return tk + (g2.rows.length ? tlabel("q", "?", "Ask him row by row · " + g2.rows.filter(function (r) { var a = L.session.answers[r.k]; return a && asked(a.v); }).length + " of " + g2.rows.length + " asked") : "") + '<div class="prose big">' + g2.html + '</div>';
@@ -1566,10 +1589,10 @@ function chunkHTML(c) {
         qtags(c.it) + '<div class="qtext prose">' + paperHTML(c.it.q, subjNow()) + '</div>' + answerBox(c.it.a, c.it.book ? c.it.page : null) + hintsHTML(c) + ctlBig(c.it.id, a, plain(c.it.q));
     case "drill": var a2 = L.session.answers[c.key] || {};
       return '<div class="qhead">' + tlabel("q", "?", (c.title || "Drill") + (c.of > 1 ? " \u00b7 " + c.n + " of " + c.of : "")) + '</div><div class="qtext prose">' + paperHTML(c.d[0], subjNow()) + '</div>' + answerBox(c.d[1]) + hintsHTML(c) + ctlBig(c.key, a2, plain(c.d[0]));
-    case "question": return (c.b.parts || []).length ? sliderHTML(c) + hintsHTML(c) : questionBlock(c.b, true) + hintsHTML(c);
+    case "question": return (c.b.parts || []).length ? sliderHTML(c) + hintsHTML(c) : (c.full ? '<div class="tags growtag">' + tag("Full board for you", "line") + tag("His screen: click " + c.click[0] + " of " + c.click[1]) + '</div>' : "") + questionBlock(c.full ? Object.assign({}, c.b, { img: c.full }) : c.b, true) + hintsHTML(c);
     case "board": return boardHTML(c);
     case "concept": return conceptHTML(c);
-    case "end": return '<div class="tphase stack s4"><div class="tags">' + tag("Done", "ok") + '</div><h2>End of the script</h2><span class="hint">Log times, notes and what to change next time.</span><div><button class="btn next" type="button" data-tgo="after">After the lesson</button></div></div>';
+    case "end": return '<div class="tphase stack s4"><div class="tags">' + tag("Done", "ok") + '</div><h2>End of the script</h2><span class="hint">Log times, notes and what to change next time.</span><div class="row"><button class="btn" type="button" data-store>Add a section from the Store</button><button class="btn next" type="button" data-tgo="after">After the lesson</button></div></div>';
     default: return block(c.b || {});
   }
 }
@@ -1580,9 +1603,9 @@ function warmBtn(c) { return c.t === "step" && /warm-up/i.test(plain(c.it.html))
 function pastLine(c, i) { var st = stateOf(c);
   return '<button type="button" class="pastline ' + st + '" data-tjump="' + i + '"><span class="ic">' + iconOf(c) + '</span><span class="tx">' + esc(shortOf(c, 120)) + '</span>' + (st === "done" ? '<span class="mk">✓ Taught</span>' : st === "s-skip" ? '<span class="mk">Skipped</span>' : st === "v-tskip" ? '<span class="mk">You skipped it</span>' : st === "v-skipped" ? '<span class="mk">No answer</span>' : st ? '<span class="mk">' + esc(cap(st.slice(2))) + '</span>' : "") + '</button>'; }
 function drawTeach() {
-  var s = L.script || {}, x = L.session, subj = s.subject || x.subject; document.body.setAttribute("data-subject", subj); document.body.classList.add("teaching");
-  var keepRef = TCH.id === L.id && TCH.seq[TCH.pos], ae = document.activeElement, fgo = ae && ae.closest && ae.closest(".tfoot") && ae.getAttribute("data-tgo");
-  if (TCH.id !== L.id) { TCH = { id: L.id, seq: teachSeq(), pos: +(ls(tposKey()) || 0), open: {} }; }
+  var s = L.script || {}, x = L.session, subj = s.subject || x.subject; document.body.setAttribute("data-subject", subj); document.body.classList.add("teaching"); document.body.classList.toggle("prep", PREP);
+  var tid = L.id + (PREP ? "|prep" : ""), keepRef = TCH.id === tid && TCH.seq[TCH.pos], ae = document.activeElement, fgo = ae && ae.closest && ae.closest(".tfoot") && ae.getAttribute("data-tgo");
+  if (TCH.id !== tid) { TCH = { id: tid, seq: teachSeq(), pos: +(ls(tposKey()) || 0), open: {} }; }
   else { TCH.seq = teachSeq(); if (keepRef) { var j = TCH.seq.findIndex(function (q) { return q.t === keepRef.t && (q.it && q.it === keepRef.it || q.b && q.b === keepRef.b && !q.it && !q.d || q.d && q.d === keepRef.d || q.p === keepRef.p && q.t === "phase"); }); if (j >= 0) TCH.pos = j; } }
   if (TCH.pos >= TCH.seq.length) TCH.pos = TCH.seq.length - 1;
   var c = TCH.seq[TCH.pos], pct = Math.round(100 * TCH.pos / Math.max(1, TCH.seq.length - 1)), lv = live();
@@ -1590,17 +1613,17 @@ function drawTeach() {
   var pk = c.p ? kindOf(c.p.name) : "", reals = phases().filter(function (p) { return !p.sys && kindOf(p.name) !== "Bank" && kindOf(p.name) !== "Recycle"; });
   var inPart = c.p ? TCH.seq.filter(function (q) { return q.p === c.p; }) : [], pf = inPart.length ? Math.round(100 * (inPart.indexOf(c) + 1) / inPart.length) : 0;
   var h = '<div class="teach3">' + runwayHTML(c) + '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
-    '<button class="btn sm outl" type="button" id="toc" aria-label="Outline">☰<span class="olab"> Outline</span></button><a class="btn sm quiet back" href="#/lesson/' + encodeURIComponent(L.id) + '" title="Back to Plan">Plan</a>' + (pk ? tag(esc(pk), pk === "If time" ? "dash" : "line") : "") + '<b>' + esc(c.p ? (pk ? partTitle(c.p.name) : c.p.name) : "End") + '</b>' + (c.mod ? '<span class="hint">· ' + esc(c.mod) + '</span>' : "") + '</div>' +
+    '<button class="btn sm outl" type="button" id="toc" aria-label="Outline">☰<span class="olab"> Outline</span></button>' + (PREP ? '<a class="btn sm quiet back" href="#/">Lessons</a>' : '<a class="btn sm quiet back" href="#/lesson/' + encodeURIComponent(L.id) + '" title="Prepare: the same screens, nothing recorded">Prepare</a>') + '' + (pk ? tag(esc(pk), pk === "If time" ? "dash" : "line") : "") + '<b>' + esc(c.p ? (partTitle(c.p.name)) : "End") + '</b>' + (c.mod ? '<span class="hint">· ' + esc(c.mod) + '</span>' : "") + '</div>' +
     '<div class="tmini"><span class="tmore"><button class="btn sm" type="button" data-tmore aria-expanded="false" aria-label="More: warm-up, suggest a change, try-out">⋯<span class="tdot" id="wudot" hidden></span></button>' +
-      '<div class="tmenu" hidden><button class="btn sm" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn sm" type="button" data-suggest>Suggest a change</button><button class="btn sm trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button></div></span>' +
+      '<div class="tmenu" hidden><button class="btn sm" type="button" data-store>Add from the Store</button><button class="btn sm" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn sm" type="button" data-suggest>Suggest a change</button><button class="btn sm trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button>' + LPAGES.map(function (q) { return '<button class="btn sm" type="button" data-phase="' + q[0] + '" data-real="">' + q[1] + '</button>'; }).join("") + '</div></span>' +
       '<a class="btn sm" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"></path></svg></a>' +
       '<span class="tag num"><span class="olab">Step </span>' + (TCH.pos + 1) + ' of ' + TCH.seq.length + '</span>' +
-      (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a step by hand.">Preview</button>'
+      (PREP ? tag("Prepare", "line") + '<a class="btn sm pri" href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach</a></div></div>' : (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a step by hand.">Preview</button>'
         : '<button type="button" class="preview stopped" data-pvhelp title="The clock is stopped. Taught, Skip and verdicts still count.">Clock stopped</button>') +
-      '<span class="clockpill' + (lv ? " live" : "") + '"><span class="dot"></span><span class="t" id="clk">0:00</span></span><button class="btn sm' + (lv ? "" : " pri") + (clockNag(lv) ? " nag" : "") + '" id="clkgo" type="button"></button></div></div>' +
+      '<span class="clockpill' + (lv ? " live" : "") + '"><span class="dot"></span><span class="t" id="clk">0:00</span></span><button class="btn sm' + (lv ? "" : " pri") + (clockNag(lv) ? " nag" : "") + '" id="clkgo" type="button"></button></div></div>') +
     (reals.length > 1 ? '<div class="flow ' + esc(subj) + ' tflow" aria-hidden="true">' + reals.map(function (p) { var on = p === c.p, past = c.p && reals.indexOf(p) < reals.indexOf(c.p);
       return '<span style="flex:' + pw(p) + '"' + (on ? ' class="on"' : "") + '><i' + (on ? ' style="background:linear-gradient(90deg,var(--accent) ' + pf + '%,var(--line) ' + pf + '%)"' : past ? ' style="background:var(--accent);opacity:.45"' : "") + '></i></span>'; }).join("") + '</div>' : '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>') +
-    clockNag(lv) + '</div><div class="tstage">';
+    (PREP ? "" : clockNag(lv)) + '</div><div class="tstage">';
   /* the last two chunks of the same section as short grey lines, then the current one */
   var keep = window.innerWidth < 900 ? 1 : 2, start = TCH.pos;
   while (start > 0 && TCH.pos - start < keep && TCH.seq[start - 1].p === c.p && TCH.seq[start - 1].mod === c.mod && TCH.seq[start - 1].t !== "phase") start--;
@@ -1616,9 +1639,14 @@ function drawTeach() {
   var ol = $(".outline"), oc = $(".outline .cur"); if (ol && oc && ol.clientHeight) ol.scrollTop += oc.getBoundingClientRect().top - ol.getBoundingClientRect().top - ol.clientHeight / 2 + oc.offsetHeight / 2;
   if (window.scrollY) window.scrollTo(0, 0);
   ls(tposKey(), String(TCH.pos));
+  if (STARTCLOCK === L.id && !PREP) { STARTCLOCK = null; var cg = $("#clkgo"); if (cg && !live()) cg.click(); }
+  checkOther();
 }
 /* moving through the script with the clock stopped: a bar that stays until the clock runs (Ali, 10 Oct: "sometimes i forget to start it, sometimes i forget to unpause it") */
 function clockNag(lv) {
+  var bk = ckJSON("tutor.break");
+  if (!lv && bk && bk.id === L.id && L.session.status !== "finished") { var left = Math.max(0, Math.ceil((bk.until - Date.now()) / 60000));
+    return '<div class="clocknag brk" role="status"><span class="dot" aria-hidden="true"></span><span><b>On a break since ' + esc(hhmm(bk.at)) + '.</b> ' + (left ? left + ' min left, then a reminder.' : 'Time is up.') + '</span><button class="btn sm pri" type="button" data-clkgo>Resume</button><button class="btn sm quiet" type="button" data-ck="more">5 more min</button></div>'; }
   if (lv || !TCH.moved || TCH.nagOff || L.session.status === "finished") return "";
   var never = !(L.session.time.log || []).length;
   return '<div class="clocknag" role="status"><span class="dot" aria-hidden="true"></span><span><b>' + (never ? "The clock has not started." : "The clock is paused.") + '</b> ' + (never ? "Nothing is recorded, verdicts included." : "This time is not counted.") + '</span>' +
@@ -1626,12 +1654,12 @@ function clockNag(lv) {
 }
 function footHTML(c, lv) {
   var taughtable = { step: 1, mod: 1, concept: 1, board: 1 }[c.t] || (c.t === "text" && c.key), mid = "";
-  if (c.t === "question" && (c.b.img || []).length) mid += '<button class="btn accent-soft" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
+  if (c.t === "question" && (c.b.img || []).length && !PREP) mid += '<button class="btn accent-soft" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
   if (c.t === "mod") mid += '<button class="btn quiet" type="button" data-tskip="mod">Skip this section</button>';
   if (c.t === "phase") mid += '<button class="btn quiet" type="button" data-tskip="phase">Skip this part</button>';
   // Taught / Skip / Next once the lesson has started (clock running, paused or ended); before that only Next
   var three = !previewing() && taughtable && c.t !== "mod", qk = { quiz: 1, drill: 1, question: 1 }[c.t] && chunkKey(c), qa = qk && L.session.answers[qk];
-  var iskip = qk ? '<button class="btn dash iskip" type="button" data-tiskip aria-pressed="' + !!(qa && qa.v === "tskip") + '" title="You chose not to ask it: not a verdict, never a mistake">Not asked <kbd>0</kbd></button>' : "";
+  var iskip = qk && !PREP ? '<button class="btn dash iskip" type="button" data-tiskip aria-pressed="' + !!(qa && qa.v === "tskip") + '" title="You chose not to ask it: not a verdict, never a mistake">Not asked <kbd>0</kbd></button>' : "";
   var lab = c.t === "phase" ? "Start this part" : c.t === "mod" ? "Teach this" : "Next";
   return '<div class="tfoot' + (three ? " three" : "") + '"><button class="btn" type="button" data-tgo="-1"' + (TCH.pos === 0 ? " disabled" : "") + '><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>Back</button><div class="mid">' + mid + '</div>' +
     (c.t === "end" ? "" : three
@@ -1655,17 +1683,18 @@ function runwayHTML(c) {
       rows += '<button type="button" class="oc ' + stateOf(q) + (j === TCH.pos ? " cur" : "") + (q.mod ? " in" : "") + '" data-tjump="' + j + '"><span class="ic">' + iconOf(q) + '</span><span class="tx">' + esc(shortOf(q, 70)) + '</span></button>'; });
     var open = TCH.open[p.id] != null ? TCH.open[p.id] : i === ci;
     var pj = flowQuick() ? seqIndex(function (q) { return q.p === p; }) : seqIndex(function (q) { return q.t === "phase" && q.p === p; });
-    return '<details class="opart' + (i < ci ? " past" : i === ci ? " now" : "") + '" data-pid="' + esc(p.id) + '"' + (open ? " open" : "") + '><summary>' + (kindOf(p.name) ? '<span class="kinds"><span class="k">' + esc(kindOf(p.name)) + '</span></span>' : "") + '<span class="nm">' + esc(kindOf(p.name) ? partTitle(p.name) : p.name) + '</span>' + (sub ? '<span class="sub">' + esc(sub) + '</span>' : "") + '</summary>' +
+    return '<details class="opart' + (i < ci ? " past" : i === ci ? " now" : "") + '" data-pid="' + esc(p.id) + '"' + (open ? " open" : "") + '><summary>' + (kindOf(p.name) ? '<span class="kinds"><span class="k">' + esc(kindOf(p.name)) + '</span></span>' : "") + '<span class="nm">' + esc(partTitle(p.name)) + '</span>' + (sub ? '<span class="sub">' + esc(sub) + '</span>' : "") + '</summary>' +
       '<button type="button" class="oc go' + (TCH.pos === pj ? " cur" : "") + '" data-tjump="' + pj + '"><span class="ic">▸</span><span class="tx">Start of this part</span></button>' + rows + '</details>';
   }).join("");
   var subj = s.subject || x.subject, pd = parseId(L.id);
-  return '<aside class="runway" aria-label="Lesson outline"><div class="rhead"><a class="back" href="#/lesson/' + encodeURIComponent(L.id) + '">← Back to Plan</a><button class="btn small outl" type="button" id="tocx">Close</button></div>' +
+  return '<aside class="runway" aria-label="Lesson outline"><div class="rhead">' + (PREP ? '<a class="back" href="#/">← Lessons</a>' : '<a class="back" href="#/lesson/' + encodeURIComponent(L.id) + '">← Prepare</a>') + '<button class="btn small outl" type="button" id="tocx">Close</button></div>' +
     '<div class="tags">' + subjTag(subj) + tag(esc(fmtDate(s.date || x.date || pd.date))) + lessonTags(s, x) + '</div><div class="ttl">' + esc(lessonTitle(s, x)) + '</div>' +
     bar + '<div class="onclock" id="onclock" hidden><span id="onclockt"></span></div><nav class="outline">' + parts + '</nav></aside>';
 }
 /* a board or picture fills the space between the top bar and the buttons: no scrolling to see the bottom */
 /* question screens without scrolling: Flip is the one layout (Ali, 8 Oct: Classic, Side panel and Floating card removed) */
 var flipOn = false;
+var LPAGES = [["_extra", "Extra questions"], ["_work", "His work"], ["_time", "Times"], ["_after", "After the lesson"]];
 function applyFit() { var cur = $(".chunk.cur"); document.body.setAttribute("data-tlayout", "flip");
   if (!cur || !/\bt-(question|quiz|drill)\b/.test(cur.className) || $(".slider", cur)) return;
   applyFlip(cur); }
@@ -1698,6 +1727,7 @@ function applyFlip(cur) {
   var hasBack = !!(pics.childNodes.length || hints.length), hasAns = !!backText.childNodes.length;
   cur.appendChild(left); cur.appendChild(ans); cur.classList.add("fit", "flip"); cur.classList.toggle("flipped", flipOn && (hasBack || hasAns));
   // the button is there whenever there is an answer; fitFront hides it when the back would be empty
+  if (ctlb && PREP) { ctlb.remove(); ctlb = null; }
   if (ctlb) { var iid = ctlb.getAttribute("data-item"), mk = $("input[data-mk]", ctlb);
     ctlb.remove(); cur.insertAdjacentHTML("beforeend", vrail(iid, target(iid), ctlb.getAttribute("data-q"), { flip: hasBack || hasAns ? "data-flip" : "", flipped: flipOn && (hasBack || hasAns), flipHidden: !hasBack, marks: mk && mk.getAttribute("aria-label").replace(/\D+/g, "") })); }
   else { strip.innerHTML = hasBack || hasAns ? '<button type="button" class="btn flipbtn" data-flip' + (hasBack ? "" : " hidden") + '>' + (flipOn ? "\u2190 Question" : "Mark scheme") + ' <kbd>A</kbd></button>' : "";
@@ -1778,7 +1808,7 @@ function setDone(key, label, on, skip) { var x = L.session; x.done = x.done || {
 /* how: "taught" ticks the chunk you leave (only while the clock runs); "skip" records it as skipped on purpose;
    "next" and "jump" move without recording anything */
 function tmove(d, how) {
-  var c = TCH.seq[TCH.pos], x = L.session; flipOn = false; BOARD = { open: null, near: null }; TCH.moved = true;
+  var c = TCH.seq[TCH.pos], x = L.session; flipOn = false; BOARD = { open: null, near: null }; TCH.moved = true; noteTap();
   if (how === "skip" && !previewing() && c.key && { step: 1, text: 1 }[c.t]) { setDone(c.key, shortOf(c), false, true); touch(); }
   if (how === "taught" && !previewing() && c.key && { step: 1, text: 1 }[c.t] && !isDone(c.key)) { setDone(c.key, shortOf(c), true); touch(); }
   if (how === "taught" && !previewing() && c.t === "mod" && !isDone(c.key)) { setDone(c.key, c.b.name, true); touch(); }
@@ -1788,7 +1818,7 @@ function tmove(d, how) {
     touch(); }
   var n = Math.max(0, Math.min(TCH.seq.length - 1, TCH.pos + d)); TCH.pos = n;
   var np = TCH.seq[n] && TCH.seq[n].p, r = replay(x.time.log);
-  if (np && r.running && r.phase !== np.id) logEvent("phase", np.id);
+  if (np && !PREP && r.running && r.phase !== np.id) logEvent("phase", np.id);
   if (np) L.phase = np.id;
   document.body.classList.remove("toc-open");
   drawTeach();
@@ -1814,6 +1844,7 @@ document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) re
 document.addEventListener("toggle", function (e) { var d = e.target; if (MODE === "teach" && d.classList && d.classList.contains("opart")) TCH.open[d.getAttribute("data-pid")] = d.open; }, true);
 document.addEventListener("keydown", function (e) { if (MODE !== "teach" || SH || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || "")) return;
   if ($("#wuov") || $("#sug") || !$("#zoom").hidden || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (PREP && /^[0-6]$/.test(e.key)) return;
   if (e.key === "0") { iskipIt(); return; }
   if ((e.key === "a" || e.key === "A") && ($(".chunk.cur.flip") || $(".chunk.cur .slider"))) { flipIt(); return; }
   if ((e.key === "ArrowDown" || e.key === "ArrowUp") && $(".chunk.cur .slider")) { e.preventDefault(); slGo(SL.i + (e.key === "ArrowDown" ? 1 : -1)); return; }
@@ -1821,6 +1852,172 @@ document.addEventListener("keydown", function (e) { if (MODE !== "teach" || SH |
   var three = !!$(".tfoot.three");
   if (e.key === "ArrowRight") tmove(1, three ? "next" : "taught"); else if (e.key === "ArrowLeft") tmove(-1, "jump");
   else if (three && (e.key === "t" || e.key === "T")) tmove(1, "taught"); else if (three && (e.key === "s" || e.key === "S")) tmove(1, "skip"); });
+
+/* ---------------- the store: a chapter's sections, ready to add in the middle of a lesson ----------------
+   (Ali, 11 Oct: "I start 7.1, find it too basic: I should not be stuck with 7.1. All teaching material for 7.1 to 7.6
+   can be made in one go, just make sure it can be brought up any time.")
+   students/<s>/store/<name>/store.json = {subject, topic, title, parts: [{id, code, name, minutes, blocks}]}, the same blocks
+   as a script, pictures by their full path. Adding one records {part, store, after, at} in session.added; the part shows
+   after the part you are on, in Teach, the outline, Student view and After the lesson. Prepare can look without saving. */
+var STORES = {};
+function storePaths() { return (TREE || []).filter(function (t) { return new RegExp("^" + studentBase().replace(/[.]/g, "\\.") + "store/[^/]+/store\\.json$").test(t.path); }).map(function (t) { return t.path; }); }
+function loadStores() { var ps = storePaths(); return Promise.all(ps.map(function (p) { if (STORES[p] && STORES[p].sha === shaOf(p)) return null;
+    return fileJSON(p).then(function (r) { if (r) STORES[p] = { sha: r.sha, data: r.data }; }).catch(function () {}); })).catch(function () {}); }
+function storePart(path, id) { var st = STORES[path]; return st && (st.data.parts || []).filter(function (q) { return q.id === id; })[0]; }
+function addedList() { return ((L && L.session.added) || []).filter(function (a) { return !a.removed; }).concat(PREP && L && L.prepAdded || []); }
+function addedParts() { var out = []; addedList().forEach(function (a) { var q = storePart(a.store, a.part); if (!q) return;
+    out.push({ after: a.after, part: { id: "st-" + q.id, name: q.name, start: null, end: null, blocks: q.blocks || [], show: q.show, fromStore: a.store, after: a.after, code: q.code, introduces: q.introduces } }); });
+  return out; }
+function storeOpen() { var subj = subjNow(), old = $("#stov"); if (old) old.remove();
+  var el = document.createElement("div"); el.id = "stov"; el.className = "sug"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Add from the store");
+  el.innerHTML = '<div class="sug-card wu"><div class="sug-head"><h3>Add from the Store</h3><button class="btn small" type="button" id="stox" aria-label="Close">×</button></div><div id="stobox" class="stack s4"><div class="empty"><b class="t-card">Loading the store</b></div></div></div>';
+  document.body.appendChild(el);
+  loadTree(true).then(loadStores).then(storeDraw, function () { $("#stobox").innerHTML = '<div class="empty"><b class="t-card">Couldn’t reach GitHub</b></div>'; }); }
+function storeDraw() { var box = $("#stobox"); if (!box) return; var subj = subjNow(), cur = TCH.seq[TCH.pos], here = cur && cur.p, inScript = {};
+  ((L.script && L.script.phases) || []).forEach(function (p) { inScript[String(p.name).toLowerCase()] = 1; });
+  var tc = L.script && L.script.topic && L.script.topic.code, used = {}; addedList().forEach(function (a) { used[a.store + "#" + a.part] = 1; });
+  var stores = Object.keys(STORES).filter(function (p) { var d = STORES[p].data; return !d.subject || d.subject === subj; });
+  if (!stores.length) { box.innerHTML = '<div class="empty"><b class="t-card">No store for ' + esc((SUBJ[subj] || subj).toLowerCase()) + ' yet</b><span class="hint">Ask Claude to prepare the chapter’s sections.</span></div>'; return; }
+  box.innerHTML = '<p class="hint">' + (PREP ? "Look at a section here. Nothing is saved in Prepare." : "It goes straight after the part you are on" + (here ? " (" + esc(partTitle(here.name)) + ")" : "") + ", and you jump to it.") + '</p>' +
+    stores.map(function (p) { var d = STORES[p].data; return '<section class="stack s3"><div class="tags">' + topicTag(d) + tag((d.parts || []).length + " sections") + '</div>' +
+      (d.parts || []).map(function (q) { var k = p + "#" + q.id, isIn = used[k], inLesson = inScript[String(q.name).toLowerCase()] || tc && q.code === tc, n = 0;
+        (function walk(bs) { (bs || []).forEach(function (b) { if (b.type === "question" || b.type === "drill" || b.type === "quiz") n += b.type === "question" ? 1 : (b.items || []).length; if (b.blocks) walk(b.blocks); }); })(q.blocks);
+        return '<div class="storerow' + (isIn ? " on" : "") + '"><div class="stack s2" style="min-width:0"><div class="tags">' + (q.code ? tag('<b>' + esc(q.code) + '</b>', "topic") : "") + (kindOf(q.name) ? tag(esc(kindOf(q.name)), "line") : "") + (q.minutes ? tag(q.minutes + " min") : "") + (n ? tag(n + " questions") : "") + (inLesson ? tag("In this lesson") : "") + (isIn ? tag("Added", "ok") : "") + '</div><b>' + esc(partTitle(q.name)) + '</b></div>' +
+          (isIn ? '<button class="btn sm" type="button" data-stgo="' + esc(q.id) + '">Go to it</button><button class="btn sm quiet" type="button" data-strm="' + esc(k) + '">Remove</button>' : '<button class="btn sm pri" type="button" data-stadd="' + esc(k) + '">' + (PREP ? "Look at it" : "Add after this part") + '</button>') + '</div>'; }).join("") + '</section>'; }).join(""); }
+function storeJump(pid) { var j = seqIndex(function (c) { return c.p && c.p.id === "st-" + pid; }); if (TCH.seq[j] && TCH.seq[j].p && TCH.seq[j].p.id === "st-" + pid) tmove(j - TCH.pos, "jump"); }
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-stadd],[data-strm],[data-stgo],#stox,[data-store]"); if (!t || !L) return;
+  if (t.hasAttribute("data-store")) { storeOpen(); return; }
+  if (t.id === "stox") { var o = $("#stov"); if (o) o.remove(); return; }
+  if (t.hasAttribute("data-stgo")) { var o2 = $("#stov"); if (o2) o2.remove(); storeJump(t.getAttribute("data-stgo")); return; }
+  var k = (t.getAttribute("data-stadd") || t.getAttribute("data-strm")).split("#"), path = k[0], pid = k[1], cur = TCH.seq[TCH.pos], after = cur && cur.p ? cur.p.id : null;
+  if (cur && cur.p && cur.p.fromStore) after = cur.p.after;   // a second addition goes after the first one, not inside it
+  if (t.hasAttribute("data-stadd")) { var a = { part: pid, store: path, after: after, at: now(), d: CFG.device };
+    if (PREP) { L.prepAdded = (L.prepAdded || []).filter(function (x) { return x.part !== pid; }).concat([a]); }
+    else { L.session.added = (L.session.added || []).filter(function (x) { return x.part !== pid; }).concat([a]); touch(); flush(); }
+    var o3 = $("#stov"); if (o3) o3.remove(); TCH.seq = teachSeq(); drawTeach(); storeJump(pid); toast(PREP ? "Showing it here. Nothing saved." : "Added after this part"); return; }
+  if (t.hasAttribute("data-strm")) { if (PREP) L.prepAdded = (L.prepAdded || []).filter(function (x) { return x.part !== pid; });
+    else { (L.session.added || []).forEach(function (x) { if (x.part === pid) { x.removed = true; x.at = now(); } }); touch(); }
+    drawTeach(); storeDraw(); toast("Removed from this lesson"); } });
+
+/* ---------------- a clock that does not rely on memory (Ali, 11 Oct) ----------------
+   "Sometimes I start a lesson and forget the timer, he asks for a bathroom break and I forget to restart it, and in the
+   15 minutes between chemistry and maths I forget to start the maths timer." The app already sees when he is teaching:
+   every tap in Teach has a time. So the taps keep a record of their own, and the clock is checked against them.
+     1  every Teach tap is kept (first and last, on this device), clock or no clock; After the lesson offers them as the times
+     2  clock off and he is teaching: a chime and the screen edge flashes; 2 more screens or 2 minutes on, a full screen
+        "Lesson started? Start from 18:12" (his first tap), so no minutes are lost
+     3  Pause in Teach is a 5 minute break; at the end a chime and "Back?" (Resume / 5 more min / Lesson over)
+     4  chemistry ends: a 15 minute countdown to maths, then a full screen "Maths time"
+     5  clock running and no taps for 10 minutes: "Still teaching? End at 17:46"; opening a lesson while another one's
+        clock still runs: "Chemistry clock still on. End it at 17:46"
+     6  Prepare never asks. Sounds can be turned off in Settings. */
+var CK = { id: null, off: 0, offFirst: null, quietUntil: 0, ask: null }, BREAK_MIN = 5, IDLE_MIN = 10, GAP_MIN = 15;
+function ckJSON(k, v) { if (v === undefined) { try { return JSON.parse(ls(k) || "null"); } catch (e) { return null; } } ls(k, v === null ? null : JSON.stringify(v)); }
+function tapsKey(id) { return "tutor.taps." + CFG.student + "." + id; }
+function taps(id) { return ckJSON(tapsKey(id || (L && L.id))) || {}; }
+function lessonSubj(id) { return parseId(id).subject || ""; }
+function subjWord(id) { var sj = lessonSubj(id); return sj === "maths" ? "Maths" : sj === "chem" ? "Chemistry" : "The other lesson"; }
+function ckReset() { CK.off = 0; CK.offFirst = null; CK.quietUntil = 0; }
+var AC = null;
+document.addEventListener("pointerdown", function () { try { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === "suspended") AC.resume(); } catch (e) {} }, { passive: true });
+function chime(n) { if (ls("tutor.chime") === "off") return; try { if (navigator.vibrate) navigator.vibrate([150, 90, 150]); } catch (e) {}
+  try { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); var t0 = AC.currentTime + 0.02;
+    [784, 1047, 784, 1047].slice(0, (n || 1) * 2).forEach(function (f, i) { var o = AC.createOscillator(), g = AC.createGain(), at = t0 + i * 0.2;
+      o.type = "sine"; o.frequency.value = f; g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.3, at + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, at + 0.45);
+      o.connect(g); g.connect(AC.destination); o.start(at); o.stop(at + 0.5); }); } catch (e) {} }
+function edgeFlash() { document.body.classList.remove("edgeflash"); void document.body.offsetWidth; document.body.classList.add("edgeflash"); setTimeout(function () { document.body.classList.remove("edgeflash"); }, 2600); }
+/* a teaching tap in Teach: kept, and checked against the clock */
+function noteTap() {
+  if (MODE !== "teach" || PREP || !L) return;
+  var t = now(), tp = taps(); if (!tp.first) tp.first = t; tp.last = t; tp.n = (tp.n || 0) + 1; ckJSON(tapsKey(L.id), tp);
+  if (CK.id !== L.id) { CK.id = L.id; ckReset(); }
+  if (live() || L.session.status === "finished") { CK.off = 0; CK.offFirst = null; return; }
+  if (Date.now() < CK.quietUntil) return;
+  CK.off++; if (!CK.offFirst) CK.offFirst = t;
+  if (CK.off === 1) { chime(); edgeFlash(); }
+  if (CK.off >= 3 || Date.now() - Date.parse(CK.offFirst) >= 120000) clockAsk("start");
+}
+/* an event at a given time (a back-dated start, an end at the last tap); never before the last one already logged */
+function logEventAt(e, p, t) { var lg = L.session.time.log, last = lg.length ? lg[lg.length - 1].t : null; if (last && String(t) < String(last)) t = last;
+  lg.push({ t: t, e: e, p: p || undefined, d: CFG.device }); L.session.time.editAt = now(); clockState(e, t); touch(); }
+/* which lesson's clock runs, the break, and the countdown to the next lesson: kept on this device */
+function clockState(e, t) { if (!L) return; var id = L.id;
+  if (e === "start" || e === "resume") { ckJSON("tutor.running", { id: id, at: t || now() }); ckJSON("tutor.break", null); ckReset(); var nx = ckJSON("tutor.next"); if (nx && nx.id === id) ckJSON("tutor.next", null); }
+  if (e === "pause" || e === "end") { var r = ckJSON("tutor.running"); if (r && r.id === id) ckJSON("tutor.running", null); }
+  if (e === "pause" && MODE === "teach" && !PREP) ckJSON("tutor.break", { id: id, at: t || now(), until: Date.now() + BREAK_MIN * 60000 });
+  if (e === "end") { ckJSON("tutor.break", null); nextAfter(id, t || now()); } }
+/* chemistry has ended: maths today, if there is a maths lesson today */
+function nextAfter(id, t) { var p = parseId(id); if (p.subject !== "chem" || p.date !== todayIso()) return;
+  var mid = p.date + "-maths", has = TREE && TREE.some(function (x) { return x.path.indexOf(lessonBase(mid)) === 0; }); if (!has) return;
+  var ms = ckJSON(localKey(mid)); if (ms && ms.session && (ms.session.status === "finished" || (ms.session.time.log || []).length)) return;
+  ckJSON("tutor.next", { id: mid, from: id, at: Date.parse(t) + GAP_MIN * 60000 }); }
+/* the full-screen question: one at a time; every answer is one tap */
+function clockAsk(kind, o) { o = o || {}; if (CK.ask || $("#ckask")) return; CK.ask = kind; CK.other = null; var x = L && L.session, tp = L ? taps() : {}, h = "", b = [];
+  var B = function (act, label, cls) { b.push('<button class="btn' + (cls ? " " + cls : "") + '" type="button" data-ck="' + act + '">' + label + '</button>'); };
+  if (kind === "start") { var never = !(x.time.log || []).length, from = CK.offFirst || tp.first || now(), lg = x.time.log, pz = lg.length ? lg[lg.length - 1] : null;
+    if (never) { h = '<h2>Lesson started?</h2><p>The clock is not running. Your first tap was at <b>' + esc(hhmm(from)) + '</b>.</p>'; B("startfrom", "Start from " + esc(hhmm(from)), "pri"); B("startnow", "Start now"); B("look", "I’m only looking", "quiet"); }
+    else { h = '<h2>Back from the break?</h2><p>The clock paused at <b>' + esc(hhmm(pz.t)) + '</b>. You started teaching again at <b>' + esc(hhmm(from)) + '</b>.</p>'; B("startfrom", "Resume from " + esc(hhmm(from)), "pri"); B("startnow", "Resume now"); B("look", "Still on a break", "quiet"); }
+    CK.from = from; CK.retry = o.retry || null; }
+  else if (kind === "break") { var bk = ckJSON("tutor.break") || {}; h = '<h2>Break over?</h2><p>Paused at <b>' + esc(hhmm(bk.at)) + '</b>, ' + Math.max(1, Math.round((Date.now() - Date.parse(bk.at)) / 60000)) + ' min ago.</p>'; B("resume", "Resume", "pri"); B("more", "5 more min"); B("endat:" + bk.at, "Lesson over: end at " + esc(hhmm(bk.at)), "quiet"); }
+  else if (kind === "idle") { h = '<h2>Still teaching?</h2><p>' + esc(subjWord(o.id)) + ' clock is running. No taps since <b>' + esc(hhmm(o.last)) + '</b> (' + Math.round((Date.now() - Date.parse(o.last)) / 60000) + ' min).</p>'; B("endat:" + o.last, "End at " + esc(hhmm(o.last)), "pri"); B("pauseat:" + o.last, "Pause at " + esc(hhmm(o.last))); B("going", "Still going", "quiet"); CK.other = o.id; }
+  else if (kind === "other") { h = '<h2>' + esc(subjWord(o.id)) + ' clock still on</h2><p>It has run since <b>' + esc(hhmm(o.since)) + '</b>.' + (o.last ? ' Last ' + esc(subjWord(o.id).toLowerCase()) + ' tap: <b>' + esc(hhmm(o.last)) + '</b>.' : "") + '</p>'; B("endat:" + (o.last || now()), "End it at " + esc(hhmm(o.last || now())), "pri"); B("keep", "Keep it running", "quiet"); CK.other = o.id; }
+  else if (kind === "next") { h = '<h2>' + esc(subjWord(o.id)) + ' time</h2><p>' + esc(subjWord(o.id)) + ' was due at <b>' + esc(hhmm(new Date(o.at).toISOString())) + '</b>, ' + GAP_MIN + ' min after the last lesson.</p>'; B("opennext", "Open " + esc(subjWord(o.id).toLowerCase()) + " and start", "pri"); B("later", "5 more min"); B("nottoday", "Not today", "quiet"); CK.other = o.id; }
+  var el = document.createElement("div"); el.id = "ckask"; el.className = "ckask"; el.setAttribute("role", "alertdialog"); el.setAttribute("aria-modal", "true");
+  el.innerHTML = '<div class="ckcard"><span class="ckdot" aria-hidden="true"></span>' + h + '<div class="ckbtns">' + b.join("") + '</div></div>'; document.body.appendChild(el);
+  chime(2); edgeFlash(); var f = $(".ckbtns .btn.pri", el); if (f) f.focus(); }
+function closeAsk() { var el = $("#ckask"); if (el) el.remove(); CK.ask = null; }
+/* another lesson's clock (not the open one): changed straight in its file on GitHub */
+function endElsewhere(id, e, t) { var path = lessonBase(id) + "session.json", saved = ckJSON(localKey(id));
+  return gh("/repos/" + CFG.repo + "/contents/" + enc(path)).then(function (r) {
+    var remote = r.status === 404 ? null : JSON.parse(new TextDecoder().decode(b64bytes(r.json.content))), sha = r.status === 404 ? null : r.json.sha;
+    var ss = saved && saved.session ? merge(norm(saved.session), remote) : norm(remote || newSession(id, null)), lg = ss.time.log, last = lg.length ? lg[lg.length - 1].t : null;
+    lg.push({ t: last && String(t) < String(last) ? last : t, e: e, d: CFG.device }); ss.time.editAt = now(); finalizeTime(ss);
+    if (TRY) return; return putB64(path, b64enc(JSON.stringify(ss, null, 1)), CFG.student + " " + id + ": clock " + e + " (" + CFG.device + ")", sha).then(function (nsha) { ckJSON(localKey(id), { session: ss, sha: nsha, dirty: false }); });
+  }).then(function () { var rr = ckJSON("tutor.running"); if (rr && rr.id === id) ckJSON("tutor.running", null); if (e === "end") nextAfter(id, t); toast(subjWord(id) + " clock " + (e === "end" ? "ended" : "paused") + " at " + hhmm(t)); })
+  .catch(function () { toast("Couldn’t reach GitHub: open that lesson and end it there"); }); }
+document.addEventListener("click", function (ev) { var t = ev.target.closest && ev.target.closest("[data-ck]"); if (!t) return; var a = t.getAttribute("data-ck"), kind = CK.ask, oid = CK.other; closeAsk();
+  var mine = L && (!oid || oid === L.id) && route().indexOf("/lesson/") === 0, cur = L && phases().filter(function (p) { return p.id === L.phase && !p.sys; })[0];
+  var startAt = function (when) { var r = replay(L.session.time.log); if (L.session.status === "finished") { L.session.status = "in-progress"; L.session.statusAt = now(); }
+    logEventAt(r.secs || L.session.time.log.length ? "resume" : "start", cur ? cur.id : (r.phase || phases()[0].id), when); wake(); drawLesson(); if (CK.retry && CK.retry.isConnected) CK.retry.click(); CK.retry = null; };
+  if (a === "startfrom") return startAt(CK.from);
+  if (a === "startnow") return startAt(now());
+  if (a === "look") { CK.quietUntil = Date.now() + 10 * 60000; CK.off = 0; CK.offFirst = null; return; }
+  if (a === "resume") return startAt(now());
+  if (a === "more") { var bk = ckJSON("tutor.break"); if (bk) { bk.until = Date.now() + 5 * 60000; ckJSON("tutor.break", bk); } return; }
+  if (a === "going") { if (oid) { var tp = taps(oid); tp.last = now(); ckJSON(tapsKey(oid), tp); } return; }
+  if (a === "keep") { CK.keep = oid; return; }
+  if (a === "later") { var nx = ckJSON("tutor.next"); if (nx) { nx.at = Date.now() + 5 * 60000; nx.shown = false; ckJSON("tutor.next", nx); } return; }
+  if (a === "nottoday") { ckJSON("tutor.next", null); return; }
+  if (a === "opennext") { ckJSON("tutor.next", null); STARTCLOCK = oid; location.hash = "#/lesson/" + encodeURIComponent(oid) + "/teach"; return; }
+  var m = /^(endat|pauseat):(.+)$/.exec(a); if (m) { var e = m[1] === "endat" ? "end" : "pause", when = m[2];
+    if (e === "end" && kind === "break") { ckJSON("tutor.break", null); }
+    if (mine && L && (!oid || oid === L.id)) { logEventAt(e, null, when); if (e === "pause") ckJSON("tutor.break", null); drawLesson(); flush(); toast((e === "end" ? "Ended" : "Paused") + " at " + hhmm(when) + ". Change it under Times."); }
+    else endElsewhere(oid, e, when); } });
+/* every few seconds: the break, a forgotten clock, and the next lesson */
+function clockWatch() { if (!CFG.token || $("#ckask")) return; var tnow = Date.now();
+  var bk = ckJSON("tutor.break"); if (bk && L && L.id === bk.id && MODE === "teach" && !PREP && !live() && tnow > bk.until) { if (replay(L.session.time.log).secs && L.session.status !== "finished") return clockAsk("break"); ckJSON("tutor.break", null); }
+  var rn = ckJSON("tutor.running"); if (rn && CK.keep !== rn.id) { var tp = taps(rn.id), last = [tp.last, rn.at].filter(Boolean).sort().pop(), vid = L && L.id === rn.id && MODE === "teach" && TCH.seq[TCH.pos] && TCH.seq[TCH.pos].t === "video";
+    if (last && tnow - Date.parse(last) > (vid ? 30 : IDLE_MIN) * 60000) return clockAsk("idle", { id: rn.id, last: last }); }
+  var nx = ckJSON("tutor.next"); if (nx && tnow >= nx.at && !nx.shown) { if (L && L.id === nx.id && live()) { ckJSON("tutor.next", null); return; } nx.shown = true; ckJSON("tutor.next", nx); return clockAsk("next", nx); }
+  var nb = $(".clocknag.brk"); if (nb && L && MODE === "teach") nb.outerHTML = clockNag(live());
+  nextBar(); }
+setInterval(clockWatch, 5000);
+/* the countdown to the next lesson, small, at the bottom of every page */
+function nextBar() { var nx = ckJSON("tutor.next"), el = $("#nextbar"); if (!nx || nx.shown) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement("div"); el.id = "nextbar"; el.className = "nextbar"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+  var left = Math.max(0, Math.ceil((nx.at - Date.now()) / 60000));
+  el.innerHTML = '<span class="dot" aria-hidden="true"></span><span><b>' + esc(subjWord(nx.id)) + ' at ' + esc(hhmm(new Date(nx.at).toISOString())) + '</b> · ' + left + ' min</span><button class="btn sm" type="button" data-ck="nottoday">Not today</button>'; CK.other = nx.id; }
+/* opening Teach while another lesson's clock still runs */
+function checkOther() { if (PREP || MODE !== "teach" || !L || $("#ckask")) return; var rn = ckJSON("tutor.running"); if (!rn || rn.id === L.id || CK.keep === rn.id) return;
+  clockAsk("other", { id: rn.id, since: rn.at, last: taps(rn.id).last }); }
+/* After the lesson: the taps as the times, when the clock missed the lesson */
+function tapTimes() { var x = L.session, tp = taps(); if (!tp.first || !tp.last) return null; var m = Math.round((Date.parse(tp.last) - Date.parse(tp.first)) / 60000);
+  if (m < 10 || (x.time.minutes || 0) >= m - 5) return null; return { first: tp.first, last: tp.last, m: m }; }
+function tapBanner() { var tt = tapTimes(); if (!tt) return "";
+  return '<div class="clocknag tapfix" role="status"><span class="dot" aria-hidden="true"></span><span><b>Your taps show ' + esc(hhmm(tt.first)) + ' to ' + esc(hhmm(tt.last)) + ' (' + tt.m + ' min).</b> The clock says ' + Math.round(L.session.time.minutes || 0) + ' min.</span><button class="btn sm pri" type="button" data-usetaps>Use ' + esc(hhmm(tt.first)) + ' to ' + esc(hhmm(tt.last)) + '</button></div>'; }
+document.addEventListener("click", function (e) { if (!(e.target.closest && e.target.closest("[data-usetaps]")) || !L) return; var tt = tapTimes(); if (!tt) return;
+  var ed = L.session.time.edit = L.session.time.edit || {}; ed.started = tt.first; ed.ended = tt.last; ed.minutes = null; timeEdited(); drawLesson(); toast("Times set from your taps. Change them below if needed."); });
+document.addEventListener("change", function (e) { if (e.target.id !== "s-chime") return; ls("tutor.chime", e.target.checked ? null : "off"); toast("Saved on this device"); if (e.target.checked) chime(); });
 
 /* ---------------- student view: the questions only, for his screen (opens in its own tab) ----------------
    Exam questions as pictures, quick questions as text. Never an answer or a mark scheme.
@@ -1845,13 +2042,18 @@ function studentItems() { var out = [];
   return out; }
 function drawStudent() {
   document.body.classList.add("student"); document.body.setAttribute("data-subject", (L.script && L.script.subject) || L.session.subject);
-  if (!STU || STU.id !== L.id) STU = { id: L.id, items: studentItems(), tab: "exam", i: -1, drawer: false };
+  var sig = addedList().map(function (a) { return a.part; }).join();
+  if (!STU || STU.id !== L.id) STU = { id: L.id, items: studentItems(), tab: "exam", i: -1, drawer: false, sig: sig };
+  else if (STU.sig !== sig) { var keep = STU.items[STU.i]; STU.items = studentItems(); STU.sig = sig; STU.i = keep ? Math.max(0, STU.items.findIndex(function (q) { return q.id === keep.id; })) : -1; }
   var list = STU.items.map(function (q, i) { q.i = i; return q; }).filter(function (q) { return q.kind === STU.tab; });
   if (STU.i < 0 || !STU.items[STU.i] || STU.items[STU.i].kind !== STU.tab) STU.i = list.length ? list[0].i : -1;
   var cnt = function (k) { return STU.items.filter(function (q) { return q.kind === k; }).length; }, ne = cnt("exam"), nq = cnt("quick"), nv = cnt("video"), cur = STU.items[STU.i], pos = list.indexOf(cur);
-  var view = !cur ? '<div class="empty"><b class="t-card">No questions here</b></div>' : cur.kind === "video" ? '<div class="stu-vid">' + localVideo(cur.v, true) + '<div class="stu-vt">' + esc(cur.v.title || "") + '</div></div>' : cur.kind === "exam"
+  var one = function (cur) { return cur.kind === "video" ? '<div class="stu-vid">' + localVideo(cur.v, true) + '<div class="stu-vt">' + esc(cur.v.title || "") + '</div></div>' : cur.kind === "exam"
     ? cur.twin ? '<div class="stu-twin">' + twinHTML(cur.twin) + '</div>' : '<div class="stu-fit ' + (cur.img.length > 1 ? "many" : "one") + '">' + cur.img.map(function (i) { return '<img data-src="' + esc(i) + '" alt="Question" hidden>'; }).join("") + '</div>'
-    : '<div class="stu-card"><div class="stu-q">' + paperHTML(cur.text, subjNow()) + '</div></div>';
+    : '<div class="stu-card"><div class="stu-q">' + paperHTML(cur.text, subjNow()) + '</div></div>'; };
+  var grp = cur ? stuGroup(STU.items.indexOf(cur)) : [];
+  var view = !cur ? '<div class="empty"><b class="t-card">No questions here</b></div>' : grp.length > 1
+    ? '<div class="stu-many" style="--n:' + grp.length + '">' + grp.map(function (q) { return '<div class="stu-cell"><span class="stu-cn num">' + (STU.items.indexOf(q) + 1) + '</span>' + one(q) + '</div>'; }).join("") + '</div>' : one(cur);
   var drawer = '<aside class="stu-drawer"' + (STU.drawer ? "" : " hidden") + ' aria-label="Questions"><div class="stu-dh"><div class="modes"><button type="button" data-stab="exam" aria-pressed="' + (STU.tab === "exam") + '">Exam ' + ne + '</button><button type="button" data-stab="quick" aria-pressed="' + (STU.tab === "quick") + '">Quick ' + nq + '</button>' + (nv ? '<button type="button" data-stab="video" aria-pressed="' + (STU.tab === "video") + '">Video ' + nv + '</button>' : "") + '</div><button class="btn small" type="button" id="stufs">Full screen</button><button class="btn small" type="button" id="stux">Close</button></div>' +
     '<p class="hint">Only the question or video shows on his screen. Move with the arrow keys, a swipe, or the faint \u2039 \u203a at the edges; \u201cShow him\u201d in Teach sends a question here.</p><nav class="stu-list">' +
     list.map(function (q, k) { return '<button type="button" class="stu-item' + (q === cur ? " cur" : "") + '" data-si="' + q.i + '"><span class="n num">' + (k + 1) + '</span>' + (q.kind === "exam" && q.img.length ? '<img data-src="' + esc(q.img[0]) + '" alt="" hidden><span class="ph"></span>' : '<span class="tx">' + (q.kind === "video" ? "\u25b6 " : "") + esc(plain(q.text).slice(0, 80)) + '</span>') + '</button>'; }).join("") + '</nav></aside>';
@@ -1861,15 +2063,19 @@ function drawStudent() {
   STU.items.forEach(function (q) { if (q.kind === "exam" && !q.lab) { var b0 = null; (function find(bs) { (bs || []).forEach(function (b) { if (b.id === q.id) b0 = b; if (b.blocks) find(b.blocks); }); })(q.p.blocks); q.lab = b0 && (b0.label || b0.source) || ""; } });
   var from = Math.max(0, Math.min(at - 2, STU.items.length - 6)), chips = STU.items.slice(from, from + 6);
   var CHEV = function (d) { return '<svg class="icon lg" viewBox="0 0 24 24" aria-hidden="true"><path d="' + (d < 0 ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6") + '"></path></svg>'; };
-  app.innerHTML = '<div class="stu clean"><header class="stu-top"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button><span class="push"></span>' + (cur ? tag((at + 1) + " of " + STU.items.length, "num") : "") + '</header><main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
-    '<button class="stu-edge prev" type="button" data-sgo="-1" aria-label="Previous question"' + (at <= 0 ? " disabled" : "") + '>' + CHEV(-1) + '</button><button class="stu-edge next" type="button" data-sgo="1" aria-label="Next question"' + (at < 0 || at >= STU.items.length - 1 ? " disabled" : "") + '>' + CHEV(1) + '</button>' +
+  app.innerHTML = '<div class="stu clean"><header class="stu-top"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button><span class="push"></span><div class="seg stu-n" role="group" aria-label="Questions on screen">' + [1, 2, 3].map(function (n) { return '<button type="button" data-stun="' + n + '" aria-pressed="' + (stuN() === n) + '" title="' + (n === 1 ? "One question at a time" : n + " questions together") + '">' + n + '</button>'; }).join("") + '</div>' + (cur ? tag((grp.length > 1 ? (at + 1) + " to " + (STU.items.indexOf(grp[grp.length - 1]) + 1) : (at + 1)) + " of " + STU.items.length, "num") : "") + '</header><main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
+    '<button class="stu-edge prev" type="button" data-sgo="-1" aria-label="Previous question"' + (at <= 0 ? " disabled" : "") + '>' + CHEV(-1) + '</button><button class="stu-edge next" type="button" data-sgo="1" aria-label="Next question"' + (at < 0 || STU.items.indexOf(grp[grp.length - 1]) >= STU.items.length - 1 ? " disabled" : "") + '>' + CHEV(1) + '</button>' +
     (STU.items.length > 1 ? '<nav class="stu-chips" aria-label="Questions">' + chips.map(function (q) { return '<button type="button" class="it" data-si="' + q.i + '"' + (q === cur ? ' aria-current="true"' : "") + '>' + (q.kind === "video" ? '<svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"></path></svg>' : "") + (STU.items.indexOf(q) + 1) + ' \u00b7 ' + esc(short(q)) + '</button>'; }).join("") + (STU.items.length > 6 ? '<button type="button" class="it" id="stumore">More</button>' : "") + '</nav>' : "") + drawer + '</div>';
   $$(".stu-view img").forEach(showImg); loadImages(app); maths(app); prefetchLesson();
   var ci = $(".stu-item.cur"); if (ci && STU.drawer) ci.scrollIntoView({ block: "nearest" });
   if (BC) BC.postMessage({ type: "alive", lesson: L.id });
 }
 /* arrows, swipes and the edge buttons go through every question in script order, exam and quick alike */
-function stuGo(d) { var k = STU.i + d; if (k < 0 || k >= STU.items.length) return; STU.i = k; STU.tab = STU.items[k].kind; drawStudent(); }
+function stuGo(d) { var g = stuGroup(STU.i), k = d > 0 ? STU.items.indexOf(g[g.length - 1]) + 1 : Math.max(0, STU.i - (stuN() > 1 ? stuN() * 2 - 1 : 1)); if (d < 0 && STU.i === 0 || k >= STU.items.length) return; STU.i = k; STU.tab = STU.items[k].kind; drawStudent(); }
+/* 1, 2 or 3 questions on his screen at once (Ali, 11 Oct: "he made one graph, I clicked right, then the second: let me put two or three together") */
+function stuN() { return Math.max(1, Math.min(3, +(ls("tutor.stun") || 1))); }
+function stuGroup(at) { var cur = STU.items[at], g = cur ? [cur] : []; if (!cur || cur.kind === "video") return g;
+  for (var k = at + 1; k < STU.items.length && g.length < stuN(); k++) { var q = STU.items[k]; if (q.kind === "video") continue; if (q.kind !== cur.kind) break; g.push(q); } return g; }   // a walkthrough video between two questions does not split them
 (function () { var x0 = null, y0 = null;
   document.addEventListener("touchstart", function (e) { if (MODE !== "student" || !STU || STU.drawer || e.touches.length !== 1) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
   document.addEventListener("touchend", function (e) { if (x0 == null || MODE !== "student" || !STU) return; var t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
@@ -1878,6 +2084,7 @@ document.addEventListener("click", function (e) { if (MODE !== "student" || !STU
   if (t.hasAttribute("data-stab")) { STU.tab = t.getAttribute("data-stab"); STU.i = -1; drawStudent(); }
   else if (t.hasAttribute("data-si")) { STU.i = +t.getAttribute("data-si"); STU.drawer = false; drawStudent(); }
   else if (t.hasAttribute("data-sgo")) stuGo(+t.getAttribute("data-sgo"));
+  else if (t.hasAttribute("data-stun")) { ls("tutor.stun", t.getAttribute("data-stun")); drawStudent(); }
   else if (t.id === "stumenu" || t.id === "stumore") { STU.drawer = !STU.drawer; drawStudent(); }
   else if (t.id === "stux") { STU.drawer = false; drawStudent(); }
   else if (t.id === "stufs") { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (x) {} } });
@@ -1886,7 +2093,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v44", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v55", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
@@ -1974,7 +2181,9 @@ if (TRY) { document.body.classList.add("tryout");
 flowPressed();
 
 /* the Exams tab (exams.js) works through these */
-window.TD = { tag: tag, subjTag: subjTag, topicStrTag: topicStrTag, refTag: refTag, cap: cap, fmtDate: fmtDate, hmin: hmin, app: app, $: $, $$: $$, esc: esc, clean: clean, ls: ls, toast: toast, maths: maths, CFG: CFG, gh: gh, putB64: putB64, b64enc: b64enc, loadTree: loadTree, shaOf: shaOf, blobBytes: blobBytes, fileJSON: fileJSON, fileURL: fileURL, studentBase: studentBase, isTry: TRY, render: render, openZoom: openZoom };
+window.TD = { cget: cget, cput: cput, tag: tag, subjTag: subjTag, topicStrTag: topicStrTag, refTag: refTag, cap: cap, fmtDate: fmtDate, hmin: hmin, app: app, $: $, $$: $$, esc: esc, clean: clean, ls: ls, toast: toast, maths: maths, CFG: CFG, gh: gh, putB64: putB64, b64enc: b64enc, loadTree: loadTree, shaOf: shaOf, blobBytes: blobBytes, fileJSON: fileJSON, fileURL: fileURL, studentBase: studentBase, isTry: TRY, render: render, openZoom: openZoom };
 
+/* browser tests only (localStorage tutor.test): read the app's state from the test */
+if (ls("tutor.test") === "1") window.__t = function (src) { return eval(src); };   // eslint-disable-line no-eval
 render();
 })();
