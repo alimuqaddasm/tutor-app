@@ -85,6 +85,7 @@ with sync_playwright() as p:
             fig = st.locator(".pp-fig").count() > 0
             ok = st.locator(".ex-qtext .pp").count() == 1 and (not fig or st.locator(".pp-fig .ex-qimg").count() == 1)
             check("%s Q%d: his page shows the paper layout%s" % (name, qn, ", picture in its place" if fig else ""), ok)
+            st.add_style_tag(content=".botbar{position:static!important}")   # full-page shots: the fixed bar would cover the middle
             st.screenshot(path=os.path.join(SHOTS, "r26-%s-q%d-1440.png" % (name, qn)), full_page=True)
             st.set_viewport_size({"width": 390, "height": 844}); st.wait_for_timeout(300)
             st.screenshot(path=os.path.join(SHOTS, "r26-%s-q%d-390.png" % (name, qn)), full_page=True)

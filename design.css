@@ -289,6 +289,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:15px}
 .pp-fig{margin:.7em 0;text-align:center}
 .pp-fig figure{margin:0}
 .pp-fig img{max-width:100%;height:auto;border:0;border-radius:0;background:#fff}
+.pp-fig[style]{max-width:100%}
 .pp-fig[style] img,.pp-fig[style] figure,.pp-fig[style] button{width:100%;max-width:none}
 .pp-fig button{border:0;background:none;padding:0;cursor:zoom-in}
 .pp-mcq{margin:.4em 0 0}
