@@ -1974,7 +1974,7 @@ if (TRY) { document.body.classList.add("tryout");
 flowPressed();
 
 /* the Exams tab (exams.js) works through these */
-window.TD = { tag: tag, subjTag: subjTag, topicStrTag: topicStrTag, refTag: refTag, cap: cap, fmtDate: fmtDate, hmin: hmin, app: app, $: $, $$: $$, esc: esc, clean: clean, ls: ls, toast: toast, maths: maths, CFG: CFG, gh: gh, putB64: putB64, b64enc: b64enc, loadTree: loadTree, shaOf: shaOf, blobBytes: blobBytes, fileJSON: fileJSON, fileURL: fileURL, studentBase: studentBase, isTry: TRY, render: render };
+window.TD = { tag: tag, subjTag: subjTag, topicStrTag: topicStrTag, refTag: refTag, cap: cap, fmtDate: fmtDate, hmin: hmin, app: app, $: $, $$: $$, esc: esc, clean: clean, ls: ls, toast: toast, maths: maths, CFG: CFG, gh: gh, putB64: putB64, b64enc: b64enc, loadTree: loadTree, shaOf: shaOf, blobBytes: blobBytes, fileJSON: fileJSON, fileURL: fileURL, studentBase: studentBase, isTry: TRY, render: render, openZoom: openZoom };
 
 render();
 })();

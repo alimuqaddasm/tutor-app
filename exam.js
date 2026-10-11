@@ -449,7 +449,7 @@ function question() {
     : '<textarea id="ans" class="input" spellcheck="false" placeholder="Working or notes"' + (ro ? " disabled" : "") + '>' + esc(d.text) + '</textarea>';
   box.innerHTML =
     '<div class="row ex-qhead"><span class="tag line lg">Question ' + (k + 1) + ' of ' + ord.length + '</span><span class="tag lg">' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</span>' + (q.type === "upload_required" ? '<span class="tag ask lg push">Photo needed</span>' : "") + '</div>' +
-    '<div class="ex-qtext"' + (q.has_img ? " hidden" : "") + '>' + (q.has_img ? "" : paperHTML(q.text_html, S.subject)) + '</div>' +
+    '<div class="ex-qtext"' + (q.has_img && !q.typed ? " hidden" : "") + '>' + (q.has_img && !q.typed ? "" : paperHTML(q.text_html, S.subject)) + '</div>' +
     (q.has_img ? '<figure class="ex-qimg"><button type="button" data-zoom><img alt="Question ' + (cur + 1) + ' picture"></button></figure>' : "") +
     (mcq ? '<div class="field ex-answer"><span class="lab">Your answer</span>' + input + '</div>' : "") +
     (upload ? '<div class="sunk stack ex-work"><span class="lab">' + (q.work ? esc(q.work) : mcq ? "Your working (optional)" : "Your working") + '</span>' +
@@ -625,7 +625,7 @@ function asgWork(m) {
       '<nav class="a-qnav" aria-label="Questions"><div class="a-eyebrow">Questions</div><div class="a-qlist"></div><span class="grow"></span>' +
         (ro ? "" : '<button type="button" class="a-finish" data-a-finish>I\'m done with ' + esc(x.title) + '</button>') + '</nav>' +
       '<main class="a-qcard"><div class="a-qhead"><h2>Question ' + (k + 1) + '</h2>' + (q.label && q.label !== "Q" + (k + 1) ? '<span class="a-meta">' + esc(q.label) + '</span>' : "") + '<span class="grow"></span><b>' + esc(q.marks) + ' mark' + (q.marks === 1 ? "" : "s") + '</b></div>' +
-        (q.has_img ? "" : '<div class="a-qtext">' + paperHTML(q.text_html, subjOf(x) === "chem" ? "chem" : "maths") + '</div>') +
+        (q.has_img && !q.typed ? "" : '<div class="a-qtext">' + paperHTML(q.text_html, subjOf(x) === "chem" ? "chem" : "maths") + '</div>') +
         (q.has_img ? '<figure class="a-qimg"><button type="button" data-zoom><img alt="Question ' + (k + 1) + '" data-src="/api/s/questions/' + esc(q.id) + '/image"></button></figure>' : "") +
         (mcq ? '<div class="a-lab">Your answer</div>' + input : "") +
         '<div class="a-lab">' + (q.work ? esc(q.work) : mcq ? "Your working (optional)" : "Your pages for this question") + '</div><div class="a-pages" data-q="' + esc(q.id) + '" data-kind="main"></div>' +
