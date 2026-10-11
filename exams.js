@@ -731,7 +731,11 @@ function iso(ms) { return ms == null ? null : new Date(ms).toISOString(); }
 document.addEventListener("click", function (e) {
   if ((location.hash || "").indexOf("#/exams") !== 0) return;
   var b = e.target.closest && e.target.closest("button, img.xt-zoomable"); if (!b) return;
-  if (b.tagName === "IMG") { if (b.src) { $("#zimg").src = b.src; $("#zoom").hidden = false; } return; }
+  if (b.tagName === "IMG") { if (!b.src) return;
+    /* zoomed in, a swipe or the arrow keys go to the next picture of the same kind on this page (Ali, 11 Oct) */
+    var kind = function (im) { return / picture$/.test(im.alt) ? "q" : im.alt; };
+    var all = Array.prototype.filter.call(document.querySelectorAll("#app img.xt-zoomable"), function (im) { return im.src && kind(im) === kind(b); });
+    openZoom(all.map(function (im) { return im.src; }), Math.max(0, all.indexOf(b))); return; }
   if (b.hasAttribute("data-compare")) return compare(Number(b.getAttribute("data-compare")));
   if (b.hasAttribute("data-cmpgo")) return compare(Number(b.getAttribute("data-cmpgo")));
   if (b.hasAttribute("data-cmpx")) return closeCompare();
