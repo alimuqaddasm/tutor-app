@@ -337,6 +337,7 @@ function drawExam() {
 
 /* the question as he sees it, on the exam page itself: no need to open Student view to read it (Ali, 11 Oct) */
 function qLook(q) {
+  if (q.has_img && q.typed) return '<div class="xq-look xt-qtext">' + T.clean(q.text_html) + '<img class="xt-zoomable" loading="lazy" alt="' + esc(q.label) + ' picture" title="Tap to open large" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>';
   if (q.has_img) return '<div class="xq-look"><img class="xt-zoomable" loading="lazy" alt="' + esc(q.label) + ' picture" title="Tap to open large" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>';
   return q.text_html ? '<div class="xq-look xt-qtext">' + T.clean(q.text_html) + '</div>' : "";
 }
