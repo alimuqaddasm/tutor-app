@@ -88,7 +88,7 @@ with sync_playwright() as p:
     pg.goto(APP + "#/lesson/" + MA)
     wait_for(pg, lambda: pg.locator(".tfoot").count() == 1, 25)
     check("Open shows the Teach screens (Prepare)", pg.locator(".teach3").count() == 1 and pg.locator("body.prep").count() == 1)
-    check("  ...a Prepare tag and a Teach button, no clock", "Prepare" in pg.inner_text(".tbar") and pg.locator(".tbar a[href$='/teach']").count() == 1 and pg.locator("#clkgo").count() == 0)
+    check("  ...a Prepare tag and a Teach button, no clock", "Prepare" in pg.inner_text(".tbar") and pg.locator(".tmini > a[href$='/teach']").count() == 1 and pg.locator("#clkgo").count() == 0)
     lt = pg.inner_text(".runway .ttl")
     check("  ...the lesson title in Title Case", lt == pg.evaluate("t => titleCase(t)", lt) and lt[:1].isupper(), lt)
     for i in range(6):
