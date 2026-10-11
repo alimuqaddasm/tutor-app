@@ -95,6 +95,18 @@ with sync_playwright() as p:
             st.locator('.pp-opt[data-opt="D"]').click()
             check("chem Q6: tapping option D's line picks D and fills its oval", wait_for(st, lambda: st.locator('.ex-pick[data-pick="D"][aria-pressed="true"]').count() == 1 and st.locator('.pp-opt.on[data-opt="D"]').count() == 1) is not None)
         sctx.close()
+        xid = pg.evaluate("location.hash").split("/")[2]
+        tapi("POST", "/api/t/exams/%s/lock" % xid)
+        pg.goto(APP + "#/exams/%s/mark" % xid)
+        check(name + ": Mark page shows every question in the paper layout", wait_for(pg, lambda: pg.locator(".pp").count() >= qs, 20) is not None, pg.locator(".pp").count())
+        pg.screenshot(path=os.path.join(SHOTS, "r26-%s-mark-1440.png" % name), full_page=True)
+        if pg.locator("[data-compare]").count():
+            pg.locator("[data-compare]").first.click()
+            pg.wait_for_timeout(800)
+            pg.evaluate("document.querySelectorAll('details.xt-cmpq').forEach(d => d.open = true)")
+            check(name + ": Compare shows the question in the paper layout", pg.locator(".xt-cmpq .pp").count() == 1)
+            pg.screenshot(path=os.path.join(SHOTS, "r26-%s-compare-1440.png" % name), full_page=True)
+
     b.close()
 print("%d of %d passed" % (sum(results), len(results)))
 raise SystemExit(0 if all(results) else 1)

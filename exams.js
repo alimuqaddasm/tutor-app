@@ -335,13 +335,16 @@ function drawExam() {
   showPics(app); drawRun(); drawLog();
 }
 
+/* the question in the paper's layout, picture in its place, for any page that shows a question (Mark, Compare too) */
+function paperQ(q, ex) {
+  var fig = q.has_img ? '<img class="xt-zoomable xq-fig" loading="lazy" alt="' + esc(q.label) + ' picture" title="Tap to open large" data-xsrc="/api/t/exams/' + esc(ex.id) + '/questions/' + esc(q.id) + '/image">' : "";
+  var h = PaperQ.render(q.text_html, /^chem/.test(ex.subject || "") ? "chem" : "maths");
+  return fig && h.indexOf('<div class="pp-fig"></div>') >= 0 ? h.replace('<div class="pp-fig"></div>', '<div class="pp-fig">' + fig + '</div>') : h + fig;
+}
+function isPaper(q) { return !!(window.PaperQ && PaperQ.is(q.text_html)); }
 /* the question as he sees it, on the exam page itself: no need to open Student view to read it (Ali, 11 Oct) */
 function qLook(q) {
-  if (window.PaperQ && PaperQ.is(q.text_html)) {   // typed like the paper: the paper layout, picture in its place
-    var fig = q.has_img ? '<img class="xt-zoomable xq-fig" loading="lazy" alt="' + esc(q.label) + ' picture" title="Tap to open large" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image">' : "";
-    var h = PaperQ.render(q.text_html, /^chem/.test(X.subject || "") ? "chem" : "maths");
-    return '<div class="xq-look">' + (fig && h.indexOf("pp-fig") >= 0 ? h.replace('<div class="pp-fig"></div>', '<div class="pp-fig">' + fig + '</div>') : h + fig) + '</div>';
-  }
+  if (isPaper(q)) return '<div class="xq-look">' + paperQ(q, X) + '</div>';   // typed like the paper
   if (q.has_img && q.typed) return '<div class="xq-look xt-qtext">' + T.clean(q.text_html) + '<img class="xt-zoomable" loading="lazy" alt="' + esc(q.label) + ' picture" title="Tap to open large" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>';
   if (q.has_img) return '<div class="xq-look"><img class="xt-zoomable" loading="lazy" alt="' + esc(q.label) + ' picture" title="Tap to open large" data-xsrc="/api/t/exams/' + esc(X.id) + '/questions/' + esc(q.id) + '/image"></div>';
   return q.text_html ? '<div class="xq-look xt-qtext">' + T.clean(q.text_html) + '</div>' : "";
@@ -505,7 +508,7 @@ function drawMark() {
     shown++; vis.push({ q: q, i: i, r: r, sec: asg ? (secs.filter(function (x) { return x.id === q.section; })[0] || {}).title : "" });
     return head + '<section class="xt-mq stack s4" data-mq="' + esc(q.id) + '" data-mqi="' + i + '"><div class="row"><span class="tag line">' + esc(q.label || "Q" + (i + 1)) + '</span>' + (r.source ? T.refTag(r.source) : "") + T.tag(q.marks + " mark" + (q.marks === 1 ? "" : "s")) + '<button class="btn sm push" type="button" data-compare="' + i + '" title="His work beside the mark scheme, full screen">Side by side</button></div>' +
       '<div class="xt-3">' +
-        '<div class="xt-col"><div class="xt-lab">Question</div><div class="xt-qtext">' + T.clean(q.text_html) + '</div>' + (q.has_img ? '<img class="xt-zoomable" alt="Question picture" data-xsrc="/api/t/exams/' + esc(R.id) + '/questions/' + esc(q.id) + '/image">' : "") + '</div>' +
+        '<div class="xt-col"><div class="xt-lab">Question</div>' + (isPaper(q) ? paperQ(q, R) : '<div class="xt-qtext">' + T.clean(q.text_html) + '</div>' + (q.has_img ? '<img class="xt-zoomable" alt="Question picture" data-xsrc="/api/t/exams/' + esc(R.id) + '/questions/' + esc(q.id) + '/image">' : "")) + '</div>' +
         '<div class="xt-col"><div class="xt-lab">His work' + (q.finalAt ? ' <span class="hint">Last saved ' + esc(t12(q.finalAt)) + '</span>' : "") + (q.writtenLate ? ' <span class="xt-late">Part written late</span>' : "") + '</div>' + timeLine(q) +
           (asg ? (q.final ? '<div class="xt-ans">' + esc(q.final) + '</div>' : '<p class="hint">No typed answer.</p>') + (q.doneAt == null ? '<p class="hint">He has not finished this part yet.</p>' : "")
             : q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : '<p class="hint">No typed answer.</p>') +
@@ -614,7 +617,7 @@ function compare(i) {
   var subj = /chem/i.test(R.subject || "") ? "chem" : "maths";
   cmp.innerHTML = '<header class="xt-cmphead"><button class="btn sm" type="button" data-cmpx><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>Back to marking</button><div class="tags">' + T.subjTag(subj) + T.tag(esc(shortTitle(R.title))) + T.tag("Side by side") + T.tag(q.marks + " mark" + (q.marks === 1 ? "" : "s")) + (q.seconds ? T.tag(esc(dur(q.seconds)) + " on it") : "") + '</div><span class="xt-grow"></span>' +
       '<div class="seg xt-cmpseg" role="group" aria-label="Questions">' + R.questions.map(function (x, k) { return '<button type="button" data-cmpgo="' + k + '"' + (k === i ? ' aria-pressed="true"' : "") + '>' + esc(x.label || "Q" + (k + 1)) + '</button>'; }).join("") + '</div></header>' +
-    '<details class="xt-cmpq"><summary>The question</summary><div class="xt-qtext">' + T.clean(q.text_html) + '</div>' + (q.has_img ? '<img class="xt-zoomable" alt="Question picture" data-xsrc="/api/t/exams/' + esc(R.id) + '/questions/' + esc(q.id) + '/image">' : "") + '</details>' +
+    '<details class="xt-cmpq"><summary>The question</summary>' + (isPaper(q) ? paperQ(q, R) : '<div class="xt-qtext">' + T.clean(q.text_html) + '</div>' + (q.has_img ? '<img class="xt-zoomable" alt="Question picture" data-xsrc="/api/t/exams/' + esc(R.id) + '/questions/' + esc(q.id) + '/image">' : "")) + '</details>' +
     '<div class="xt-cmp2"><section class="xt-col card"><h2 class="t-sec">His work</h2>' +
         (q.doneAt != null ? (q.atDone ? '<div class="xt-ans">' + esc(q.atDone) + '</div>' : "") + (q.changedAfterDone ? '<details class="xt-det xt-after"><summary>Changed after Done: not for marks</summary><div class="xt-ans">' + esc(q.final) + '</div></details>' : "")
           : q.final ? '<div class="xt-ans">' + lateSplit(q) + '</div>' : "") +
