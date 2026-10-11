@@ -4,7 +4,8 @@
      <h4>11.</h4> <h5>(a)</h5>    Edexcel question number and part label
      <p>…</p>                       one line of the paper (AQA starts each sentence on a new line)
      <p class="mk">[1 mark]</p>    marks, bold on the right   (Edexcel: <p class="mk">(2)</p>)
-     <figure></figure>              where the question's picture goes
+     <figure data-w="5.4" data-x="13.1"></figure>  where the picture goes: its width and its left edge from the
+                                    text start, in em of the paper's text size, measured on the PDF (no data-x: centred)
      <ol class="mcq"><li>…</li></ol> multiple choice options A, B, C… with the paper's answer boxes
      <p class="ans">Reason</p>       an answer-space label with its line (data-unit="g" adds the unit after the line)
      <p class="note">…</p>          Claude's note to him (not part of the paper)
@@ -27,7 +28,11 @@
       if (tag === "H5") return row(n.textContent.trim(), "part");
       if (!cur) row("", "");
       var st = n.getAttribute("style") ? ' style="' + esc(n.getAttribute("style")) + '"' : "";
-      if (tag === "FIGURE") return cur.body.push('<div class="pp-fig"></div>');
+      if (tag === "FIGURE") {   // data-w / data-x: width and left edge in em of the paper's own text size (11 pt AQA, 12 pt Edexcel), measured on the PDF
+        var w = parseFloat(n.getAttribute("data-w")), x = parseFloat(n.getAttribute("data-x"));
+        var fs = w > 0 ? ' style="width:' + w + 'em;' + (x >= 0 ? "margin-left:min(" + x + "em,calc(100% - " + w + "em))" : "margin-left:auto;margin-right:auto") + '"' : "";
+        return cur.body.push('<div class="pp-fig"' + fs + '></div>');
+      }
       if (tag === "OL" && n.classList.contains("mcq")) {
         var L = "ABCDEFGH";
         return cur.body.push('<div class="pp-mcq">' + Array.prototype.map.call(n.children, function (li, i) {

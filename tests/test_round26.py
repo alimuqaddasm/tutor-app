@@ -76,7 +76,7 @@ with sync_playwright() as p:
         st = sctx.new_page()
         st.goto(link)
         wait_for(st, lambda: st.locator(".ex-qtext").count() == 1, 20)
-        for qn in ([1, 2, 3, 4, 5, 6] if name == "chem" else [1, 2, 3, 4, 5]):
+        for qn in ([1, 2, 3, 4, 5, 6, 8] if name == "chem" else [1, 2, 3, 4, 5]):
             st.set_viewport_size({"width": 1440, "height": 900})
             st.click('[data-go="%d"]' % (qn - 1))
             st.wait_for_timeout(500)
@@ -85,6 +85,7 @@ with sync_playwright() as p:
             fig = st.locator(".pp-fig").count() > 0
             ok = st.locator(".ex-qtext .pp").count() == 1 and (not fig or st.locator(".pp-fig .ex-qimg").count() == 1)
             check("%s Q%d: his page shows the paper layout%s" % (name, qn, ", picture in its place" if fig else ""), ok)
+            st.add_style_tag(content=".botbar{position:static!important}")   # full-page shots: the fixed bar would cover the middle
             st.screenshot(path=os.path.join(SHOTS, "r26-%s-q%d-1440.png" % (name, qn)), full_page=True)
             st.set_viewport_size({"width": 390, "height": 844}); st.wait_for_timeout(300)
             st.screenshot(path=os.path.join(SHOTS, "r26-%s-q%d-390.png" % (name, qn)), full_page=True)
@@ -95,6 +96,18 @@ with sync_playwright() as p:
             st.locator('.pp-opt[data-opt="D"]').click()
             check("chem Q6: tapping option D's line picks D and fills its oval", wait_for(st, lambda: st.locator('.ex-pick[data-pick="D"][aria-pressed="true"]').count() == 1 and st.locator('.pp-opt.on[data-opt="D"]').count() == 1) is not None)
         sctx.close()
+        xid = pg.evaluate("location.hash").split("/")[2]
+        tapi("POST", "/api/t/exams/%s/lock" % xid)
+        pg.goto(APP + "#/exams/%s/mark" % xid)
+        check(name + ": Mark page shows every question in the paper layout", wait_for(pg, lambda: pg.locator(".pp").count() >= qs, 20) is not None, pg.locator(".pp").count())
+        pg.screenshot(path=os.path.join(SHOTS, "r26-%s-mark-1440.png" % name), full_page=True)
+        if pg.locator("[data-compare]").count():
+            pg.locator("[data-compare]").first.click()
+            pg.wait_for_timeout(800)
+            pg.evaluate("document.querySelectorAll('details.xt-cmpq').forEach(d => d.open = true)")
+            check(name + ": Compare shows the question in the paper layout", pg.locator(".xt-cmpq .pp").count() == 1)
+            pg.screenshot(path=os.path.join(SHOTS, "r26-%s-compare-1440.png" % name), full_page=True)
+
     b.close()
 print("%d of %d passed" % (sum(results), len(results)))
 raise SystemExit(0 if all(results) else 1)

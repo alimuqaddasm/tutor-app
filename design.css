@@ -289,6 +289,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:15px}
 .pp-fig{margin:.7em 0;text-align:center}
 .pp-fig figure{margin:0}
 .pp-fig img{max-width:100%;height:auto;border:0;border-radius:0;background:#fff}
+.pp-fig[style]{max-width:100%}
+.pp-fig[style] img,.pp-fig[style] figure,.pp-fig[style] button{width:100%;max-width:none}
 .pp-fig button{border:0;background:none;padding:0;cursor:zoom-in}
 .pp-mcq{margin:.4em 0 0}
 .pp-opt{display:grid;grid-template-columns:1.7em minmax(0,1fr) 2.6em;align-items:center;column-gap:.3em;margin:.75em 0}
@@ -300,13 +302,14 @@ table.tbl{width:100%;border-collapse:collapse;font-size:15px}
 .pp-rule{flex:1;max-width:14em;border-bottom:1px solid #000;height:1em}
 .pp ol.steps{list-style:none;margin:.2em 0 0;padding:0 0 0 1.2em}
 .pp ol.steps li{display:grid;grid-template-columns:1.3em minmax(0,1fr);column-gap:.4em;align-items:baseline;padding:0;margin:0 0 .45em;border-radius:0}
-.pp sub,.pp sup{font-size:.72em;line-height:0}
+.pp sub,.pp sup{font-size:.7em;line-height:0;position:relative;vertical-align:baseline}
+.pp sub{top:.3em}
+.pp sup{top:-.62em;margin-left:.06em}
 .pp ul.given{margin:.3em 0 .5em;padding-left:1.6em}
 .pp ul.given li{margin:.35em 0}
-.pp.edx .pp-fig img{max-width:min(100%,30em)}
-.pp.aqa .pp-fig img{max-width:min(100%,46em)}
 @media (max-width:560px){
   .pp-row,.pp.edx .pp-row{grid-template-columns:minmax(0,1fr);row-gap:.5em}
   .pp.edx .pp-row.part,.pp.edx .pp-row.cont{margin-left:1.2em}
   .pp-rule{max-width:none}
 }
+.pp-fig:not([style]) img{max-width:min(100%,30em)}
