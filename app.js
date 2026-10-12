@@ -1317,7 +1317,9 @@ function teachSeq() {
   seq.concat([{ t: "end" }]).forEach(function (c) { var g = c.t === "question" && (c.b.img || []).length && (c.b.grow || /^board\b/i.test(c.b.label || "")) ? c : null;
     if (g && run.length && (run[0].p !== g.p || run[0].mod !== g.mod || run[0].b.label !== g.b.label)) { done(); }
     if (g) run.push(g); else if (c.t === "question" || c.t === "phase" || c.t === "mod" || c.t === "end") done(); });
-  function done() { if (run.length > 1) { var last = run[run.length - 1].b.img; run.slice(0, -1).forEach(function (c, i) { c.full = last; c.click = [i + 1, run.length]; }); } run = []; }
+  /* one screen for Ali with the full board; "Next line" adds the next line on his screen (Ali, 12 Oct: "I see one board only, he sees a new line every click") */
+  function done() { if (run.length > 1) { var c0 = run[0]; c0.full = run[run.length - 1].b.img; c0.lines = run.map(function (c) { return c.b.id; }); run.slice(1).forEach(function (c) { c.drop = true; }); } run = []; }
+  seq = seq.filter(function (c) { return !c.drop; });
   /* hints: the steps and notes right after a question fold into that question's screen, closed (Ali, 2 Oct:
      "he is good at maths, keep them hidden until I want them"). On by default for maths; Settings switches it. */
   if (foldOn((L.script && L.script.subject) || L.session.subject)) { var fs = [], host = null;
@@ -1582,6 +1584,12 @@ function previewing() { return MODE === "teach" && L && (PREP || !(L.session.tim
 var TLTAG = { q: "ask", ask: "ask", check: "ok", draw: "bad", say: "chem", show: "maths", core: "line", deep: "dash", "do": "line" };
 function tlabel(kind, ic, text) { return '<div class="tlabel k-' + kind + '"><span class="tag lg ' + (TLTAG[kind] || "line") + '">' + esc(cap(text)) + '</span></div>'; }
 var KIC = { say: "S", draw: "D", ask: "?", show: "▣", check: "✓" };
+/* how many lines of a growing board are on his screen (kept on this device for the lesson) */
+var LINES = {};
+function lineAt(c) { return LINES[L.id + "|" + c.b.id] || 0; }
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-line]"); if (!t || !L) return;
+  var c = (TCH.seq || [])[TCH.pos]; if (!c || !c.lines) return; var k = L.id + "|" + c.b.id, ln = lineAt(c); if (ln >= c.lines.length) ln = 0;
+  showHim(c.lines[ln]); LINES[k] = ln + 1; drawTeach(); });
 function chunkKey(c) { return c.t === "quiz" ? c.it.id : c.t === "drill" ? c.key : c.t === "question" ? c.b.id : c.key || null; }
 /* what one chunk is, in a few words: for the outline, the greyed lines and "up next" */
 /* LaTeX as plain text for short labels (outline, grey lines, up next): a cut-off \( … \) would show raw code */
@@ -1614,7 +1622,7 @@ function chunkHTML(c) {
         qtags(c.it) + '<div class="qtext prose">' + paperHTML(c.it.q, subjNow()) + '</div>' + answerBox(c.it.a, c.it.book ? c.it.page : null) + hintsHTML(c) + ctlBig(c.it.id, a, plain(c.it.q));
     case "drill": var a2 = L.session.answers[c.key] || {};
       return '<div class="qhead">' + tlabel("q", "?", (c.title || "Drill") + (c.of > 1 ? " \u00b7 " + c.n + " of " + c.of : "")) + '</div><div class="qtext prose">' + paperHTML(c.d[0], subjNow()) + '</div>' + answerBox(c.d[1]) + hintsHTML(c) + ctlBig(c.key, a2, plain(c.d[0]));
-    case "question": return (c.b.parts || []).length ? sliderHTML(c) + hintsHTML(c) : (c.full ? '<div class="tags growtag">' + tag("Full board for you", "line") + tag("His screen: click " + c.click[0] + " of " + c.click[1]) + '</div>' : "") + questionBlock(c.full ? Object.assign({}, c.b, { img: c.full }) : c.b, true) + hintsHTML(c);
+    case "question": return (c.b.parts || []).length ? sliderHTML(c) + hintsHTML(c) : (c.lines ? '<div class="tags growtag">' + tag("Full board for you", "line") + tag(PREP ? c.lines.length + " lines on his screen" : "His screen: line " + lineAt(c) + " of " + c.lines.length) + '</div>' : "") + questionBlock(c.lines ? Object.assign({}, c.b, { img: c.full, id: c.lines[c.lines.length - 1] }) : c.b, true) + hintsHTML(c);
     case "board": return boardHTML(c);
     case "concept": return conceptHTML(c);
     case "end": return '<div class="tphase stack s4"><div class="tags">' + tag("Done", "ok") + '</div><h2>End of the script</h2><span class="hint">Log times, notes and what to change next time.</span><div class="row"><button class="btn" type="button" data-store>Add a section from the Store</button><button class="btn next" type="button" data-tgo="after">After the lesson</button></div></div>';
@@ -1679,7 +1687,9 @@ function clockNag(lv) {
 }
 function footHTML(c, lv) {
   var taughtable = { step: 1, mod: 1, concept: 1, board: 1 }[c.t] || (c.t === "text" && c.key), mid = "";
-  if (c.t === "question" && (c.b.img || []).length && !PREP) mid += '<button class="btn accent-soft" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
+  if (c.t === "question" && c.lines && !PREP) { var ln = lineAt(c), n = c.lines.length;
+    mid += '<button class="btn accent-soft" type="button" data-line="' + esc(c.b.id) + '">' + (ln === 0 ? "Show him line 1" : ln < n ? "Next line (" + (ln + 1) + " of " + n + ")" : "Start again from line 1") + '</button>'; }
+  else if (c.t === "question" && (c.b.img || []).length && !PREP) mid += '<button class="btn accent-soft" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
   if (c.t === "mod") mid += '<button class="btn quiet" type="button" data-tskip="mod">Skip this section</button>';
   if (c.t === "phase") mid += '<button class="btn quiet" type="button" data-tskip="phase">Skip this part</button>';
   // Taught / Skip / Next once the lesson has started (clock running, paused or ended); before that only Next
