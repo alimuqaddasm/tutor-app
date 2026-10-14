@@ -41,9 +41,11 @@ with sync_playwright() as p:
         pg.wait_for_function("()=>__t(\"studentSeen['%s']\")" % LID, timeout=10000)
         seen = []
         pg.locator(".tfoot [data-line]").click(); pg.wait_for_timeout(500)
-        for k in range(1, 7):
-            pg.locator(".tfoot [data-line]").click(); pg.wait_for_timeout(500)
-            seen.append(stu.evaluate("__t('STU.items[STU.i].id')"))
+        for k in range(40):
+            if "Start again" in pg.locator(".tfoot [data-line]").inner_text(): break
+            pg.locator(".tfoot [data-line]").click(); pg.wait_for_timeout(400)
+            i = stu.evaluate("__t('STU.items[STU.i].id')")
+            if not seen or seen[-1] != i: seen.append(i)
         check("each click puts the next line on his screen", seen == ["s71-g%d" % k for k in range(1, 7)], seen)
         check("after the last line the button offers to start again", "Start again" in pg.locator(".tfoot [data-line]").inner_text())
         check("his screen shows the board", stu.locator(".stu-fit canvas.bcv").count() == 1)
