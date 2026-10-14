@@ -198,7 +198,7 @@ with sync_playwright() as p:
     pg.evaluate("s => __t(s)", "CK.quietUntil = Date.now() + 3600000; CK.keep = (ckJSON('tutor.running') || {}).id; ckJSON('tutor.next', null)")
     pg.click("[data-tmore]"); pg.click(".tmenu [data-store]")
     check("Teach: Add from the Store lists the sections", wait_for(pg, lambda: pg.locator(".storerow [data-stadd^='students/UK-1/store/maths-test/']").count() == 2, 10) is not None, pg.inner_text("#stobox") if pg.locator("#stobox").count() else "no panel")
-    check("  ...the real chapter 7 store is there too, 7 sections", pg.locator(".storerow [data-stadd^='students/UK-1/store/maths-y2-7/']").count() == 7 or "maths-y2-7" not in str(fake.files.keys()))
+    check("  ...the real chapter 7 store is there too, 7 sections or more (leftovers join it)", pg.locator(".storerow [data-stadd^='students/UK-1/store/maths-y2-7/']").count() >= 7 or "maths-y2-7" not in str(fake.files.keys()))
     shot(pg, "store-1440")
     pg.click(".storerow [data-stadd='students/UK-1/store/maths-test/store.json#s72']")
     check("  ...adding jumps to the new section", wait_for(pg, lambda: "Double Angle Formulae" in pg.inner_text(".tbar"), 5) is not None, pg.inner_text(".tbar") if pg.locator(".tbar").count() else "")
@@ -240,7 +240,7 @@ with sync_playwright() as p:
         pg.evaluate("__t('tmove(%d - TCH.pos, \"jump\")')" % j)
         wait_for(pg, lambda: pg.locator(".growtag").count() == 1, 5)
         src = pg.evaluate("__t('TCH.seq[TCH.pos].full[0]')")
-        check("  ...Ali sees the full board on click 1", (src.endswith("f6.png") or src.endswith("g5.png")) and "Full board for you" in pg.inner_text(".growtag"), src)
+        check("  ...Ali's board starts with the question alone (round 30)", (src.endswith("f6.png") or src.endswith("g5.png")) and "Question only" in pg.inner_text(".growtag"), src)
         shot(pg, "growboard-1440")
 
     # ---------- warm-up shuffle ----------

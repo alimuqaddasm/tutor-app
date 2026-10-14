@@ -35,19 +35,18 @@ with sync_playwright() as p:
         pos = pg.evaluate("__t(\"TCH.seq.findIndex(function(c){return c.lines&&c.lines.length===6})\")")
         pg.evaluate("p=>__t('TCH.pos='+p+';drawTeach()')", pos); pg.wait_for_timeout(1000)
         tags = pg.inner_text(".chunk.cur .growtag")
-        check("Ali sees 'Full board for you' and 'line 0 of 6'", "Full board for you" in tags and "line 0 of 6" in tags, tags)
-        src = pg.get_attribute(".chunk.cur .qbody img", "data-src") or ""
-        check("Ali's picture is the full board (line 6)", src.endswith("s71-g6.png"), src)
+        check("Ali sees 'Question only' (since round 30 his board builds too)", "Question only" in tags, tags)
         btn = pg.locator(".tfoot [data-line]")
-        check("button reads 'Show him line 1'", btn.inner_text().strip() == "Show him line 1", btn.inner_text())
+        check("button reads 'Show him the question'", btn.inner_text().strip() == "Show him the question", btn.inner_text())
         pg.wait_for_function("()=>__t(\"studentSeen['%s']\")" % LID, timeout=10000)
         seen = []
+        pg.locator(".tfoot [data-line]").click(); pg.wait_for_timeout(500)
         for k in range(1, 7):
             pg.locator(".tfoot [data-line]").click(); pg.wait_for_timeout(500)
             seen.append(stu.evaluate("__t('STU.items[STU.i].id')"))
         check("each click puts the next line on his screen", seen == ["s71-g%d" % k for k in range(1, 7)], seen)
         check("after the last line the button offers to start again", "Start again" in pg.locator(".tfoot [data-line]").inner_text())
-        check("his screen shows the line picture", stu.get_attribute(".stu-fit img", "data-src").endswith("s71-g6.png"))
+        check("his screen shows the board", stu.locator(".stu-fit canvas.bcv").count() == 1)
         pg.screenshot(path=os.path.join(SHOTS, "r29-teach-1440.png")); stu.screenshot(path=os.path.join(SHOTS, "r29-student.png"))
         pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(500); pg.screenshot(path=os.path.join(SHOTS, "r29-teach-390.png"))
         # the next screen is not another copy of the same board

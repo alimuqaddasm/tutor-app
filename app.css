@@ -1301,3 +1301,10 @@ tr.xt-lit td{background:var(--accent-wash)}
 .xt-pzone .tag{position:absolute;top:var(--s1);right:var(--s1)}
 .xt-pzone:hover,.xt-pzone:focus-visible{border-color:var(--accent)}
 .xt-pzone[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-wash);mix-blend-mode:multiply}
+
+/* a board that builds line by line (14 Oct): a canvas sized like the board pictures */
+.bwrap{position:relative;display:flex;justify-content:center}
+.bcv{display:block;max-width:100%;max-height:78vh;width:auto;height:auto;border:1px solid var(--line);border-radius:var(--r-md);background:#fff}
+.stu-fit .bwrap{width:100%;height:100%;align-items:center}
+.stu-fit .bcv{max-height:100%;border:0}
+.qbody .bcv{max-height:58vh;border:0}
