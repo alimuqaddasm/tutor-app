@@ -1950,8 +1950,13 @@ function loadStores() { var ps = storePaths(); return Promise.all(ps.map(functio
     return fileJSON(p).then(function (r) { if (r) STORES[p] = { sha: r.sha, data: r.data }; }).catch(function () {}); })).catch(function () {}); }
 function storePart(path, id) { var st = STORES[path]; return st && (st.data.parts || []).filter(function (q) { return q.id === id; })[0]; }
 function addedList() { return ((L && L.session.added) || []).filter(function (a) { return !a.removed; }).concat(PREP && L && L.prepAdded || []); }
+/* one object per added part for the whole lesson: the outline and the screens match parts by object, so a fresh copy
+   on every draw left an added part with no rows and "Start of this part" jumping to the top (Ali, 14 Oct) */
+var ADDED = {};
 function addedParts() { var out = []; addedList().forEach(function (a) { var q = storePart(a.store, a.part); if (!q) return;
-    out.push({ after: a.after, part: { id: "st-" + q.id, name: q.name, start: null, end: null, blocks: q.blocks || [], show: q.show, fromStore: a.store, after: a.after, code: q.code, introduces: q.introduces } }); });
+    var k = (L && L.id) + "|" + a.store + "|" + a.part + "|" + a.after, hit = ADDED[k];
+    if (!hit || hit.src !== q) hit = ADDED[k] = { src: q, part: { id: "st-" + q.id, name: q.name, start: null, end: null, blocks: q.blocks || [], show: q.show, fromStore: a.store, after: a.after, code: q.code, introduces: q.introduces } };
+    out.push({ after: a.after, part: hit.part }); });
   return out; }
 function storeOpen() { var subj = subjNow(), old = $("#stov"); if (old) old.remove();
   var el = document.createElement("div"); el.id = "stov"; el.className = "sug"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Add from the store");
