@@ -1634,7 +1634,10 @@ function whyLabels(box, bd, b, step, ghost) { if (!box || !bd.whys || !bd.whys.s
   var last = -1e9; $$(".tag", box).forEach(function (t) { var top = t.offsetTop - t.offsetHeight / 2; if (top < last + 4) { t.style.top = (last + 4 + t.offsetHeight / 2) + "px"; top = last + 4; } last = top + t.offsetHeight; }); }
 /* send the board's state to the Student view; without one open, show the picture as before */
 function showBoard(c, step) { var g = bdGroup(c, step), id = c.bd.ids[Math.max(0, Math.min(c.bd.ids.length - 1, g))];
-  if (BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 10000) { BC.postMessage({ type: "show", lesson: L.id, id: id, board: Object.assign({}, c.bd, { step: step }) });
+  /* always send: a Student view in a window that is not in front may check in only once a minute (Windows and
+     Chrome slow its timers), so "not heard from lately" does not mean it is closed (Ali, 14 Oct) */
+  if (BC && L) BC.postMessage({ type: "show", lesson: L.id, id: id, board: Object.assign({}, c.bd, { step: step }) });
+  if (BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 180000) {
     toast(c.bd.mode === "lines" ? "Hint line " + step + " is on his screen" : step ? "Step " + step + " is on his screen" : "The question is on his screen"); return; }
   /* no Student view open: the board still builds on Ali's screen (he may be sharing it); say once how to send it */
   if (!showBoard.told) { showBoard.told = true; toast(c.bd.mode === "lines" ? "Open the Student view first, then give the hint" : "Building on your screen. Open the Student view to send it to him"); } }
@@ -1713,7 +1716,7 @@ function drawTeach() {
   h += '<div class="chunk cur t-' + c.t + (stateOf(c) === "done" ? " done" : "") + '" data-tk="' + esc(chunkKey(c) || "") + '">' + stripHTML(c) + chunkHTML(c) + '</div>';
   var nx = TCH.seq[TCH.pos + 1];
   h += '</div>' + (nx ? '<button type="button" class="upnext" data-tjump="' + (TCH.pos + 1) + '"><b class="lab">Up next</b><span>' + esc(shortOf(nx, 130)) + '</span></button>' : "") + '</div>' + footHTML(c, lv) + '</section></div>';
-  app.innerHTML = h; fillRows(app); loadImages(app); boardMount(app, !!BANIM); BANIM = null; maths(app); tick();
+  app.innerHTML = h; fillRows(app); loadImages(app); boardMount(app, !!BANIM); BANIM = null; maths(app); tick(); pingStudent();
   window.scrollTo(0, 0); fitBoards(); fitBoard(); applyFit(); warmCount(); prefetchLesson(); prefetchAhead(TCH.seq.slice(TCH.pos + 1, TCH.pos + 5));
   if (fgo) { var fb = $('.tfoot [data-tgo="' + fgo + '"]') || $(".tfoot .btn.next") || $(".tfoot .btn"); if (fb && !fb.disabled) fb.focus({ preventScroll: true }); }
   /* move only the outline's own scroll box: scrollIntoView also scrolled the page down (Ali, 2 Oct) */
@@ -2126,10 +2129,13 @@ try { BC = new BroadcastChannel("tutor-desk"); } catch (e) {}
 var studentSeen = {};
 if (BC) BC.onmessage = function (ev) { var m = ev.data || {};
   if (m.type === "alive") studentSeen[m.lesson] = Date.now();
+  if (m.type === "ping" && MODE === "student" && L) BC.postMessage({ type: "alive", lesson: L.id });
   if (m.type === "show" && MODE === "student" && L && m.lesson === L.id && STU) { var k = STU.items.findIndex(function (q) { return q.id === m.id; }); STU.board = m.board || null; STU.banim = !!(m.board && m.board.step); if (k >= 0) { STU.tab = STU.items[k].kind; STU.i = k; drawStudent(); } BC.postMessage({ type: "alive", lesson: L.id }); } };
 setInterval(function () { if (BC && MODE === "student" && L) BC.postMessage({ type: "alive", lesson: L.id }); }, 4000);
+function pingStudent() { if (BC && MODE === "teach" && L) BC.postMessage({ type: "ping" }); }
+window.addEventListener("focus", pingStudent); document.addEventListener("visibilitychange", pingStudent);
 /* Show him: to the student tab if one is open for this lesson, otherwise full screen here */
-function showHim(id) { if (/^v:/.test(id) && !(BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 10000)) { toast("Open the Student view first, then press Show him"); return; } if (BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 10000 && id !== "*") { BC.postMessage({ type: "show", lesson: L.id, id: id }); toast("Sent to the student view"); return; } openShow(id); }
+function showHim(id) { if (/^v:/.test(id) && !(BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 180000)) { toast("Open the Student view first, then press Show him"); return; } if (BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 180000 && id !== "*") { BC.postMessage({ type: "show", lesson: L.id, id: id }); toast("Sent to the student view"); return; } openShow(id); }
 function studentItems() { var out = [];
   phases().filter(function (p) { return !p.sys; }).forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) {
     if (b.type === "question" && (b.parts || []).length) out.push({ kind: "exam", id: b.id, img: [], twin: b, p: p });
