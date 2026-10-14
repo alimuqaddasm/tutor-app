@@ -708,7 +708,7 @@ function quizBlock(b) {
 function questionBlock(q, big) {
   var paper = q.source && /edexcel|solomon|maths genie|pearson/i.test(q.source) || (L.script || {}).subject === "maths" ? "q-edexcel" : "q-aqa";
   var h = '<div class="qcard"><div class="row">' + tag("Question", "line") + (q.source ? refTag(q.source) : tag(esc(q.label || ""), "line")) + (!q.board && ((q.img || []).length || (q.parts || []).length) ? '<button class="btn sm push" type="button" data-show="' + esc(q.id) + '">Show him</button>' : "") + '</div>' +
-    (q.html || (q.parts && !big) || (q.img || []).length ? '<div class="card qbody ' + paper + '">' + (q.html ? '<div class="prose">' + clean(q.html) + '</div>' : "") + (q.parts && !big ? twinHTML(q) : "") + (q.board ? boardCanvas(q.board) : (q.img || []).map(function (i) { return img(i, q.label); }).join("")) + '</div>' : "");
+    (q.html || (q.parts && !big) || (q.img || []).length ? '<div class="card qbody ' + paper + '">' + (q.html ? '<div class="prose">' + clean(q.html) + '</div>' : "") + (q.parts && !big ? twinHTML(q) : "") + (q.board ? boardCanvas(q.board, Math.max(0, LINES[L.id + "|" + q.board.id] || 0), true) : (q.img || []).map(function (i) { return img(i, q.label); }).join("")) + '</div>' : "");
   if (q.answer || (q.answerImg || []).length) h += '<details class="fold reveal"><summary>Mark scheme</summary><div class="prose">' + clean(q.answer || "") + (q.answerImg || []).map(function (i) { return img(i, "Mark scheme"); }).join("") + '</div></details>';
   var a = L.session.answers[q.id] || {};
   if (big) return h + ctlBig(q.id, a, q.label, q.marks) + '</div>';
@@ -1305,7 +1305,8 @@ function teachSeq() {
         else if (b.type === "quiz") { var its = b.items || [], f = quizFilter(its), on = its.filter(function (i) { return quizOn(i, f); });
           seq.push({ t: "quizpick", b: b, p: p, mod: mod });
           on.forEach(function (it, i) { seq.push({ t: "quiz", it: it, n: i + 1, of: on.length, b: b, p: p, mod: mod }); }); }
-        else if (b.type === "drill") (b.items || []).forEach(function (d, i) { seq.push({ t: "drill", d: d, key: drillKey(d[0]), n: i + 1, of: b.items.length, title: b.title, p: p, mod: mod }); });
+        else if (b.type === "drill") (b.items || []).forEach(function (d, i) { var dc = { t: "drill", d: d, key: drillKey(d[0]), n: i + 1, of: b.items.length, title: b.title, p: p, mod: mod }, pic = hintPic(b, d);
+          if (pic) dc.bd = { id: dc.key, mode: "lines", ids: [dc.key], imgs: [pic], box: b.hintBox || null }; seq.push(dc); });
         else seq.push({ t: b.type, b: b, p: p, mod: mod });
       });
     })(p.blocks, null);
@@ -1318,7 +1319,7 @@ function teachSeq() {
     if (g && run.length && (run[0].p !== g.p || run[0].mod !== g.mod || run[0].b.label !== g.b.label)) { done(); }
     if (g) run.push(g); else if (c.t === "question" || c.t === "phase" || c.t === "mod" || c.t === "end") done(); });
   /* one screen for Ali with the full board; "Next line" adds the next line on his screen (Ali, 12 Oct: "I see one board only, he sees a new line every click") */
-  function done() { if (run.length > 1) { var c0 = run[0]; c0.full = run[run.length - 1].b.img; c0.lines = run.map(function (c) { return c.b.id; }); c0.imgs = run.map(function (c) { return c.b.img[c.b.img.length - 1]; }); run.slice(1).forEach(function (c) { c.drop = true; }); } run = []; }
+  function done() { if (run.length > 1) { var c0 = run[0]; c0.full = run[run.length - 1].b.img; c0.lines = run.map(function (c) { return c.b.id; }); c0.bd = { id: c0.b.id, mode: "grow", ids: c0.lines, imgs: run.map(function (c) { return c.b.img[c.b.img.length - 1]; }), whys: run.map(function (c) { return c.b.why || ""; }) }; run.slice(1).forEach(function (c) { c.drop = true; }); } run = []; }
   seq = seq.filter(function (c) { return !c.drop; });
   /* hints: the steps and notes right after a question fold into that question's screen, closed (Ali, 2 Oct:
      "he is good at maths, keep them hidden until I want them"). On by default for maths; Settings switches it. */
@@ -1400,7 +1401,7 @@ function boardHTML(c) {
     h += '<li class="brow' + (open ? " open" : "") + (it.rel ? " rel" : "") + (star ? " star" : "") + '" data-v="' + esc(a.v || "") + '">' +
       '<button type="button" class="bq" data-bopen="' + esc(k) + '" aria-expanded="' + open + '"><span class="bn num">' + (i + 1) + '</span><span class="bt">' + (star ? '<i aria-hidden="true">★</i> ' : "") + clean(String(boardQ(it)).replace(/<br\s*\/?>/gi, " \u00b7 ")) + '</span>' +
       (it.it && it.it.page ? '<span class="bpg">' + esc(it.it.page) + '</span>' : it.title && /\(([^)]+)\)/.test(it.title) ? '<span class="bpg">' + esc(/\(([^)]+)\)/.exec(it.title)[1]) + '</span>' : "") + '<span class="bv" aria-hidden="true">' + ({ right: "✓", wrong: "✗", partly: "½", wording: "W", terminology: "T", skipped: "-", tskip: "⏭" }[a.v] || "") + '</span></button>' +
-      (open ? '<div class="bbody"><div class="qtext prose">' + paperHTML(boardQ(it), subjNow()) + '</div><div class="bans prose">' + clean(boardA(it)) + '</div>' + (a.note ? '<div class="bnote"><b>Note:</b> ' + esc(a.note) + '</div>' : "") + boardNext(items, it) + '</div>' : "") + '</li>'; });
+      (open ? '<div class="bbody"><div class="qtext prose">' + paperHTML(boardQ(it), subjNow()) + '</div><div class="bans prose">' + clean(boardA(it)) + '</div>' + (it.t === "drill" ? hintHTML(it) : "") + (a.note ? '<div class="bnote"><b>Note:</b> ' + esc(a.note) + '</div>' : "") + boardNext(items, it) + '</div>' : "") + '</li>'; });
   var oi = items.filter(function (it) { return boardKey(it) === BOARD.open; })[0];
   return h + '</ol>' + vrail(oi ? boardKey(oi) : null, oi ? L.session.answers[boardKey(oi)] : null, oi ? plain(boardQ(oi)) : ""); }
 /* the question that opens after a ✓: the next one not yet asked, in the order on screen (wrapping round) */
@@ -1585,26 +1586,58 @@ var TLTAG = { q: "ask", ask: "ask", check: "ok", draw: "bad", say: "chem", show:
 function tlabel(kind, ic, text) { return '<div class="tlabel k-' + kind + '"><span class="tag lg ' + (TLTAG[kind] || "line") + '">' + esc(cap(text)) + '</span></div>'; }
 var KIC = { say: "S", draw: "D", ask: "?", show: "▣", check: "✓" };
 /* how many lines of a growing board are on his screen (kept on this device for the lesson) */
-/* Ali's screen and his build together, one line per tap (Ali, 14 Oct): -1 nothing sent yet, 0 the question alone, k lines */
+/* Ali's screen and his build together, one piece per tap (Ali, 14 Oct). A board is c.bd: {id, mode, ids, imgs, whys}.
+   mode "grow": click-by-click pictures; mode "lines": one worked answer given line by line as hints (his turn).
+   LINES[lesson|board] is the step on his screen: -1 nothing sent yet; 0 the question alone; then each piece. */
 var LINES = {};
-function seenAt(c) { var v = LINES[L.id + "|" + c.b.id]; return v == null ? -1 : v; }
+function bdKey(bd) { return bd.mode + ":" + bd.imgs.join("|") + (bd.box ? "@" + bd.box.join(",") : ""); }
+function bdInfo(bd) { return Board.info(bdKey(bd)); }
+function seenAt(c) { var v = LINES[L.id + "|" + c.bd.id]; return v == null ? -1 : v; }
 function lineAt(c) { return Math.max(0, seenAt(c)); }
-var BANIM = null; // the board whose newest line should write in on the next draw
+function bdSteps(c) { var b = bdInfo(c.bd); return b ? b.steps.length - 1 : null; }
+function bdGroup(c, step) { var b = bdInfo(c.bd); return b && b.steps[step] ? b.steps[step].group : -1; }
+function lineBtn(c) { var s = seenAt(c), n = bdSteps(c), hint = c.bd.mode === "lines";
+  if (hint) return s < 1 ? "Give him a hint: line 1" : n != null && s >= n ? "Hints done · start again" : "Next hint line (" + (s + 1) + (n != null ? " of " + n : "") + ")";
+  return s < 0 ? (PREP ? "Start the board" : "Show him the question") : n != null && s >= n ? "Start again" : "Next (" + (s + 1) + (n != null ? " of " + n : "") + ")"; }
+var BANIM = null; // the board whose newest piece should write in on the next draw
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-line]"); if (!t || !L) return;
-  var c = (TCH.seq || [])[TCH.pos]; if (!c || !c.lines) return; var k = L.id + "|" + c.b.id, ln = seenAt(c) + 1; if (ln > c.lines.length) ln = 0;
-  LINES[k] = ln; BANIM = c.b.id; if (!PREP) showBoard(c, ln); drawTeach(); });
-/* a canvas for a growing board; boardMount() draws it once the pictures are in */
-function boardCanvas(bd) { return '<div class="bwrap"><canvas class="bcv" data-bimgs="' + esc(JSON.stringify(bd.imgs)) + '" data-bstep="' + bd.step + '"' + (bd.ghost ? ' data-bghost="1"' : "") + ' role="img" aria-label="Board, ' + (bd.step ? "line " + bd.step + " of " + bd.imgs.length : "the question") + '"></canvas><div class="ph">Loading board</div></div>'; }
-function boardMount(root, anim) { $$("canvas.bcv", root).forEach(function (cv) { var paths = JSON.parse(cv.getAttribute("data-bimgs")), step = +cv.getAttribute("data-bstep");
-  Promise.all(paths.map(function (p) { return fileURL(/^(students|books|boards)\//.test(p) ? p : lessonBase(L.id) + p); })).then(function (us) {
+  var c = (TCH.seq || [])[TCH.pos]; if (!c || !c.bd) return; var n = bdSteps(c); if (n == null) return;
+  var ln = seenAt(c) + 1; if (c.bd.mode === "lines" && ln < 1) ln = 1; if (ln > n) ln = c.bd.mode === "lines" ? -1 : 0;
+  LINES[L.id + "|" + c.bd.id] = ln; BANIM = c.bd.id; if (!PREP && ln >= 0) showBoard(c, ln); drawTeach(); });
+/* his turn (Ali, 14 Oct): the worked answer can go to him one line at a time, only when he is stuck */
+function hintPic(b, d) { if (!/his turn/i.test(b.title || "") && !b.hints || !b.hintBox) return null; var m = /data-src="([^"]+)"/.exec(String(d[1] || "")); return m ? m[1] : null; }
+function hintHTML(c) { if (!c || !c.bd) return ""; var s = seenAt(c);
+  return '<div class="bhint stack s3"><div class="row"><span class="lab">' + (s < 1 ? "Stuck? Give him the answer one line at a time" : "Given to him so far") + '</span><button class="btn sm accent-soft push" type="button" data-hint="' + esc(c.key) + '">' + esc(lineBtn(c)) + '</button></div>' + (s >= 1 ? boardCanvas(c.bd, s, false) : "") + '</div>'; }
+function hintChunk(k) { var hit = null; (TCH.seq || []).forEach(function (c) { if (c.t === "drill" && c.key === k) hit = c; if (c.t === "board") c.items.forEach(function (it) { if (it.t === "drill" && it.key === k) hit = it; }); }); return hit; }
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-hint]"); if (!t || !L) return;
+  var c = hintChunk(t.getAttribute("data-hint")); if (!c || !c.bd) return;
+  var go = function () { var n = bdSteps(c); if (n == null) return; var ln = seenAt(c) + 1; if (ln < 1) ln = 1; if (ln > n) ln = -1;
+    LINES[L.id + "|" + c.bd.id] = ln; BANIM = c.bd.id; if (!PREP && ln >= 1) showBoard(c, ln); drawTeach(); };
+  if (bdSteps(c) != null) go(); else Promise.all(c.bd.imgs.map(function (p) { return fileURL(/^(students|books|boards)\//.test(p) ? p : lessonBase(L.id) + p); }))
+    .then(function (us) { return Board.analyse(bdKey(c.bd), us, c.bd.mode, c.bd.box); }).then(go).catch(function () { toast("Couldn\u2019t load the answer picture"); }); });
+/* a canvas for a board, with its step labels beside it; boardMount() draws it once the pictures are in */
+function boardCanvas(bd, step, ghost) { return '<div class="bwrap' + (bd.whys && bd.whys.some(Boolean) ? " has-why" : "") + '"><div class="bcvbox"><canvas class="bcv" data-bd="' + esc(JSON.stringify(bd)) + '" data-bstep="' + step + '"' + (ghost ? ' data-bghost="1"' : "") + ' role="img" aria-label="' + (bd.mode === "lines" ? "Hint lines" : "Board") + '"></canvas><div class="ph">Loading board</div></div><div class="bwhy" aria-live="polite"></div></div>'; }
+function boardMount(root, anim) { $$("canvas.bcv", root).forEach(function (cv) { var bd = JSON.parse(cv.getAttribute("data-bd")), step = +cv.getAttribute("data-bstep"), ghost = cv.hasAttribute("data-bghost");
+  Promise.all(bd.imgs.map(function (p) { return fileURL(/^(students|books|boards)\//.test(p) ? p : lessonBase(L.id) + p); })).then(function (us) {
     if (us.some(function (u) { return !u; })) throw new Error("missing");
-    return Board.analyse(paths.join("|"), us); }).then(function (b) { var ph = cv.nextElementSibling; if (ph && ph.classList.contains("ph")) ph.remove();
-    Board.draw(cv, b, step, { ghost: cv.hasAttribute("data-bghost"), animate: anim, hl: getComputedStyle(document.documentElement).getPropertyValue("--wording-wash").trim() || "#FBF3D2" }); })
-  .catch(function () { var ph = cv.nextElementSibling; if (ph) ph.textContent = "Couldn\u2019t load the board."; }); }); }
+    return Board.analyse(bdKey(bd), us, bd.mode, bd.box); }).then(function (b) { var ph = cv.nextElementSibling; if (ph && ph.classList.contains("ph")) ph.remove();
+    Board.draw(cv, b, step, { ghost: ghost, animate: anim, hl: getComputedStyle(document.documentElement).getPropertyValue("--wording-wash").trim() || "#FBF3D2" });
+    whyLabels(cv.closest(".bwrap").querySelector(".bwhy"), bd, b, step, ghost);
+    var lb = document.querySelector('.tfoot [data-line="' + bd.id + '"]'), c = (TCH.seq || [])[TCH.pos]; if (lb && c && c.bd && c.bd.id === bd.id) lb.textContent = lineBtn(c);
+    var hb = document.querySelector('[data-hint="' + bd.id + '"]'), hc = hb && hintChunk(bd.id); if (hb && hc) hb.textContent = lineBtn(hc); })
+  .catch(function () { var ph = cv.nextElementSibling; if (ph) ph.textContent = "Couldn’t load the board."; }); }); }
+/* step labels (the script's "why" on each click), beside the line they explain; the next one faint for Ali */
+function whyLabels(box, bd, b, step, ghost) { if (!box || !bd.whys || !bd.whys.some(Boolean)) return; var g = b.steps[step].group, ng = b.steps[step + 1] ? b.steps[step + 1].group : -1;
+  box.innerHTML = bd.whys.map(function (w, k) { var r = b.groups[k]; if (!w || !r || (k > g && !(ghost && k === ng))) return "";
+    return '<span class="tag ' + (k === g ? "maths" : k > g ? "dash" : "line") + '" style="top:' + (100 * (r.y + r.h / 2) / b.H).toFixed(2) + '%">' + esc(w) + '</span>'; }).join("");
+  /* two lines close together: push the later label down so they never sit on each other */
+  var last = -1e9; $$(".tag", box).forEach(function (t) { var top = t.offsetTop - t.offsetHeight / 2; if (top < last + 4) { t.style.top = (last + 4 + t.offsetHeight / 2) + "px"; top = last + 4; } last = top + t.offsetHeight; }); }
 /* send the board's state to the Student view; without one open, show the picture as before */
-function showBoard(c, step) { var id = c.lines[Math.max(0, step - 1)];
-  if (BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 10000) { BC.postMessage({ type: "show", lesson: L.id, id: id, board: { ids: c.lines, imgs: c.imgs, step: step } }); toast(step ? "Line " + step + " is on his screen" : "The question is on his screen"); return; }
-  openShow(id); }
+function showBoard(c, step) { var g = bdGroup(c, step), id = c.bd.ids[Math.max(0, Math.min(c.bd.ids.length - 1, g))];
+  if (BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 10000) { BC.postMessage({ type: "show", lesson: L.id, id: id, board: Object.assign({}, c.bd, { step: step }) });
+    toast(c.bd.mode === "lines" ? "Hint line " + step + " is on his screen" : step ? "Step " + step + " is on his screen" : "The question is on his screen"); return; }
+  /* no Student view open: the board still builds on Ali's screen (he may be sharing it); say once how to send it */
+  if (!showBoard.told) { showBoard.told = true; toast(c.bd.mode === "lines" ? "Open the Student view first, then give the hint" : "Building on your screen. Open the Student view to send it to him"); } }
 function chunkKey(c) { return c.t === "quiz" ? c.it.id : c.t === "drill" ? c.key : c.t === "question" ? c.b.id : c.key || null; }
 /* what one chunk is, in a few words: for the outline, the greyed lines and "up next" */
 /* LaTeX as plain text for short labels (outline, grey lines, up next): a cut-off \( … \) would show raw code */
@@ -1636,8 +1669,8 @@ function chunkHTML(c) {
       return '<div class="qhead">' + tlabel("q", "?", "Oral quiz \u00b7 " + c.n + " of " + c.of) + '<button class="linkbtn qset" type="button" data-tjump="' + pick + '">Set: ' + esc((quizChoices(c.b.items || []).filter(function (q) { return q.f === quizFilter(c.b.items || []); })[0] || {}).label || "All") + ' \u00b7 change</button></div>' +
         qtags(c.it) + '<div class="qtext prose">' + paperHTML(c.it.q, subjNow()) + '</div>' + answerBox(c.it.a, c.it.book ? c.it.page : null) + hintsHTML(c) + ctlBig(c.it.id, a, plain(c.it.q));
     case "drill": var a2 = L.session.answers[c.key] || {};
-      return '<div class="qhead">' + tlabel("q", "?", (c.title || "Drill") + (c.of > 1 ? " \u00b7 " + c.n + " of " + c.of : "")) + '</div><div class="qtext prose">' + paperHTML(c.d[0], subjNow()) + '</div>' + answerBox(c.d[1]) + hintsHTML(c) + ctlBig(c.key, a2, plain(c.d[0]));
-    case "question": return (c.b.parts || []).length ? sliderHTML(c) + hintsHTML(c) : (c.lines ? '<div class="tags growtag">' + tag(lineAt(c) <= 0 ? "Question only" : "Line " + lineAt(c) + " of " + c.lines.length, "line") + (lineAt(c) < c.lines.length ? tag("Faint: the next line, only you see it", "dash") : "") + (PREP ? "" : tag(seenAt(c) < 0 ? "Not on his screen yet" : "His screen: " + (seenAt(c) ? "line " + seenAt(c) : "the question"))) + '</div>' : "") + questionBlock(c.lines ? Object.assign({}, c.b, { img: c.full, id: c.lines[c.lines.length - 1], board: { imgs: c.imgs, step: Math.max(0, lineAt(c)), ghost: true } }) : c.b, true) + hintsHTML(c);
+      return '<div class="qhead">' + tlabel("q", "?", (c.title || "Drill") + (c.of > 1 ? " \u00b7 " + c.n + " of " + c.of : "")) + '</div><div class="qtext prose">' + paperHTML(c.d[0], subjNow()) + '</div>' + answerBox(c.d[1]) + hintHTML(c) + hintsHTML(c) + ctlBig(c.key, a2, plain(c.d[0]));
+    case "question": return (c.b.parts || []).length ? sliderHTML(c) + hintsHTML(c) : (c.bd ? '<div class="tags growtag">' + tag(lineAt(c) <= 0 ? "Question only" : "Step " + lineAt(c) + (bdSteps(c) != null ? " of " + bdSteps(c) : ""), "line") + (bdSteps(c) == null || lineAt(c) < bdSteps(c) ? tag("Faint: what comes next, only you see it", "dash") : "") + (PREP ? "" : tag(seenAt(c) < 0 ? "Not on his screen yet" : "His screen: " + (seenAt(c) ? "step " + seenAt(c) : "the question"))) + '</div>' : "") + questionBlock(c.bd ? Object.assign({}, c.b, { img: c.full, id: c.lines[c.lines.length - 1], board: c.bd }) : c.b, true) + hintsHTML(c);
     case "board": return boardHTML(c);
     case "concept": return conceptHTML(c);
     case "end": return '<div class="tphase stack s4"><div class="tags">' + tag("Done", "ok") + '</div><h2>End of the script</h2><span class="hint">Log times, notes and what to change next time.</span><div class="row"><button class="btn" type="button" data-store>Add a section from the Store</button><button class="btn next" type="button" data-tgo="after">After the lesson</button></div></div>';
@@ -1702,9 +1735,8 @@ function clockNag(lv) {
 }
 function footHTML(c, lv) {
   var taughtable = { step: 1, mod: 1, concept: 1, board: 1 }[c.t] || (c.t === "text" && c.key), mid = "";
-  if (c.t === "question" && c.lines) { var ln = seenAt(c), n = c.lines.length;
-    mid += '<button class="btn accent-soft" type="button" data-line="' + esc(c.b.id) + '">' + (ln < 0 ? (PREP ? "Line 1" : "Show him the question") : ln < n ? "Next line (" + (ln + 1) + " of " + n + ")" : "Start again") + '</button>'; }
-  else if (c.t === "question" && (c.b.img || []).length && !PREP) mid += '<button class="btn accent-soft" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
+  if (c.bd) mid += '<button class="btn accent-soft" type="button" data-line="' + esc(c.bd.id) + '">' + esc(lineBtn(c)) + '</button>';
+  if (c.bd) {} else if (c.t === "question" && (c.b.img || []).length && !PREP) mid += '<button class="btn accent-soft" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
   if (c.t === "mod") mid += '<button class="btn quiet" type="button" data-tskip="mod">Skip this section</button>';
   if (c.t === "phase") mid += '<button class="btn quiet" type="button" data-tskip="phase">Skip this part</button>';
   // Taught / Skip / Next once the lesson has started (clock running, paused or ended); before that only Next
@@ -2116,8 +2148,8 @@ function drawStudent() {
   if (STU.i < 0 || !STU.items[STU.i] || STU.items[STU.i].kind !== STU.tab) STU.i = list.length ? list[0].i : -1;
   var cnt = function (k) { return STU.items.filter(function (q) { return q.kind === k; }).length; }, ne = cnt("exam"), nq = cnt("quick"), nv = cnt("video"), cur = STU.items[STU.i], pos = list.indexOf(cur);
   var one = function (cur) { return cur.kind === "video" ? '<div class="stu-vid">' + localVideo(cur.v, true) + '<div class="stu-vt">' + esc(cur.v.title || "") + '</div></div>' : cur.kind === "exam"
-    ? cur.twin ? '<div class="stu-twin">' + twinHTML(cur.twin) + '</div>' : STU.board && STU.board.ids.indexOf(cur.id) >= 0 ? '<div class="stu-fit one">' + boardCanvas({ imgs: STU.board.imgs, step: STU.board.step }) + '</div>' : '<div class="stu-fit ' + (cur.img.length > 1 ? "many" : "one") + '">' + cur.img.map(function (i) { return '<img data-src="' + esc(i) + '" alt="Question" hidden>'; }).join("") + '</div>'
-    : '<div class="stu-card"><div class="stu-q">' + paperHTML(cur.text, subjNow()) + '</div></div>'; };
+    ? cur.twin ? '<div class="stu-twin">' + twinHTML(cur.twin) + '</div>' : STU.board && STU.board.ids.indexOf(cur.id) >= 0 ? '<div class="stu-fit one">' + boardCanvas(STU.board, STU.board.step) + '</div>' : '<div class="stu-fit ' + (cur.img.length > 1 ? "many" : "one") + '">' + cur.img.map(function (i) { return '<img data-src="' + esc(i) + '" alt="Question" hidden>'; }).join("") + '</div>'
+    : '<div class="stu-card"><div class="stu-q">' + paperHTML(cur.text, subjNow()) + '</div>' + (STU.board && STU.board.mode === "lines" && STU.board.ids.indexOf(cur.id) >= 0 ? '<div class="stu-hint">' + boardCanvas(STU.board, STU.board.step) + '</div>' : "") + '</div>'; };
   var grp = cur ? stuGroup(STU.items.indexOf(cur)) : [];
   var view = !cur ? '<div class="empty"><b class="t-card">No questions here</b></div>' : grp.length > 1
     ? '<div class="stu-many" style="--n:' + grp.length + '">' + grp.map(function (q) { return '<div class="stu-cell"><span class="stu-cn num">' + (STU.items.indexOf(q) + 1) + '</span>' + one(q) + '</div>'; }).join("") + '</div>' : one(cur);

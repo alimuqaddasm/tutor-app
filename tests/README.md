@@ -20,7 +20,7 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/runtest.py tests/test_round26.py   # round 26 (11 Oct): typed questions set out like the paper (number boxes, marks, option boxes, Edexcel parts, figure in place), on the Exams page before the start too (29 checks)
     python tests/runtest.py tests/test_round28.py   # round 28 (11 Oct night): exam time is lesson time, stray taps, save in one commit, Claude's marks as a table, side by side with pull-out question and mark scheme, the rail on a short screen (30 checks; needs the local exam server)
     python tests/runtest.py tests/test_round29.py   # round 29 (12 Oct): a growing board is one screen for Ali; "Next line" adds a line on his screen (12 checks)
-    python tests/runtest.py tests/test_round30.py   # round 30 (14 Oct): the board builds line by line for Ali too, each line writes in, the next line faint for Ali, the question alone first (15 checks)
+    python tests/runtest.py tests/test_round30.py   # round 30 (14 Oct): the board builds piece by piece for Ali too, pieces write in, the next piece faint for Ali, the question alone first, step labels, his-turn hints line by line (20 checks)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
 On Windows run with PYTHONIOENCODING=utf-8, or printing ★ crashes the console.
