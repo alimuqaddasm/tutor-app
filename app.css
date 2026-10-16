@@ -651,6 +651,8 @@ button.upnext:hover span{color:var(--text-2);text-decoration:underline}
 .tfoot .mid{display:flex;gap:var(--s2);flex-wrap:wrap}
 .tfoot .mid .btn{border-color:transparent;background:transparent;color:var(--text-2)}
 .tfoot .mid .btn[data-show]{background:var(--accent-wash);color:var(--accent-ink)}
+.tfoot .mid .btn.cambtn{border-color:var(--line);color:var(--text)}
+.cambtn .icon{margin-right:6px}
 .tfoot > .btn:first-child{min-height:52px}
 .tfoot .btn kbd{margin-left:6px;font-size:11px;padding:1px 6px;border-radius:5px;border:1px solid currentColor;opacity:.55}
 .btn.next{margin-left:auto;min-width:180px;min-height:56px;padding:0 var(--s5);gap:var(--s3);background:var(--slate);border-color:var(--slate);color:var(--on-slate);font-size:17px}
@@ -1144,7 +1146,9 @@ body[data-subject="maths"] :is(.qtext,.stu-q) .katex{font-size:1.08em}
 .stu-card .stu-q{max-width:none;margin:0;text-align:left;font-size:clamp(1.6rem,3vw,2.6rem)}
 .stu-edge{width:56px;height:120px;display:grid;place-items:center;background:rgba(255,255,255,.7);color:var(--text-4);opacity:1}
 .stu-edge:hover,.stu-edge:focus-visible{opacity:1;color:var(--text-2);background:var(--surface)}
-.stu-chips{position:fixed;left:0;right:0;bottom:var(--s5);z-index:4;display:flex;justify-content:center;gap:var(--s2);flex-wrap:wrap;padding:0 var(--s4)}
+.stu-chips{position:fixed;left:0;right:0;bottom:var(--s5);z-index:4;display:flex;justify-content:safe center;gap:var(--s2);flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:0 var(--s4)}
+/* the question never runs under the chips (Ali, 12 Oct): the view keeps their real height free */
+.stu.clean .stu-view{padding-bottom:calc(var(--chipsh,40px) + var(--s5) + var(--s4))}
 .stu-chips .it{display:flex;align-items:center;gap:var(--s2);min-height:40px;padding:0 14px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface);font-size:var(--fs-sm);font-weight:600;color:var(--text-2);cursor:pointer;white-space:nowrap}
 .stu-chips .it[aria-current]{background:var(--accent-wash);border-color:var(--accent-wash);color:var(--accent-ink)}
 @media (max-width:760px){.stu.clean .stu-view{padding:56px 12px 120px}.stu-card,.stu-twin{padding:var(--s5)}.stu-edge{display:none}}
@@ -1239,16 +1243,16 @@ body.edgeflash::after{content:"";position:fixed;inset:0;z-index:119;pointer-even
 body.teaching .nextbar{bottom:calc(var(--footh,72px) + var(--s3))}
 .tapfix{margin-bottom:var(--s5);max-width:none}
 @media (prefers-reduced-motion:reduce){body.edgeflash::after,.ckcard .ckdot{animation:none}}
-/* Student view: 1, 2 or 3 questions together (11 Oct) */
+/* Student view: 1 to 4 questions together (11 Oct), arranged by their shape (16 Oct) */
 .stu-top .stu-n{opacity:.6}
 .stu-top .stu-n:hover,.stu-top .stu-n:focus-within{opacity:1}
-.stu-many{width:100%;height:100%;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:var(--s4);align-items:stretch}
+.stu-many{width:100%;height:100%;display:grid;grid-template-columns:repeat(var(--c),minmax(0,1fr));grid-template-rows:repeat(var(--r),minmax(0,1fr));gap:var(--s4);align-items:stretch}
 .stu-cell{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:safe center;padding:var(--s4);border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line);overflow:auto}
 .stu-cell .stu-cn{position:absolute;top:var(--s2);left:var(--s3);font-size:var(--fs-sm);font-weight:600;color:var(--text-3)}
 .stu-cell .stu-card,.stu-cell .stu-twin{width:100%;padding:var(--s4);border:0;margin:0}
 .stu-cell .stu-card .stu-q{font-size:clamp(1.2rem,2vw,2rem)}
-.stu-cell .stu-fit.one img{max-height:calc(100vh - 200px)}
-@media (max-width:760px){.stu-many{grid-template-columns:1fr;height:auto}}
+.stu-cell .stu-fit.one img{max-height:100%}
+@media (max-width:760px){.stu-many{grid-template-columns:1fr;grid-template-rows:none;height:auto}}
 /* Add from the Store (11 Oct) */
 .storerow{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line)}
 .storerow > .stack{flex:1 1 260px}
