@@ -146,10 +146,10 @@ with sync_playwright() as p:
     wait_for(pg, lambda: pg.locator("section.xt-mq").count() == 1, 15)
     check("Mark page: Claude's marks in a table", wait_for(pg, lambda: pg.locator('[data-mq="q1"] table.xt-mtbl tr.xt-mrow').count() == 4, 10) is not None)
     hd = pg.inner_text('[data-mq="q1"] table.xt-mtbl thead')
-    check("  ...columns: mark scheme, Claude, Claude's reason, You", all(w in hd for w in ["Mark scheme", "Claude", "reason", "You"]), hd)
+    check("  ...columns: mark scheme, Claude, Claude's reason, You", all(w in hd for w in ["Mark scheme", "Auto-checker", "Reason", "You"]), hd)
     last = pg.inner_text('[data-mq="q1"] table.xt-mtbl tr.xt-mrow >> nth=3')
     check("  ...a cross with Claude's reason", "✕" in last and "obtuse" in last, last)
-    check("  ...no paragraph of ticks above it", "Claude: 3 / 4" in pg.inner_text('[data-mq="q1"] .xt-cmark') and "M1, A1" not in pg.inner_text('[data-mq="q1"] .xt-cmark'))
+    check("  ...no paragraph of ticks above it", "Auto-checker: 3 / 4" in pg.inner_text('[data-mq="q1"] .xt-cmark') and "M1, A1" not in pg.inner_text('[data-mq="q1"] .xt-cmark'))
     pg.screenshot(path=os.path.join(SHOTS, "r28-mark-1440.png"), full_page=True)
 
     # ---------- side by side ----------
