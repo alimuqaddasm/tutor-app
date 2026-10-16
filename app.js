@@ -130,6 +130,8 @@ function newSession(id, script) {
 var PREVIEW_FIX = "2026-10-01T12:00:00Z";
 function norm(s) { if (s && s.done && !((s.time && s.time.log) || []).some(function (e) { return e.e === "start"; })) Object.keys(s.done).forEach(function (k) { var d = s.done[k]; if (d && !d.off && String(d.at) < PREVIEW_FIX) s.done[k] = { off: true, at: PREVIEW_FIX, label: d.label }; }); s.time = s.time || {}; s.time.log = s.time.log || []; s.time.edit = s.time.edit || {}; s.answers = s.answers || {}; s.extra = s.extra || []; s.work = s.work || []; s.feedback = s.feedback || {}; s.devices = s.devices || []; s.done = s.done || {};
   if (s.time.manual && !Object.keys(s.time.edit).length) { s.time.edit = { started: s.time.started, ended: s.time.ended }; delete s.time.manual; } return s; }
+/* the lesson was ended with End lesson (its last clock event is "end") */
+function endedLog(log) { var l = log || []; return !!l.length && l[l.length - 1].e === "end"; }
 function replay(log, upto) {
   var running = false, since = null, phase = null, secs = 0, per = {}, end = upto || Date.now();
   function add(t) { if (running && since != null) { var d = Math.max(0, (t - since) / 1000); secs += d; if (phase) per[phase] = (per[phase] || 0) + d; } since = t; }
@@ -568,7 +570,7 @@ function drawLesson() {
   var h = '<header class="band stack lhead2"><div class="crumb"><a href="#/">Lessons</a><span aria-hidden="true">/</span><span>' + esc(SUBJ[subj] || subj) + '</span></div><div class="head"><div class="stack s3" style="min-width:0;flex:1 1 480px"><div class="tags">' + tags + '</div>' +
     '<h1 class="t-title" title="' + esc(s.title || x.title || "") + '">' + esc(lessonTitle(s, x)) + '</h1>' + focus + (!focus && s.summary ? '<span class="hint">' + esc(plain(s.summary)) + '</span>' : "") + '</div>' +
     '<div class="stack s3" style="align-items:flex-end"><div class="seg modes" role="group" aria-label="Mode"><a href="#/lesson/' + encodeURIComponent(L.id) + '" aria-current="true">Plan</a><a href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach</a><a href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"></path></svg></a></div>' +
-    '<div class="row"><span class="clockpill' + (r.running ? " live" : "") + '"><span class="dot"></span><span id="clk" class="num">0:00</span></span><button class="btn pri" id="clkgo" type="button"></button>' + (r.running ? '<button class="btn danger" id="clkend" type="button">End lesson</button>' : "") + '<button class="btn sm quiet" type="button" data-phase="_time">Edit part times</button></div></div></div>' + flow +
+    '<div class="row"><span class="clockpill' + (r.running ? " live" : "") + '"><span class="dot"></span><span id="clk" class="num">0:00</span></span><button class="btn pri" id="clkgo" type="button"></button>' + ((x.time.log || []).length && !endedLog(x.time.log) ? '<button class="btn danger" id="clkend" type="button">End lesson</button>' : "") + '<button class="btn sm quiet" type="button" data-phase="_time">Edit part times</button></div></div></div>' + flow +
     (s.focus && s.focus.length ? '<div id="focusbox" hidden>' + focusTable(s.focus) + '</div>' : "") + '</header>';
   var ICO = { _revise: '<path d="M20 12a8 8 0 1 1-2.34-5.66"></path><path d="M20 4v5h-5"></path>', _extra: '<path d="M12 5v14M5 12h14"></path>', _work: '<rect x="3" y="5" width="18" height="15" rx="2"></rect><circle cx="12" cy="12.5" r="3.5"></circle>', _time: '<circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2 2M9 2h6"></path>', _after: '<path d="M5 12l5 5L20 7"></path>' };
   h += '<div class="lesson"><nav class="rail" aria-label="Lesson parts">' + ps.map(function (p, i) {
@@ -707,7 +709,7 @@ function quizBlock(b) {
 }
 function questionBlock(q, big) {
   var paper = q.source && /edexcel|solomon|maths genie|pearson/i.test(q.source) || (L.script || {}).subject === "maths" ? "q-edexcel" : "q-aqa";
-  var h = '<div class="qcard"><div class="row">' + tag("Question", "line") + (q.source ? refTag(q.source) : tag(esc(q.label || ""), "line")) + (!q.board && ((q.img || []).length || (q.parts || []).length) ? '<button class="btn sm push" type="button" data-show="' + esc(q.id) + '">Show him</button>' : "") + '</div>' +
+  var h = '<div class="qcard"><div class="row">' + tag("Question", "line") + (q.source ? refTag(q.source) : tag(esc(q.label || ""), "line")) + '<span class="row push" style="gap:var(--s2)">' + camBtn(q, true) + (!q.board && ((q.img || []).length || (q.parts || []).length) ? '<button class="btn sm" type="button" data-show="' + esc(q.id) + '">Show him</button>' : "") + '</span></div>' +
     (q.html || (q.parts && !big) || (q.img || []).length ? '<div class="card qbody ' + paper + '">' + (q.html ? '<div class="prose">' + clean(q.html) + '</div>' : "") + (q.parts && !big ? twinHTML(q) : "") + (q.board ? boardCanvas(q.board, Math.max(0, LINES[L.id + "|" + q.board.id] || 0), true) : (q.img || []).map(function (i) { return img(i, q.label); }).join("")) + '</div>' : "");
   if (q.answer || (q.answerImg || []).length) h += '<details class="fold reveal"><summary>Mark scheme</summary><div class="prose">' + clean(q.answer || "") + (q.answerImg || []).map(function (i) { return img(i, "Mark scheme"); }).join("") + '</div></details>';
   var a = L.session.answers[q.id] || {};
@@ -910,7 +912,8 @@ document.addEventListener("click", function (ev) {
   if (t.id === "clkgo" || t.hasAttribute("data-clkgo")) { var r2 = replay(x.time.log); var cur = phases().filter(function (p) { return p.id === L.phase && !p.sys; })[0];
     if (r2.running) logEvent("pause"); else { if (x.status === "finished") { x.status = "in-progress"; x.statusAt = now(); } logEvent(r2.secs ? "resume" : "start", cur ? cur.id : (r2.phase || phases()[0].id)); wake(); }
     drawLesson(); return; }
-  if (t.id === "clkend") { logEvent("end"); drawLesson(); flush(); toast("Lesson ended. Undo it under Times if that was a mistake."); return; }
+  if (t.id === "clkend") { logEvent("end"); drawLesson(); flush(); var nx = ckJSON("tutor.next");
+    toast("Lesson ended." + (nx && nx.from === L.id ? " " + subjWord(nx.id) + " at " + hhmm(new Date(nx.at).toISOString()) + "." : "") + " Notes and times: After the lesson. Undo under Times."); return; }
   if (t.id === "tm-undo") { var lg = x.time.log; for (var i = lg.length - 1; i >= 0; i--) { if (lg[i].e === "end") { lg.splice(i, 1); break; } } timeEdited(); drawLesson(); toast("“End lesson” undone"); return; }
   if (t.id === "tm-clear") { x.time.edit = {}; timeEdited(); drawLesson(); return; }
   if (t.id === "tm-reset") { if (armed !== "reset") { armed = "reset"; t.textContent = "Tap again to reset the clock"; t.classList.add("confirm"); setTimeout(function () { if (armed === "reset") { armed = null; if (t.isConnected) { t.textContent = "Reset the clock"; t.classList.remove("confirm"); } } }, 4000); return; }
@@ -1016,17 +1019,35 @@ function shrink(file) {
 }
 function uploadWork() {
   var files = Array.prototype.slice.call($("#wk-files").files || []); if (!files.length) return;
-  var st = $("#wk-st"), go = $("#wk-go"), item = $("#wk-item").value, kind = $("#wk-kind").value, note = $("#wk-note").value.trim(); go.disabled = true;
-  var base = lessonBase(L.id) + "work/" + new Date().toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "-"), i = 0;
-  function next() {
-    if (i >= files.length) { go.disabled = false; st.textContent = ""; toast("Uploaded " + files.length + " file" + (files.length > 1 ? "s" : "")); flush(); drawLesson(); return; }
-    var f = files[i++]; st.textContent = "Uploading " + i + " of " + files.length + "…";
-    shrink(f).then(function (r) { var path = base + "-" + (item || "lesson").replace(/[^a-z0-9]+/gi, "") + "-" + i + "." + r.ext;
-      return putB64(path, r.b64, CFG.student + " " + L.id + ": his work (" + CFG.device + ")").then(function () { L.session.work.push({ file: path, item: item || null, kind: kind, note: note, at: now(), d: CFG.device }); touch(); }); })
-      .then(next).catch(function (e) { go.disabled = false; st.textContent = (e.status ? "GitHub said " + e.status + ". " : "") + (e.message || "Upload failed") + " Try again."; });
-  }
-  next();
+  var st = $("#wk-st"), go = $("#wk-go"); go.disabled = true;
+  sendWork(files, $("#wk-item").value, $("#wk-kind").value, $("#wk-note").value.trim(), function (i, n) { st.textContent = "Uploading " + i + " of " + n + "…"; })
+    .then(function () { go.disabled = false; st.textContent = ""; toast("Uploaded " + files.length + " file" + (files.length > 1 ? "s" : "")); flush(); drawLesson(); })
+    .catch(function (e) { go.disabled = false; st.textContent = workErr(e); });
 }
+function workErr(e) { return e.tryout ? "Try-out mode: the photo is not saved." : (e.status ? "GitHub said " + e.status + ". " : "") + (e.message || "Upload failed") + " Try again."; }
+/* each file to GitHub under the lesson's work/ folder, logged in session.work against one question (or the lesson) */
+function sendWork(files, item, kind, note, prog) {
+  var base = lessonBase(L.id) + "work/" + new Date().toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "-"), i = 0;
+  function next() { if (i >= files.length) return Promise.resolve();
+    var f = files[i++]; if (prog) prog(i, files.length);
+    return shrink(f).then(function (r) { var path = base + "-" + (item || "lesson").replace(/[^a-z0-9]+/gi, "") + "-" + i + "." + r.ext;
+      return putB64(path, r.b64, CFG.student + " " + L.id + ": his work (" + CFG.device + ")").then(function () { L.session.work.push({ file: path, item: item || null, kind: kind, note: note, at: now(), d: CFG.device }); touch(); }); }).then(next); }
+  return next();
+}
+/* the camera on a question (Ali, 16 Oct): only questions he solves from a past paper or a problem set, not boards from a video.
+   Tap it, pick the photo he sent on WhatsApp, and it is saved to that question */
+function camOK(b) { return b && b.type === "question" && !b.board && b.source && !/\bvideo\b/i.test(b.source); }
+function camCount(id) { return L.session.work.filter(function (w) { return !w.removed && w.item === id; }).length; }
+function camBtn(b, sm) { if (!camOK(b) || PREP) return ""; var n = camCount(b.id);
+  return '<button class="btn' + (sm ? " sm" : "") + ' cambtn" type="button" data-cam="' + esc(b.id) + '" title="Add a photo of his work on this question">' + CAMIC.replace("icon lg", "icon") + (n ? n + (n > 1 ? " photos" : " photo") : "His work") + '</button>'; }
+var CAM = null;
+function camPick(id) { var inp = $("#camin"); if (!inp) { inp = document.createElement("input"); inp.type = "file"; inp.id = "camin"; inp.className = "sr"; inp.accept = "image/*,application/pdf"; inp.multiple = true; inp.tabIndex = -1; document.body.appendChild(inp);
+    inp.addEventListener("change", function () { var files = Array.prototype.slice.call(inp.files || []), q = CAM; inp.value = ""; if (!files.length || !q || !L) return;
+      toast("Saving " + files.length + (files.length > 1 ? " photos" : " photo") + "…");
+      sendWork(files, q, "class", "").then(function () { toast("Saved to " + (labelOf(q) || "the question")); flush(); $$('[data-cam="' + q + '"]').forEach(function (b) { b.outerHTML = camBtn(findQ(q), b.classList.contains("sm")); }); })
+        .catch(function (e) { toast(workErr(e)); }); }); }
+  CAM = id; inp.click(); }
+function findQ(id) { var hit = null; phases().forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) { if (b.type === "question" && b.id === id) hit = b; if (b.blocks) walk(b.blocks); }); })(p.blocks); }); return hit; }
 
 /* ---------------- record ---------------- */
 function recordView() {
@@ -1119,6 +1140,7 @@ function drawShow() { var s = SH.sl[SH.i]; $("#sh-lab").textContent = ""; $("#sh
 function stepShow(d) { if (!SH) return; var n = SH.i + d; if (n < 0 || n >= SH.sl.length) return; SH.i = n; drawShow(); }
 function closeShow() { var el = $("#show"); if (el) el.remove(); SH = null; try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {} }
 document.addEventListener("click", function (e) { var t = e.target.closest("button"); if (!t) return;
+  if (t.hasAttribute("data-cam")) { camPick(t.getAttribute("data-cam")); return; }
   if (t.hasAttribute("data-show")) { showHim(t.getAttribute("data-show")); return; }
   if (t.id === "sh-x") closeShow(); else if (t.id === "sh-prev") stepShow(-1); else if (t.id === "sh-next") stepShow(1); });
 document.addEventListener("keydown", function (e) { if (!SH) return; if (e.key === "ArrowRight") stepShow(1); else if (e.key === "ArrowLeft") stepShow(-1); else if (e.key === "Escape") closeShow(); });
@@ -1704,7 +1726,7 @@ function drawTeach() {
       '<span class="tag num"><span class="olab">Step </span>' + (TCH.pos + 1) + ' of ' + TCH.seq.length + '</span>' +
       (PREP ? tag("Prepare", "line") + '<a class="btn sm pri" href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach</a></div></div>' : (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a step by hand.">Preview</button>'
         : '<button type="button" class="preview stopped" data-pvhelp title="The clock is stopped. Taught, Skip and verdicts still count.">Clock stopped</button>') +
-      '<span class="clockpill' + (lv ? " live" : "") + '"><span class="dot"></span><span class="t" id="clk">0:00</span></span><button class="btn sm' + (lv ? "" : " pri") + (clockNag(lv) ? " nag" : "") + '" id="clkgo" type="button"></button></div></div>') +
+      '<span class="clockpill' + (lv ? " live" : "") + '"><span class="dot"></span><span class="t" id="clk">0:00</span></span><button class="btn sm' + (lv ? "" : " pri") + (clockNag(lv) ? " nag" : "") + '" id="clkgo" type="button"></button>' + ((L.session.time.log || []).length && !endedLog(L.session.time.log) ? '<button class="btn sm danger" id="clkend" type="button" title="Stops the clock for good. Notes and times go under After the lesson.">End<span class="olab"> lesson</span></button>' : "") + '</div></div>') +
     (reals.length > 1 ? '<div class="flow ' + esc(subj) + ' tflow" aria-hidden="true">' + reals.map(function (p) { var on = p === c.p, past = c.p && reals.indexOf(p) < reals.indexOf(c.p);
       return '<span style="flex:' + pw(p) + '"' + (on ? ' class="on"' : "") + '><i' + (on ? ' style="background:linear-gradient(90deg,var(--accent) ' + pf + '%,var(--line) ' + pf + '%)"' : past ? ' style="background:var(--accent);opacity:.45"' : "") + '></i></span>'; }).join("") + '</div>' : '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>') +
     (PREP ? "" : clockNag(lv)) + '</div><div class="tstage">';
@@ -1731,7 +1753,7 @@ function clockNag(lv) {
   var bk = ckJSON("tutor.break");
   if (!lv && bk && bk.id === L.id && L.session.status !== "finished") { var left = Math.max(0, Math.ceil((bk.until - Date.now()) / 60000));
     return '<div class="clocknag brk" role="status"><span class="dot" aria-hidden="true"></span><span><b>On a break since ' + esc(hhmm(bk.at)) + '.</b> ' + (left ? left + ' min left, then a reminder.' : 'Time is up.') + '</span><button class="btn sm pri" type="button" data-clkgo>Resume</button><button class="btn sm quiet" type="button" data-ck="more">5 more min</button></div>'; }
-  if (lv || !TCH.moved || TCH.nagOff || L.session.status === "finished") return "";
+  if (lv || !TCH.moved || TCH.nagOff || L.session.status === "finished" || endedLog(L.session.time.log)) return "";
   var never = !(L.session.time.log || []).length;
   return '<div class="clocknag" role="status"><span class="dot" aria-hidden="true"></span><span><b>' + (never ? "The clock has not started." : "The clock is paused.") + '</b> ' + (never ? "Nothing is recorded, verdicts included." : "This time is not counted.") + '</span>' +
     '<button class="btn sm pri" type="button" data-clkgo>' + (never ? "Start lesson" : "Resume") + '</button><button class="btn sm quiet" type="button" data-nagoff>Not now</button></div>';
@@ -2163,7 +2185,7 @@ function drawStudent() {
     : '<div class="stu-card"><div class="stu-q">' + paperHTML(cur.text, subjNow()) + '</div>' + (STU.board && STU.board.mode === "lines" && STU.board.ids.indexOf(cur.id) >= 0 ? '<div class="stu-hint">' + boardCanvas(STU.board, STU.board.step) + '</div>' : "") + '</div>'; };
   var grp = cur ? stuGroup(STU.items.indexOf(cur)) : [];
   var view = !cur ? '<div class="empty"><b class="t-card">No questions here</b></div>' : grp.length > 1
-    ? '<div class="stu-many" style="--n:' + grp.length + '">' + grp.map(function (q) { return '<div class="stu-cell"><span class="stu-cn num">' + (STU.items.indexOf(q) + 1) + '</span>' + one(q) + '</div>'; }).join("") + '</div>' : one(cur);
+    ? '<div class="stu-many" style="--n:' + grp.length + ';--c:' + grp.length + ';--r:1">' + grp.map(function (q) { return '<div class="stu-cell"><span class="stu-cn num">' + (STU.items.indexOf(q) + 1) + '</span>' + one(q) + '</div>'; }).join("") + '</div>' : one(cur);
   var drawer = '<aside class="stu-drawer"' + (STU.drawer ? "" : " hidden") + ' aria-label="Questions"><div class="stu-dh"><div class="modes"><button type="button" data-stab="exam" aria-pressed="' + (STU.tab === "exam") + '">Exam ' + ne + '</button><button type="button" data-stab="quick" aria-pressed="' + (STU.tab === "quick") + '">Quick ' + nq + '</button>' + (nv ? '<button type="button" data-stab="video" aria-pressed="' + (STU.tab === "video") + '">Video ' + nv + '</button>' : "") + '</div><button class="btn small" type="button" id="stufs">Full screen</button><button class="btn small" type="button" id="stux">Close</button></div>' +
     '<p class="hint">Only the question or video shows on his screen. Move with the arrow keys, a swipe, or the faint \u2039 \u203a at the edges; \u201cShow him\u201d in Teach sends a question here.</p><nav class="stu-list">' +
     list.map(function (q, k) { return '<button type="button" class="stu-item' + (q === cur ? " cur" : "") + '" data-si="' + q.i + '"><span class="n num">' + (k + 1) + '</span>' + (q.kind === "exam" && q.img.length ? '<img data-src="' + esc(q.img[0]) + '" alt="" hidden><span class="ph"></span>' : '<span class="tx">' + (q.kind === "video" ? "\u25b6 " : "") + esc(plain(q.text).slice(0, 80)) + '</span>') + '</button>'; }).join("") + '</nav></aside>';
@@ -2173,17 +2195,33 @@ function drawStudent() {
   STU.items.forEach(function (q) { if (q.kind === "exam" && !q.lab) { var b0 = null; (function find(bs) { (bs || []).forEach(function (b) { if (b.id === q.id) b0 = b; if (b.blocks) find(b.blocks); }); })(q.p.blocks); q.lab = b0 && (b0.label || b0.source) || ""; } });
   var from = Math.max(0, Math.min(at - 2, STU.items.length - 6)), chips = STU.items.slice(from, from + 6);
   var CHEV = function (d) { return '<svg class="icon lg" viewBox="0 0 24 24" aria-hidden="true"><path d="' + (d < 0 ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6") + '"></path></svg>'; };
-  app.innerHTML = '<div class="stu clean"><header class="stu-top"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button><span class="push"></span><div class="seg stu-n" role="group" aria-label="Questions on screen">' + [1, 2, 3].map(function (n) { return '<button type="button" data-stun="' + n + '" aria-pressed="' + (stuN() === n) + '" title="' + (n === 1 ? "One question at a time" : n + " questions together") + '">' + n + '</button>'; }).join("") + '</div>' + (cur ? tag((grp.length > 1 ? (at + 1) + " to " + (STU.items.indexOf(grp[grp.length - 1]) + 1) : (at + 1)) + " of " + STU.items.length, "num") : "") + '</header><main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
+  app.innerHTML = '<div class="stu clean"><header class="stu-top"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button><span class="push"></span><div class="seg stu-n" role="group" aria-label="Questions on screen">' + [1, 2, 3, 4].map(function (n) { return '<button type="button" data-stun="' + n + '" aria-pressed="' + (stuN() === n) + '" title="' + (n === 1 ? "One question at a time" : n + " questions together") + '">' + n + '</button>'; }).join("") + '</div>' + (cur ? tag((grp.length > 1 ? (at + 1) + " to " + (STU.items.indexOf(grp[grp.length - 1]) + 1) : (at + 1)) + " of " + STU.items.length, "num") : "") + '</header><main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
     '<button class="stu-edge prev" type="button" data-sgo="-1" aria-label="Previous question"' + (at <= 0 ? " disabled" : "") + '>' + CHEV(-1) + '</button><button class="stu-edge next" type="button" data-sgo="1" aria-label="Next question"' + (at < 0 || STU.items.indexOf(grp[grp.length - 1]) >= STU.items.length - 1 ? " disabled" : "") + '>' + CHEV(1) + '</button>' +
     (STU.items.length > 1 ? '<nav class="stu-chips" aria-label="Questions">' + chips.map(function (q) { return '<button type="button" class="it" data-si="' + q.i + '"' + (q === cur ? ' aria-current="true"' : "") + '>' + (q.kind === "video" ? '<svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"></path></svg>' : "") + (STU.items.indexOf(q) + 1) + ' \u00b7 ' + esc(short(q)) + '</button>'; }).join("") + (STU.items.length > 6 ? '<button type="button" class="it" id="stumore">More</button>' : "") + '</nav>' : "") + drawer + '</div>';
-  $$(".stu-view img").forEach(showImg); loadImages(app); boardMount(app, !!STU.banim); STU.banim = false; maths(app); prefetchLesson();
+  var chh = $(".stu-chips"); if (chh) $(".stu").style.setProperty("--chipsh", chh.offsetHeight + "px");
+  $$(".stu-view img").forEach(showImg); loadImages(app); stuArrange(); boardMount(app, !!STU.banim); STU.banim = false; maths(app); prefetchLesson();
   var ci = $(".stu-item.cur"); if (ci && STU.drawer) ci.scrollIntoView({ block: "nearest" });
   if (BC) BC.postMessage({ type: "alive", lesson: L.id });
 }
+/* several questions on his screen: the arrangement that shows them biggest (Ali, 12 Oct: "17 and 18 side by side isn't right").
+   Wide questions stack one above the other, tall ones sit side by side, four can go 2 by 2. Each cell's shape comes from its
+   pictures once they load (pictures in one cell stack); a typed question or board counts as a wide card until then */
+function stuArrange() { var box = $(".stu-many"); if (!box) return; var cells = $$(".stu-cell", box), n = cells.length, v = $(".stu-view"); if (!v || n < 2) return;
+  var cs = getComputedStyle(v), W = v.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), H = v.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom), gap = 16, pad = 40;
+  var ar = cells.map(function (c) { var ims = $$("img", c).filter(function (i) { return i.naturalWidth; }); if (!ims.length) return 2.4;
+    var w = Math.max.apply(null, ims.map(function (i) { return i.naturalWidth; })); return w / ims.reduce(function (h, i) { return h + i.naturalHeight * w / i.naturalWidth; }, 0); });
+  var best = null; for (var c = 1; c <= n; c++) { var r = Math.ceil(n / c); if ((c - 1) * r >= n && c > 1) continue;
+    var cw = (W - gap * (c - 1)) / c - pad, ch = (H - gap * (r - 1)) / r - pad; if (cw <= 0 || ch <= 0) continue;
+    var sc = Math.min.apply(null, ar.map(function (a) { return Math.min(cw, ch * a) / a; }));   // the smallest picture's height decides
+    if (!best || sc > best.sc) best = { c: c, r: r, sc: sc }; }
+  if (!best || innerWidth <= 760) best = { c: 1, r: n };
+  box.style.setProperty("--c", best.c); box.style.setProperty("--r", best.r); box.setAttribute("data-c", best.c); }
+document.addEventListener("load", function (e) { if (e.target.tagName === "IMG" && e.target.closest && e.target.closest(".stu-many")) stuArrange(); }, true);
+addEventListener("resize", function () { if (MODE === "student") stuArrange(); });
 /* arrows, swipes and the edge buttons go through every question in script order, exam and quick alike */
 function stuGo(d) { var g = stuGroup(STU.i), k = d > 0 ? STU.items.indexOf(g[g.length - 1]) + 1 : Math.max(0, STU.i - (stuN() > 1 ? stuN() * 2 - 1 : 1)); if (d < 0 && STU.i === 0 || k >= STU.items.length) return; STU.i = k; STU.tab = STU.items[k].kind; drawStudent(); }
 /* 1, 2 or 3 questions on his screen at once (Ali, 11 Oct: "he made one graph, I clicked right, then the second: let me put two or three together") */
-function stuN() { return Math.max(1, Math.min(3, +(ls("tutor.stun") || 1))); }
+function stuN() { return Math.max(1, Math.min(4, +(ls("tutor.stun") || 1))); }
 function stuGroup(at) { var cur = STU.items[at], g = cur ? [cur] : []; if (!cur || cur.kind === "video") return g;
   for (var k = at + 1; k < STU.items.length && g.length < stuN(); k++) { var q = STU.items[k]; if (q.kind === "video") continue; if (q.kind !== cur.kind) break; g.push(q); } return g; }   // a walkthrough video between two questions does not split them
 (function () { var x0 = null, y0 = null;
