@@ -23,6 +23,7 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/runtest.py tests/test_round30.py   # round 30 (14 Oct, app v54): the board builds piece by piece for Ali too, pieces write in, the next piece faint for Ali, the question alone first, step labels, his-turn hints line by line (20 checks)
     python tests/runtest.py tests/test_round31.py   # round 31 (16 Oct, app v57): camera on past-paper and problem-set questions, Student view arranges 2 to 4 questions by shape, chips never cover the question, End lesson in Teach (24 checks)
     python tests/test_round32.py            # round 32 (17 Oct, app v58): clear-cut auto-checker marks accepted on their own; the message counts only saved marks; a mark Ali is typing is never overwritten (11 checks; needs the local exam server)
+    python tests/test_offline_list.py       # every ?v= file index.html and exam.html ask for is in the sw.js offline list (no browser needed)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
 On Windows run with PYTHONIOENCODING=utf-8, or printing ★ crashes the console.
