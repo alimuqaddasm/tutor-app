@@ -71,6 +71,8 @@ with sync_playwright() as p:
     stroke("pen", 300, 700, 300, 700.5, 32)   # a side-button touch that rubs out nothing
     pg.click('[data-ink="undo"]'); pg.wait_for_timeout(100)
     check("a rub that removed nothing adds nothing to Undo", n() == k - 1, n())
+    stroke("pen", 300, 700, 300, 700.5, 32); pg.wait_for_timeout(100)
+    check("  ...and leaves Redo as it was", pg.locator('[data-ink="redo"]:not([disabled])').count() == 1)
     pg.click('[data-ink="redo"]')
 
     # straight lines

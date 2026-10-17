@@ -2323,8 +2323,8 @@ document.addEventListener("pointerdown", function (e) {
   if (e.pointerType !== "touch" || INK.finger) inkSeen(e);
   if (e.pointerType !== "pen" && !INK.finger && !(e.pointerType === "mouse" && inkSide(e))) return;   // a right-button press rubs out: some tablets send the S Pen with its button held that way
   e.preventDefault();
-  var rub = INK.tool === "rub" || inkSide(e), pt = inkPt(e); inkSnap();
-  INK.cur = { id: e.pointerId, rub: rub, s: rub ? null : { t: INK.tool, c: INK.tool === "hl" ? INK.hc : INK.pc, w: INK.tool === "hl" ? INK.hs : INK.ps, p: [pt] }, n: inkPage().length, ax: e.clientX, ay: e.clientY, seen: inkSide(e) };
+  var rub = INK.tool === "rub" || inkSide(e), pt = inkPt(e), redo = inkStack(INK.redo); inkSnap();
+  INK.cur = { id: e.pointerId, rub: rub, s: rub ? null : { t: INK.tool, c: INK.tool === "hl" ? INK.hc : INK.pc, w: INK.tool === "hl" ? INK.hs : INK.ps, p: [pt] }, n: inkPage().length, redo: redo, ax: e.clientX, ay: e.clientY, seen: inkSide(e) };
   if (rub) inkRub(pt); else { inkPage().push(INK.cur.s); inkDraw(); inkHold(INK.cur); }
   try { t.setPointerCapture(e.pointerId); } catch (x) {}
 }, true);
@@ -2337,7 +2337,7 @@ document.addEventListener("pointermove", function (e) { var c = INK.cur; if (!c 
 document.addEventListener("contextmenu", function (e) { if (MODE !== "student" || !(INK.cur || INK.pen)) return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "right-click"); if (INK.cur) inkToRub(INK.cur); }, true);
 ["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { if (e.pointerType === "pen") INK.pen = false; var c = INK.cur;
   if (c && e.pointerId === c.id) { clearTimeout(c.tm); INK.cur = null;
-    if (c.rub && inkPage().length === c.n) INK.undo[INK.key].pop();   // rubbed nothing out: nothing to undo
+    if (c.rub && inkPage().length === c.n) { inkStack(INK.undo).pop(); INK.redo[INK.key] = c.redo; }   // rubbed nothing out: nothing to undo, and Redo stays
     inkRefresh(); } }, true); });
 addEventListener("resize", function () { if (MODE === "student") inkDraw(); });
 
