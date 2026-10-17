@@ -24,6 +24,7 @@ A light, quiet desk: white cards on a soft grey ground, one sans font, colour on
 | `--live` / `--live-wash` | the running clock, make-up owed, due counts, "on it now" |
 | `--right` `--partly` `--wording` `--term` `--wrong` `--none` | verdicts only |
 | `--ask` | the "Ask" and "Question" tags |
+| `--ink-1` `--ink-2` `--ink-3` | pen ink on Student view only (black, red, blue) |
 
 No other colours. No gradients, no graph paper behind pages (Teach has it as an option), no black blocks.
 
