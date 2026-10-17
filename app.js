@@ -2241,7 +2241,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v56", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v59", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
@@ -2262,7 +2262,7 @@ function sugPanel() {
     '<div class="field"><label for="sug-text">What should change, and why?</label><textarea id="sug-text" class="input" style="min-height:140px" placeholder="e.g. The Skip button is too far from my thumb on the tablet"></textarea></div>' +
     '<div class="tags" role="group" aria-label="Kind">' + ["Layout", "Wording", "Hard to find", "Too slow", "Bug", "Missing", "Teaching flow"].map(function (t) { return '<button class="chip" type="button" data-sugtag="' + t + '" aria-pressed="' + !!SUG.tags[t] + '">' + t + '</button>'; }).join("") + '</div>' +
     '<button class="btn dash" type="button" id="sug-point" style="justify-content:flex-start"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path><circle cx="12" cy="12" r="3"></circle></svg>' + (SUG.target ? "Point at something else" : "Point at it on the screen") + '</button>' +
-    '<button class="btn pri" type="button" id="sug-save">Save suggestion</button><span class="hint" id="sug-st">' + (TRY ? "Try-out: this note is the only thing that gets saved." : "Saved as a note for Claude, not into the lesson.") + '</span>' +
+    '<button class="btn pri" type="button" id="sug-save">Save suggestion</button><span class="hint" id="sug-st">' + (TRY ? "Try-out: this note is the only thing that gets saved." : "Saved as a note about the app, not into the lesson.") + '</span>' +
     '<div class="stack s2 sug-list" id="sug-list"><span class="lab">Your earlier suggestions</span><div id="sug-items" class="sunk hint" style="padding:var(--s4)">Loading…</div></div></div>';
   document.body.appendChild(el); SUG.open = true; var ta = $("#sug-text"); ta.value = SUG.draft || ""; ta.focus();
   ta.addEventListener("input", function () { SUG.draft = ta.value; });
@@ -2291,7 +2291,7 @@ function sugSend() { if (sugBusy || !navigator.onLine) return; var q = []; try {
       return gh("/repos/" + CFG.repo + "/contents/" + enc(SUGFILE), { method: "PUT", allowTry: true, body: { message: "UI suggestion (" + CFG.device + ")", content: b64enc(cur.replace(/\s*$/, cur ? "\n" : "") + q.map(function (i) { return JSON.stringify(i); }).join("\n") + "\n"), sha: sha || undefined } }); })
     .catch(function (e) { if (n < 2 && (e.status === 409 || e.status === 422)) return attempt(n + 1); throw e; }); }
   attempt(0).then(function () { var left = []; try { left = JSON.parse(ls(SUGQ_KEY) || "[]"); } catch (e) {} var ids = q.map(function (i) { return i.id; });
-      ls(SUGQ_KEY, JSON.stringify(left.filter(function (i) { return ids.indexOf(i.id) < 0; }))); sugBusy = false; toast(q.length > 1 ? q.length + " suggestions saved. They will be read with the next app changes." : "Suggestion saved. Claude will see it."); sugSend(); })
+      ls(SUGQ_KEY, JSON.stringify(left.filter(function (i) { return ids.indexOf(i.id) < 0; }))); sugBusy = false; toast(q.length > 1 ? q.length + " suggestions saved. They will be read with the next app changes." : "Suggestion saved. It will be read with the next app changes."); sugSend(); })
     .catch(function (e) { sugBusy = false; toast("Suggestion kept on this device; it sends by itself (" + (e.status === 401 || e.status === 403 ? "GitHub refused the key" : "no connection") + ")."); setTimeout(sugSend, 30000); });
 }
 window.addEventListener("online", sugSend); setTimeout(sugSend, 3000);
