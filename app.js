@@ -2244,7 +2244,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
    at its end turns into a straight line. The S Pen always writes; a finger still swipes and taps (unless "Pen and finger" is on,
    which also lets a mouse write). The S Pen's side button rubs out whole strokes. Ink belongs to the screen (the questions showing)
    and lives only in this tab: it is never saved. When you move on, the ink stays for when you come back (Keep) or goes (Clear). */
-var INK = { pages: {}, undo: {}, redo: {}, key: "", tool: "pen", pc: 0, hc: 0, ps: 1, hs: 1, finger: false, open: false, more: false, cur: null, cv: null, raf: 0, pen: false, diag: "" };
+var INK = { pages: {}, undo: {}, redo: {}, key: "", tool: "pen", pc: 0, hc: 0, ps: 1, hs: 1, finger: false, open: false, more: false, cur: null, cv: null, raf: 0, pen: false, arm: false, diag: "" };
 var INKCOL = { pen: [["--ink-1", "Black"], ["--ink-2", "Grey"], ["--ink-3", "Red"], ["--ink-4", "Orange"], ["--ink-5", "Green"], ["--ink-6", "Blue"], ["--ink-7", "Purple"], ["--ink-8", "Pink"]],
   hl: [["--hl-1", "Yellow"], ["--hl-2", "Green"], ["--hl-3", "Pink"], ["--hl-4", "Blue"]] };
 var INKW = { pen: [2, 3.5, 6], hl: [12, 20, 32] };
@@ -2307,6 +2307,9 @@ function inkRub(pt) { var r = 16, W = innerWidth, H = innerHeight, pg = inkPage(
 /* the S Pen side button: tablets report it as the right button (2), as an eraser (32), or only as a right-click; and it may be
    pressed after the pen is already down. Any of these turns the stroke into rubbing out. */
 function inkSide(e) { return !!((e.buttons & 2) || (e.buttons & 32) || e.button === 2 || e.button === 5); }
+/* rubbing along the path, every 8 px from the last point, so a quick flick can't jump over a thin stroke */
+function inkRubTo(c, pt) { var a = c.lp || pt, d = Math.hypot((pt[0] - a[0]) * innerWidth, (pt[1] - a[1]) * innerHeight), k = Math.max(1, Math.ceil(d / 8));
+  for (var i = 1; i <= k; i++) inkRub([a[0] + (pt[0] - a[0]) * i / k, a[1] + (pt[1] - a[1]) * i / k]); c.lp = pt; }
 function inkToRub(c) { if (c.rub) return; c.rub = true; if (c.s) { var pg = inkPage(), k = pg.indexOf(c.s); if (k >= 0) pg.splice(k, 1); c.s = null; clearTimeout(c.tm); inkDraw(); } }
 function inkSeen(e, how) { var side = how || (inkSide(e) ? "seen" : ""), c = INK.cur;
   if (c) { if (side) c.seen = true; else if (c.seen) return; }   // once seen in a stroke, the line keeps saying so until the next touch
@@ -2323,19 +2326,26 @@ document.addEventListener("pointerdown", function (e) {
   if (e.pointerType !== "touch" || INK.finger) inkSeen(e);
   if (e.pointerType !== "pen" && !INK.finger && !(e.pointerType === "mouse" && inkSide(e))) return;   // a right-button press rubs out: some tablets send the S Pen with its button held that way
   e.preventDefault();
-  var rub = INK.tool === "rub" || inkSide(e), pt = inkPt(e), redo = inkStack(INK.redo); inkSnap();
+  var rub = INK.tool === "rub" || inkSide(e) || INK.arm, pt = inkPt(e), redo = inkStack(INK.redo); inkSnap();
   INK.cur = { id: e.pointerId, rub: rub, s: rub ? null : { t: INK.tool, c: INK.tool === "hl" ? INK.hc : INK.pc, w: INK.tool === "hl" ? INK.hs : INK.ps, p: [pt] }, n: inkPage().length, redo: redo, ax: e.clientX, ay: e.clientY, seen: inkSide(e) };
-  if (rub) inkRub(pt); else { inkPage().push(INK.cur.s); inkDraw(); inkHold(INK.cur); }
+  if (rub) inkRubTo(INK.cur, pt); else { inkPage().push(INK.cur.s); inkDraw(); inkHold(INK.cur); }
   try { t.setPointerCapture(e.pointerId); } catch (x) {}
 }, true);
-document.addEventListener("pointermove", function (e) { var c = INK.cur; if (!c || e.pointerId !== c.id) return; e.preventDefault(); inkSeen(e);
+document.addEventListener("pointermove", function (e) { var c = INK.cur;
+  if (!c && e.pointerType === "pen" && MODE === "student" && !(e.buttons & 1)) { var arm = inkSide(e); if (arm && !INK.arm) inkSeen(e, "while hovering"); INK.arm = arm; }   // the pen above the screen, its button held: the next touch rubs out
+  if (!c || e.pointerId !== c.id) return; e.preventDefault(); inkSeen(e);
   if (inkSide(e)) inkToRub(c);
   (e.getCoalescedEvents ? e.getCoalescedEvents() : []).concat([e]).forEach(function (m) { var pt = inkPt(m);
-    if (c.rub) inkRub(pt); else if (c.s.line) c.s.p[1] = pt; else c.s.p.push(pt); });
+    if (c.rub) inkRubTo(c, pt); else if (c.s.line) c.s.p[1] = pt; else c.s.p.push(pt); });
   if (!c.rub) { inkDraw(); if (Math.hypot(e.clientX - c.ax, e.clientY - c.ay) > 3) { c.ax = e.clientX; c.ay = e.clientY; if (!c.s.line) inkHold(c); } } }, true);
 /* some tablets send the side button as a right-click: no menu on his screen, and the stroke becomes rubbing out */
 document.addEventListener("contextmenu", function (e) { if (MODE !== "student" || !(INK.cur || INK.pen)) return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "right-click"); if (INK.cur) inkToRub(INK.cur); }, true);
-["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { if (e.pointerType === "pen") INK.pen = false; var c = INK.cur;
+/* Chrome on Android turns "S Pen button held + drag" into its own text selection (Ali's Tab S7 FE, 17 Oct): nothing on his
+   screen is ever selectable (app.css), and any selection Chrome still starts is stopped and noted in the pen button check */
+document.addEventListener("selectstart", function (e) { if (MODE !== "student") return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "Chrome tried to select text"); if (INK.cur) inkToRub(INK.cur); }, true);
+document.addEventListener("selectionchange", function () { if (MODE !== "student") return; var sel = getSelection(); if (sel && !sel.isCollapsed) sel.removeAllRanges(); });
+["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { if (e.pointerType === "pen") { INK.pen = false; INK.arm = false; } var c = INK.cur;
+  if (n === "pointercancel" && c && e.pointerId === c.id) { INK.diag = "Pen button check: the browser took over the stroke · " + (e.pointerType || "?"); var d = $("#inkdiag"); if (d) d.textContent = INK.diag; }
   if (c && e.pointerId === c.id) { clearTimeout(c.tm); INK.cur = null;
     if (c.rub && inkPage().length === c.n) { inkStack(INK.undo).pop(); INK.redo[INK.key] = c.redo; }   // rubbed nothing out: nothing to undo, and Redo stays
     inkRefresh(); } }, true); });
@@ -2344,7 +2354,7 @@ addEventListener("resize", function () { if (MODE === "student") inkDraw(); });
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v61", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v62", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
