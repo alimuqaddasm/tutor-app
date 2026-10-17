@@ -2323,10 +2323,10 @@ function inkCan(e) { if (MODE !== "student" || !STU || STU.drawer || !INK.cv) re
   var t = e.target; return !!(t.closest && t.closest(".stu-view") && !t.closest("button, a, input, select, textarea, video")); }   // a tap on a button still works
 function inkTouch(e) { return !!(e.buttons & 33); }   // the pen tip (1) or its eraser end (32) is on the screen; a button alone means it hovers
 function inkStart(e) { e.preventDefault();
-  var rub = INK.tool === "rub" || inkSide(e) || INK.arm, pt = inkPt(e), redo = inkStack(INK.redo); inkSnap();
+  var rub = INK.tool === "rub" || inkSide(e) || (e.pointerType === "pen" && INK.arm), pt = inkPt(e), redo = inkStack(INK.redo); inkSnap();
   INK.cur = { id: e.pointerId, rub: rub, s: rub ? null : { t: INK.tool, c: INK.tool === "hl" ? INK.hc : INK.pc, w: INK.tool === "hl" ? INK.hs : INK.ps, p: [pt] }, n: inkPage().length, redo: redo, ax: e.clientX, ay: e.clientY, seen: inkSide(e) };
   if (rub) inkRubTo(INK.cur, pt); else { inkPage().push(INK.cur.s); inkDraw(); inkHold(INK.cur); }
-  try { e.target.setPointerCapture(e.pointerId); } catch (x) {} }
+  try { e.target.setPointerCapture(e.pointerId); INK.cur.el = e.target; } catch (x) {} }
 function inkEnd(c) { clearTimeout(c.tm); INK.cur = null;
   if (c.rub && inkPage().length === c.n) { inkStack(INK.undo).pop(); INK.redo[INK.key] = c.redo; }   // rubbed nothing out: nothing to undo, and Redo stays
   inkRefresh(); }
@@ -2340,7 +2340,7 @@ document.addEventListener("pointerdown", function (e) {
 }, true);
 document.addEventListener("pointermove", function (e) { var c = INK.cur;
   if (e.pointerType === "pen" && MODE === "student" && !inkTouch(e)) {   // the pen above the screen
-    if (c && e.pointerId === c.id) inkEnd(c);   // lifted with its button still held: no pointerup comes yet
+    if (c && e.pointerId === c.id) { try { if (c.el && c.el.hasPointerCapture(c.id)) c.el.releasePointerCapture(c.id); } catch (x) {} inkEnd(c); }   // lifted with its button still held: no pointerup comes yet, so let go of the screen too
     var arm = inkSide(e); if (arm && !INK.arm) inkSeen(e, "while hovering"); INK.arm = arm; return; }   // its button held: the next touch rubs out
   if (!c && e.pointerType === "pen" && inkCan(e)) { inkSeen(e); inkStart(e); return; }   // touched down while a button was already pressed: no new pointerdown comes
   if (!c || e.pointerId !== c.id) return; e.preventDefault(); inkSeen(e);

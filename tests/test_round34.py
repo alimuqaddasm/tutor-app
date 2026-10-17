@@ -127,7 +127,16 @@ with sync_playwright() as p:
     pg.evaluate("""() => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 14, clientX: x, clientY: y, buttons: b, button: -1, bubbles: true, cancelable: true }));
       __t('INK.pages[INK.key].push({t:"pen",c:0,w:1,p:[[0.3,0.7],[0.6,0.7]]})');   // a second line, only crossed after the pen lifts
       ev('pointermove', 640, 520, 3); ev('pointermove', 640, 560, 3); ev('pointermove', 640, 600, 2); ev('pointermove', 640, 680, 2); ev('pointerup', 640, 680, 0); }"""); pg.wait_for_timeout(150)
-    check("  ...then touching down with it held rubs out, and lifting stops the rubbing", n() == k and pg.evaluate("__t('INK.cur')") is None, (k, n()))
+    ys = [round(st["p"][0][1], 2) for st in __import__("json").loads(page())]
+    check("  ...then touching down with it held rubs out, and lifting stops the rubbing", n() == k and 0.6 not in ys and 0.7 in ys and pg.evaluate("__t('INK.cur')") is None, (k, n(), ys))
+    pg.click('[data-ink="finger"]') if pg.locator('[data-ink="finger"]').count() else None
+    pg.evaluate("__t('INK.finger=true')"); k = n()
+    pg.evaluate("""() => { const el = document.querySelector('.stu-view');
+      el.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'pen', pointerId: 15, clientX: 300, clientY: 300, buttons: 2, bubbles: true }));
+      const ev = (t, x, y, b) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'touch', pointerId: 16, clientX: x, clientY: y, buttons: b, bubbles: true, cancelable: true }));
+      ev('pointerdown', 300, 640, 1); ev('pointermove', 400, 640, 1); ev('pointerup', 400, 640, 0); }"""); pg.wait_for_timeout(150)
+    check("Pen and finger: a finger writes even while the pen hovers with its button held", n() == k + 1, (k, n()))
+    pg.evaluate("__t('INK.finger=false;INK.arm=false')")
     stroke("pen", 300, 760, 400, 760, 1)
     check("  ...and only that touch: the next one writes again", not last().get("rub") and last()["p"][0][1] > 0.8, last())
     pg.screenshot(path=os.path.join(SHOTS, "r34-tools-1440.png"))
