@@ -102,7 +102,7 @@ function blobBytes(sha) {
 }
 function fileJSON(path) { var sha = shaOf(path); if (!sha) return Promise.resolve(null); return blobBytes(sha).then(function (b) {
   try { return { data: JSON.parse(new TextDecoder().decode(b)), sha: sha }; }
-  catch (e) { var er = new Error(path.split("/").slice(-2).join("/") + " is not valid JSON (" + e.message + "). Ask Claude to fix the file."); er.broken = true; throw er; } }); }
+  catch (e) { var er = new Error(path.split("/").slice(-2).join("/") + " is not valid JSON (" + e.message + "). Ask for the file to be fixed."); er.broken = true; throw er; } }); }
 function fileText(path) { var sha = shaOf(path); if (!sha) return Promise.resolve(null); return blobBytes(sha).then(function (b) { return { text: new TextDecoder().decode(b), sha: sha }; }); }
 var urlCache = {};
 function fileURL(path) { var sha = shaOf(path); if (!sha) return Promise.resolve(null); if (urlCache[sha]) return Promise.resolve(urlCache[sha]);
@@ -438,8 +438,8 @@ function homeHTML(items) {
       return '<article class="tile" data-subject="' + sj + '"><div class="tags">' + subjTag(sj) + topicTag(s) + lessonTags(s, x) + st + when + '</div><h2>' + esc(lessonTitle(s, x)) + '</h2>' + flow +
         '<div class="acts"><a class="btn go" href="#/lesson/' + encodeURIComponent(up.id) + '/teach">Teach ▶</a><a class="btn" href="#/lesson/' + encodeURIComponent(up.id) + '">Prepare</a>' + tag(mins + " min") + '</div></article>'; }
     return '<article class="tile none" data-subject="' + sj + '"><div class="tags">' + subjTag(sj) + tag("No script yet", "dash") + '</div><h2>Next ' + esc(SUBJ[sj].toLowerCase()) + ' lesson</h2>' +
-      (last ? '<div class="tags"><span class="hint">Last</span>' + tag(esc(fmtDate(dateOf(last)))) + tag(esc(lessonTitle(last.s, last.x)), "line") + '</div>' : '<p>Ask Claude to draft the first script.</p>') +
-      '<div class="acts"><button class="btn go" type="button" data-askclaude="' + sj + '">Draft it with Claude</button><a class="btn quiet" href="#/new">Log without a script</a></div></article>';
+      (last ? '<div class="tags"><span class="hint">Last</span>' + tag(esc(fmtDate(dateOf(last)))) + tag(esc(lessonTitle(last.s, last.x)), "line") + '</div>' : '<p>No script yet: draft the first one.</p>') +
+      '<div class="acts"><button class="btn go" type="button" data-askclaude="' + sj + '">Draft it</button><a class="btn quiet" href="#/new">Log without a script</a></div></article>';
   }).join("");
   var rest = items.filter(function (it) { return !shown[it.id]; });
   var rows = rest.map(function (it) {
@@ -484,8 +484,8 @@ var VTAG = { right: ["\u2713 Right", "ok"], partly: ["\u00bd Partly", "partly"],
 function revBadge() { var b = $("#revbadge"); if (!b || !REV) return; var n = dueList(null).length; b.textContent = n; b.hidden = !n; }
 document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-askclaude]"); if (!b) return;
   var sj = b.getAttribute("data-askclaude"), txt = "/tutor next lesson " + (SUBJ[sj] || sj).toLowerCase() + " for " + CFG.student;
-  var done = function () { toast("Copied “" + txt + "”. Paste it into any Claude chat to draft the script."); };
-  try { navigator.clipboard.writeText(txt).then(done, function () { toast("Ask Claude: “" + txt + "”"); }); } catch (x) { toast("Ask Claude: “" + txt + "”"); } });
+  var done = function () { toast("Copied “" + txt + "”. Paste it into the drafting chat."); };
+  try { navigator.clipboard.writeText(txt).then(done, function () { toast("Draft it: “" + txt + "”"); }); } catch (x) { toast("Draft it: “" + txt + "”"); } });
 
 /* ---------------- new unscripted lesson ---------------- */
 function newView() {
@@ -784,19 +784,19 @@ function extraView() {
 var CAMIC = '<svg class="icon lg" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="15" rx="2"></rect><circle cx="12" cy="12.5" r="3.5"></circle><path d="M8 5l1.5-2h5L16 5"></path></svg>';
 function workView() {
   var x = L.session, items = itemsList(), live = x.work.filter(function (w) { return !w.removed; }), m = L.marking;
-  var h = pageHead("His work", "", '<div class="tags">' + tag("Goes to GitHub") + tag("Claude marks it") + '</div>');
+  var h = pageHead("His work", "", '<div class="tags">' + tag("Goes to GitHub") + tag("Auto-checker marks it") + '</div>');
   h += '<div class="split"><form class="card pad-l stack s5" id="wkform" style="flex:1 1 360px;max-width:420px"><label for="wk-files" class="drop"><span class="cam">' + CAMIC + '</span><b>Take a photo or choose files</b><span class="tags" style="justify-content:center">' + tag("Photos") + tag("PDFs") + tag("Many pages at once") + '</span><span class="hint" id="wk-pick"></span>' +
     '<input id="wk-files" class="sr" type="file" accept="image/*,application/pdf" multiple required></label>' +
     '<div class="field"><label for="wk-item">Which question?</label><select class="input" id="wk-item"><option value="">Whole lesson or several questions</option>' + items.map(function (i) { return '<option value="' + esc(i.id) + '">' + esc(i.label) + '</option>'; }).join("") + '</select></div>' +
     '<div class="field"><label for="wk-kind">What is it?</label><select class="input" id="wk-kind"><option value="class">Working in the lesson</option><option value="homework">Homework</option><option value="test">Test</option><option value="other">Other</option></select></div>' +
-    '<div class="field"><label for="wk-note">Note for Claude <span class="hint" style="font-weight:400">(optional)</span></label><input class="input" type="text" id="wk-note" placeholder="e.g. Page 2 is blurry"></div><div class="row"><button class="btn pri" type="submit" id="wk-go">Upload</button><span class="hint" id="wk-st"></span></div></form>';
+    '<div class="field"><label for="wk-note">Note for the auto-checker <span class="hint" style="font-weight:400">(optional)</span></label><input class="input" type="text" id="wk-note" placeholder="e.g. Page 2 is blurry"></div><div class="row"><button class="btn pri" type="submit" id="wk-go">Upload</button><span class="hint" id="wk-st"></span></div></form>';
   h += '<section class="grow stack"><div class="head" style="align-items:baseline"><h2 class="t-sec">Uploaded</h2><span class="hint">' + (live.length ? "Tap a photo to zoom" : "") + '</span></div>' +
     (live.length ? '<div class="shots">' + live.map(function (w) { return '<div class="stack s2">' + (/\.pdf$/i.test(w.file) ? '<div class="ph" style="aspect-ratio:3/4;border:1px solid var(--line)">PDF</div>' : '<figure class="fig"><img data-src="' + esc(w.file) + '" alt="His work" hidden style="width:100%;aspect-ratio:3/4;object-fit:cover"><div class="ph" style="aspect-ratio:3/4;border:1px solid var(--line)">Loading</div></figure>') +
       '<div class="tags">' + tag(esc(labelOf(w.item) || "Whole lesson"), "line") + tag(esc(hhmm(w.at))) + (w.kind && w.kind !== "class" ? tag(esc(cap(w.kind))) : "") + '<button class="btn sm quiet" type="button" data-wkdel="' + esc(w.file) + '">Remove</button></div>' + (w.note ? '<span class="hint">' + esc(w.note) + '</span>' : "") + '</div>'; }).join("") + '</div>'
-      : '<div class="empty" style="padding:var(--s6) var(--s5)"><b class="t-card">No photos yet</b><span class="hint">Upload his answers. Claude reads each one and marks it against the real mark scheme.</span></div>');
-  h += m ? '<div class="card pad stack s3"><div class="row"><span class="lab">Claude’s marking</span>' + (m.score != null ? tag(esc(m.score) + "/" + esc(m.max) + " marks", "ok") : "") + '</div>' + (m.summary ? '<p>' + clean(m.summary) + '</p>' : "") + (m.mistakes || []).map(function (k) { var vt = VTAG[k.type] || ["", ""];
+      : '<div class="empty" style="padding:var(--s6) var(--s5)"><b class="t-card">No photos yet</b><span class="hint">Upload his answers. The auto-checker reads each one and marks it against the real mark scheme.</span></div>');
+  h += m ? '<div class="card pad stack s3"><div class="row"><span class="lab">Auto-checker’s marking</span>' + (m.score != null ? tag(esc(m.score) + "/" + esc(m.max) + " marks", "ok") : "") + '</div>' + (m.summary ? '<p>' + clean(m.summary) + '</p>' : "") + (m.mistakes || []).map(function (k) { var vt = VTAG[k.type] || ["", ""];
       return '<div class="mrow" style="padding:var(--s3) 0"><span class="edge" style="background:' + (VCOL[k.type] || "var(--line-strong)") + '"></span><div class="tags">' + (k.type ? tag(vt[0], vt[1]) : "") + tag(esc(labelOf(k.item) || k.item || ""), "line") + '</div><p>' + clean(k.what || "") + '</p>' + (k.fix ? '<p class="fix"><b>Fix</b> · ' + clean(k.fix) + '</p>' : "") + '</div>'; }).join("") + '</div>'
-    : '<div class="empty" style="padding:var(--s6) var(--s5)"><b>Claude’s marking</b><span class="hint">Shows here after Claude reads the photos: each question, the mark and what to fix.</span></div>';
+    : '<div class="empty" style="padding:var(--s6) var(--s5)"><b>Auto-checker’s marking</b><span class="hint">Shows here after the auto-checker reads the photos: each question, the mark and what to fix.</span></div>';
   return h + '</section></div>';
 }
 function itemsList() { var out = [];
@@ -852,7 +852,7 @@ function afterView() {
   Object.keys(x.answers).forEach(function (k) { var a = x.answers[k]; if (!a.parts) addW(labelOf(k), a.v, a.note); });
   x.extra.forEach(function (e) { addW(e.q, e.v, e.note); });
   var st = function (b, l, c) { return '<div class="stat" style="padding:var(--s4) 20px"><b style="font-size:24px' + (c ? ";color:" + c : "") + '">' + b + '</b><span class="hint">' + l + '</span></div>'; };
-  var h = pageHead("After the lesson", "Claude reads this before the next script.", '<div class="row s2">' + st(x.time.minutes != null ? Math.round(x.time.minutes) + " min" : "-", "Taught") + st(sc.n ? sc.r + "/" + sc.n : "-", "Right") + st(wrong.length, "New mistakes", wrong.length ? "var(--wrong)" : "") + '</div>');
+  var h = pageHead("After the lesson", "Read before the next script is drafted.", '<div class="row s2">' + st(x.time.minutes != null ? Math.round(x.time.minutes) + " min" : "-", "Taught") + st(sc.n ? sc.r + "/" + sc.n : "-", "Right") + st(wrong.length, "New mistakes", wrong.length ? "var(--wrong)" : "") + '</div>');
   var notes = Object.keys(x.answers).filter(function (k) { return x.answers[k].note; }).map(function (k) { var a = x.answers[k];
     return '<li data-item="' + esc(k) + '"><div class="tags"><b>' + esc(labelOf(k)) + '</b>' + (a.v && VTAG[a.v] ? tag(VTAG[a.v][0], VTAG[a.v][1]) : "") + '</div>' + noteBox(a.note) + '</li>'; })
     .concat(x.extra.filter(function (e) { return e.note; }).map(function (e) { return '<li data-item="x:' + esc(e.id) + '"><b>' + esc(e.q) + '</b>' + noteBox(e.note) + '</li>'; }));
@@ -1194,7 +1194,7 @@ function drawRevise() {
   var tg = $("#revtags"); if (tg) tg.innerHTML = tag(due.length + " due today", "live") + tag("5 min · about 8 cards") + tag("Day 1, 3, 7, 14, 30");
   var segbox = $("#revseg"); if (segbox) segbox.innerHTML = seg; else seg = '<div class="row">' + seg + '</div>';
   if (segbox) seg = "";
-  if (!due.length) { box.innerHTML = seg + '<div class="empty"><b class="t-card">Nothing due today</b><span class="hint">' + (all ? "Every mistake is either mastered or comes back on a later day." : "No mistakes logged yet. They arrive when Claude closes a lesson.") + '</span></div>'; return; }
+  if (!due.length) { box.innerHTML = seg + '<div class="empty"><b class="t-card">Nothing due today</b><span class="hint">' + (all ? "Every mistake is either mastered or comes back on a later day." : "No mistakes logged yet. They arrive when the auto-checker closes a lesson.") + '</span></div>'; return; }
   if (revState.i >= due.length) revState.i = 0;
   var m = due[revState.i], r = REV.rv[m.key], bx = r ? r.box : 0, vt = VTAG[m.type];
   box.innerHTML = seg + '<div class="row"><b class="num" style="font-size:15px">Card ' + (revState.i + 1) + ' of ' + due.length + '</b><div class="bar live" style="flex:1"><i style="width:' + Math.max(2, Math.round(100 * (revState.i + 1) / due.length)) + '%"></i></div><button class="btn sm" type="button" data-rev="shuffle" title="A new order. It also changes by itself every day.">Shuffle</button></div>' +
@@ -1237,7 +1237,7 @@ function videosView() {
     '<div id="vplayer"></div><div id="vwrap" class="stack s6"><div class="empty"><b class="t-card">Loading the video list</b></div></div></div>';
   loadTree().then(function () { return fileJSON("videos.json"); }).then(function (r) {
     if (route().indexOf("/videos") !== 0) return;
-    if (!r) { $("#vwrap").innerHTML = '<div class="empty"><b class="t-card">No video list yet</b><span class="hint">Ask Claude to run tools/build_video_catalogue.py.</span></div>'; return; }
+    if (!r) { $("#vwrap").innerHTML = '<div class="empty"><b class="t-card">No video list yet</b><span class="hint">Run tools/build_video_catalogue.py to make it.</span></div>'; return; }
     var tr = {}; (TREE || []).forEach(function (t) { var m = /^transcripts\/youtube\/[a-z]+\/([A-Za-z0-9_-]{11}) .*\.txt$/.exec(t.path); if (m) tr[m[1]] = t.path; });
     VID.all = r.data.videos.map(function (v) { v.transcript = tr[v.id] || v.transcript || null; return v; }); drawVideos();
   }).catch(fail);
@@ -1989,7 +1989,7 @@ function storeDraw() { var box = $("#stobox"); if (!box) return; var subj = subj
   ((L.script && L.script.phases) || []).forEach(function (p) { inScript[String(p.name).toLowerCase()] = 1; });
   var tc = L.script && L.script.topic && L.script.topic.code, used = {}; addedList().forEach(function (a) { used[a.store + "#" + a.part] = 1; });
   var stores = Object.keys(STORES).filter(function (p) { var d = STORES[p].data; return !d.subject || d.subject === subj; });
-  if (!stores.length) { box.innerHTML = '<div class="empty"><b class="t-card">No store for ' + esc((SUBJ[subj] || subj).toLowerCase()) + ' yet</b><span class="hint">Ask Claude to prepare the chapter’s sections.</span></div>'; return; }
+  if (!stores.length) { box.innerHTML = '<div class="empty"><b class="t-card">No store for ' + esc((SUBJ[subj] || subj).toLowerCase()) + ' yet</b><span class="hint">Ask for the chapter’s sections.</span></div>'; return; }
   box.innerHTML = '<p class="hint">' + (PREP ? "Look at a section here. Nothing is saved in Prepare." : "It goes straight after the part you are on" + (here ? " (" + esc(partTitle(here.name)) + ")" : "") + ", and you jump to it.") + '</p>' +
     stores.map(function (p) { var d = STORES[p].data; return '<section class="stack s3"><div class="tags">' + topicTag(d) + tag((d.parts || []).length + " sections") + '</div>' +
       (d.parts || []).map(function (q) { var k = p + "#" + q.id, isIn = used[k], inLesson = inScript[String(q.name).toLowerCase()] || tc && q.code === tc, n = 0;
@@ -2274,7 +2274,7 @@ function loadSugs() { return loadTree(true).then(function () { return fileText(S
   return lines.filter(function (x) { return x.text; }).map(function (x) { x.reply = st[x.id] || null; return x; }).reverse(); }); }
 function drawSugs(list) { var box = $("#sug-items"); if (!box) return;
   box.innerHTML = list.length ? list.map(function (x) { return '<div class="sug-item"><div><b>' + esc(x.text) + '</b></div><div class="hint">' + esc(fmtDate(x.at.slice(0, 10))) + ' · ' + esc(x.where || "") + '</div>' +
-    (x.reply ? '<div class="sug-reply ' + esc(x.reply.status) + '">' + esc({ done: "Done", later: "Later", no: "Not doing" }[x.reply.status] || x.reply.status) + (x.reply.note ? ": " + esc(x.reply.note) : "") + '</div>' : '<div class="sug-reply open">Waiting for Claude</div>') + '</div>'; }).join("") : "None yet."; }
+    (x.reply ? '<div class="sug-reply ' + esc(x.reply.status) + '">' + esc({ done: "Done", later: "Later", no: "Not doing" }[x.reply.status] || x.reply.status) + (x.reply.note ? ": " + esc(x.reply.note) : "") + '</div>' : '<div class="sug-reply open">Waiting for a reply</div>') + '</div>'; }).join("") : "None yet."; }
 function saveSug() {
   var text = ($("#sug-text").value || "").trim(); if (!text) { $("#sug-text").focus(); return; }
   var item = { id: "s" + Date.now().toString(36), at: now(), device: CFG.device, app: APP_VERSION, tryout: !!TRY, where: whereAmI(), pointed: SUG.target || undefined,
@@ -2291,7 +2291,7 @@ function sugSend() { if (sugBusy || !navigator.onLine) return; var q = []; try {
       return gh("/repos/" + CFG.repo + "/contents/" + enc(SUGFILE), { method: "PUT", allowTry: true, body: { message: "UI suggestion (" + CFG.device + ")", content: b64enc(cur.replace(/\s*$/, cur ? "\n" : "") + q.map(function (i) { return JSON.stringify(i); }).join("\n") + "\n"), sha: sha || undefined } }); })
     .catch(function (e) { if (n < 2 && (e.status === 409 || e.status === 422)) return attempt(n + 1); throw e; }); }
   attempt(0).then(function () { var left = []; try { left = JSON.parse(ls(SUGQ_KEY) || "[]"); } catch (e) {} var ids = q.map(function (i) { return i.id; });
-      ls(SUGQ_KEY, JSON.stringify(left.filter(function (i) { return ids.indexOf(i.id) < 0; }))); sugBusy = false; toast(q.length > 1 ? q.length + " suggestions saved. Claude will see them." : "Suggestion saved. Claude will see it."); sugSend(); })
+      ls(SUGQ_KEY, JSON.stringify(left.filter(function (i) { return ids.indexOf(i.id) < 0; }))); sugBusy = false; toast(q.length > 1 ? q.length + " suggestions saved. They will be read with the next app changes." : "Suggestion saved. Claude will see it."); sugSend(); })
     .catch(function (e) { sugBusy = false; toast("Suggestion kept on this device; it sends by itself (" + (e.status === 401 || e.status === 403 ? "GitHub refused the key" : "no connection") + ")."); setTimeout(sugSend, 30000); });
 }
 window.addEventListener("online", sugSend); setTimeout(sugSend, 3000);

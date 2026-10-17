@@ -120,7 +120,7 @@ with sync_playwright() as p:
 
     # 1. the tab lists Claude's exam with its reason
     pg.goto(APP + "#/exams")
-    check("Exams is in the menu and opens", wait_for(lambda: "from Claude" in pg.inner_text("#app"), 15) is not None, pg.inner_text("#app")[:200])
+    check("Exams is in the menu and opens", wait_for(lambda: "Notes" in pg.inner_text("#app"), 15) is not None, pg.inner_text("#app")[:200])
     # since 10 Oct the reason sits folded under "Notes from Claude" on the card: open it, then it must show
     pg.click('details.xnotes > summary')
     check("Claude's exam shows with why it is due", wait_for(lambda: "Chapter 5 finished" in pg.inner_text("details.xnotes"), 4) is not None, pg.inner_text("#app")[:400])
