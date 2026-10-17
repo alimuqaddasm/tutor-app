@@ -84,18 +84,19 @@ with sync_playwright() as p:
     # the tools
     pg.click("#stupen"); pg.wait_for_timeout(200)
     check("the pen button opens the tools", pg.locator(".stu-tools").is_visible())
+    pg.click('[data-ink="more"]'); pg.wait_for_timeout(100)   # the two settings sit under More
     tools = pg.inner_text(".stu-tools")
-    check("  ...colours, Rub out, Clear ink, Keep or Clear when you move on, S Pen or Pen and finger",
-          pg.locator(".stu-dot").count() == 3 and all(w in tools for w in ["Rub out", "Clear ink", "When you move on", "Keep ink", "Writes with", "S Pen", "Pen and finger"]), tools)
+    check("  ...tools, 8 colours, Undo, Redo, Clear ink, Keep or Clear when you move on, S Pen or Pen and finger",
+          pg.locator(".stu-dot").count() == 8 and all(w in tools for w in ["Pen", "Highlighter", "Rub out", "Undo", "Redo", "Clear ink", "When you move on", "Keep ink", "Writes with", "S Pen", "Pen and finger"]), tools)
     pg.screenshot(path=os.path.join(SHOTS, "r33-tools-1440.png"))
-    pg.click('[data-ink="c1"]'); pg.evaluate(STROKE, ["pen", 500, 600, 700, 640, 1]); pg.wait_for_timeout(150)
+    pg.click('[data-ink="c2"]'); pg.evaluate(STROKE, ["pen", 500, 600, 700, 640, 1]); pg.wait_for_timeout(150)
     red = pg.evaluate("__t('INK.pages[INK.key][INK.pages[INK.key].length-1].c')")
-    check("red ink after picking red", red == 1, red)
+    check("red ink after picking red", red == 2, red)
     pg.click('.stu-tools [data-ink="clear"]'); pg.wait_for_timeout(150)
     check("Clear ink empties this screen", n() == 0 and inked() == 0, (n(), inked()))
-    pg.click('[data-ink="rub"]'); pg.evaluate(STROKE, ["pen", 500, 300, 900, 420, 1]); pg.wait_for_timeout(150)
+    pg.click('[data-ink="t-rub"]'); pg.evaluate(STROKE, ["pen", 500, 300, 900, 420, 1]); pg.wait_for_timeout(150)
     check("with Rub out on, the pen writes nothing", n() == 0, n())
-    pg.click('[data-ink="c0"]')
+    pg.click('[data-ink="t-pen"]'); pg.click('[data-ink="c0"]')
 
     # clear ink when you move on
     pg.click('[data-ink="drop"]'); pg.wait_for_timeout(100)

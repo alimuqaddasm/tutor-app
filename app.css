@@ -1328,12 +1328,16 @@ tr.xt-lit td{background:var(--accent-wash)}
 .stu-top .stu-pen{position:relative}
 .stu-top .stu-pen[aria-expanded="true"]{opacity:1;background:var(--sunk)}
 .stu-top .stu-pen[data-has]::after{content:"";position:absolute;top:var(--s2);right:var(--s2);width:8px;height:8px;border-radius:var(--r-full);background:var(--ink-2)}
-.stu-tools{position:fixed;top:calc(var(--s7) + var(--s3));left:var(--s5);z-index:6;display:flex;flex-direction:column;gap:var(--s4);padding:var(--s4);max-width:calc(100vw - 2 * var(--s5))}
+.stu-tools{position:fixed;top:calc(var(--s7) + var(--s3));left:50%;transform:translateX(-50%);z-index:6;display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--s3) var(--s4);padding:var(--s3) var(--s4);width:max-content;max-width:calc(100vw - 2 * 72px);max-height:calc(100vh - var(--s7) - var(--s3) - var(--s4));overflow:auto}   /* a toolbar along the top, clear of the round arrows at the edges */
+@media (max-width:760px){.stu-tools{max-width:calc(100vw - 2 * var(--s4))}}
 .stu-tools[hidden]{display:none}
 .stu-inkrow{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2)}
 .stu-dot{width:44px;height:44px;border:2px solid transparent;border-radius:var(--r-full);background:var(--surface);cursor:pointer;display:grid;place-items:center}
 .stu-dot::before{content:"";width:22px;height:22px;border-radius:var(--r-full);background:var(--dot)}
+.stu-dot.hl::before{width:26px;height:14px;border-radius:var(--r-sm)}
 .stu-dot[aria-pressed="true"]{border-color:var(--line-strong);background:var(--sunk)}
 .stu-tools .btn[aria-pressed="true"]{background:var(--selected);border-color:var(--line-strong)}
 @media (min-width:761px){.stu.clean .stu-view{touch-action:none}}   /* the pen writes instead of scrolling; a finger swipe still moves (it is read from touch events) */
 .stu.inking .stu-view{touch-action:none;cursor:crosshair}
+.stu-inkmore{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--s3) var(--s5);padding-top:var(--s3);border-top:1px solid var(--line-soft)}
+.stu-inkmore #inkdiag{flex-basis:100%;margin:0}
