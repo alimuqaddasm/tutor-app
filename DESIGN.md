@@ -99,7 +99,7 @@ In Teach the verdicts are round buttons down the right edge (`.vrail`; in the ap
 
 ## Wording rules
 
-1. Short and plain. A button is a verb and a thing: "Start lesson", "Accept Claude's mark". Never a lone noun like "Open" or "Compare".
+1. Short and plain. A button is a verb and a thing: "Start lesson", "Accept auto-checker mark". Never a lone noun like "Open" or "Compare".
 2. Repeated facts are tags. A sentence only when it says something new.
 3. No em or en dashes. Use a colon, a full stop or a middle dot ( · ).
 4. Sentence case: every label, tag, heading, button and status starts with a capital ("Today", "Not started", "Start lesson"), and only the first word does. `tag()` capitalises its text for you, so data written in lower case still shows right.
@@ -107,9 +107,9 @@ In Teach the verdicts are round buttons down the right edge (`.vrail`; in the ap
 4a. A lesson title is its name only ("Addition formulae"). The section number is a topic tag (7.1) and an exam lesson carries the Exam tag instead of the word "test" (`lessonParts()` in `app.js`).
 5. One name per thing. Use the glossary.
 6. Numbers carry a noun: "10/16 right", "7/10 marks", "47 due today", "45 min", "2 h 38 min", "18:40". A countdown says "left".
-7. Teacher screens call the student "he". His screens say "you" and "your teacher", and never show notes meant for Ali, Claude's names for parts, or "(revised)".
+7. Teacher screens call the student "he". His screens say "you" and "your teacher", and never show notes meant for Ali, the drafting names for parts, or "(revised)".
 8. Anything that can't be undone says so before it's pressed: "After Done you can't change your answers."
-9. Empty states say what will appear and when: "Shows here after Claude reads the photos."
+9. Empty states say what will appear and when: "Shows here after the auto-checker reads the photos."
 10. Status messages name the result: "Saved: Wrong", "Photo sent 18:01", "Locked · marked".
 11. No filler: no greetings, praise or "Let's".
 12. Never the student's real name. Use the code name (UK-1).
@@ -119,7 +119,7 @@ In Teach the verdicts are round buttons down the right edge (`.vrail`; in the ap
 - **List pages** (Lessons, Videos, Exams, Record, Settings): sidebar (`.side`) + `.main` + `.wrap`. Title `.t-page`, then a row of tags, then sections with `.t-sec` headings.
 - **Lesson and focus pages** (Plan, Teach, Warm-up, After the lesson, His work, Mark): the thin icon rail (`.iconrail`) instead of the sidebar, so the work gets the room.
 - **His screens** (Show him, Student view, his exam page, his phone, his assignment): no app chrome, white or ground, big exam-font text, round arrow buttons.
-- **Assignment cards** (Exams): the plan's `facts`, `scope`, `leftOut` and `todo` show as tags; the long `why` note folds under "Notes from Claude". Never a paragraph on the card.
+- **Assignment cards** (Exams): the plan's `facts`, `scope`, `leftOut` and `todo` show as tags; the long `why` note folds under "Notes". Never a paragraph on the card.
 - **Bars:** `.topbar` and `.botbar`. The main action sits at the right end of the bottom bar.
 - **Phone** (under 760 px): the sidebar becomes a bottom bar of five tabs (Lessons, Warm-up, Exams, Record, More).
 
@@ -139,3 +139,7 @@ In Teach the verdicts are round buttons down the right edge (`.vrail`; in the ap
 2. Use only classes and tokens from `design.css`. If you need something new, add it to `design.css` (and the canvas's Main board) first, as a token or a component, then use it.
 3. Put repeated facts in tags. Check every label against the glossary and the wording rules.
 4. Screenshot it at 1440 px and 390 px before you push.
+
+## Naming the helper (Ali, 16 Oct)
+- The app never says "Claude". Marking by the helper is the **auto-checker** ("Auto-checker marks", "Accept auto-checker mark"). Asking for a script is **Draft it**.
+- Clear-cut marks (multiple choice, or a question the marks file flags `"auto": true`, with nothing unsure) are accepted automatically; only judgement marks wait for Accept.

@@ -120,7 +120,7 @@ with sync_playwright() as p:
     pg.on("dialog", lambda d: d.accept())
 
     pg.goto(APP + "#/exams")
-    wait_for(lambda: "from Claude" in pg.inner_text("#app"), 15)
+    wait_for(lambda: "Notes" in pg.inner_text("#app"), 15)
     pg.click('[data-load="%sexam.json"]' % FOLDER)
     wait_for(lambda: pg.locator("#xt-btns").count() == 1, 15)
     eid = pg.evaluate("location.hash").split("/")[2]
@@ -138,18 +138,19 @@ with sync_playwright() as p:
 
     pg.goto(APP + "#/exams/" + eid + "/mark")
     wait_for(lambda: pg.locator("section.xt-mq").count() == 2, 10)
-    check("the Mark page says Claude has marked it, with his total", wait_for(lambda: "Claude has marked this exam: 3 / 8" in pg.inner_text("#app"), 6) is not None, pg.inner_text("#app")[:300])
-    check("each question shows Claude's mark, ticks and comment", "Claude: 2 / 3" in pg.inner_text('[data-mq="q1"]') and "M1, A2 (1 of 2)" in pg.inner_text('[data-mq="q1"]') and "not exact" in pg.inner_text('[data-mq="q1"]'))
+    check("the Mark page shows the auto-checker's marks, with its total", wait_for(lambda: "Auto-checker marks" in pg.inner_text(".xt-claude") and "3 / 8" in pg.inner_text(".xt-claude"), 6) is not None, pg.inner_text("#app")[:300])
+    check("each question shows Claude's mark, ticks and comment", "Auto-checker: 2 / 3" in pg.inner_text('[data-mq="q1"]') and "1 of 2" in pg.inner_text('[data-mq="q1"] [data-ctable] table') and "not exact" in pg.inner_text('[data-mq="q1"]'))
     check("  ...and what he was unsure about", "Not sure: the last line is hard to read" in pg.inner_text('[data-mq="q2"]'))
     pg.screenshot(path=os.path.join(SHOTS, "r20-1-claude.png"), full_page=True)
     pg.click('[data-accept="q1"]')
     check("Accept puts Claude's mark in and saves it", wait_for(lambda: pg.inner_text("#xt-total") == "2 / 8" and pg.input_value('[data-score="q1"]') == "2", 6) is not None, pg.inner_text("#xt-total"))
     check("  ...with the comment and ticks", pg.input_value('[data-comment="q1"]') == "A2: only one of two marks, not exact" and "Ticked: M1, A2 (1 of 2)" in pg.inner_text('[data-mq="q1"]'))
     check("  ...and the line now says Accepted", "Accepted" in pg.inner_text('[data-cline="q1"]'))
+    pg.click('[data-mqgo="1"]')
     pg.fill('[data-score="q2"]', "3"); pg.dispatch_event('[data-score="q2"]', "change")
     wait_for(lambda: pg.inner_text("#xt-total") == "5 / 8", 6)
     pg.click('[data-compare="1"]')
-    check("Compare shows Claude's mark too", wait_for(lambda: "Claude: 1 / 5" in pg.inner_text(".xt-cmp"), 4) is not None)
+    check("Compare shows Claude's mark too (in the mark scheme panel)", wait_for(lambda: "Auto-checker: 1 / 5" in pg.text_content(".xt-cmp .xt-msside"), 4) is not None)
     pg.click("[data-cmpx]")
     pg.click("[data-acceptall]")      # asks first, because Q2 has Ali's own 3; the test accepts
     check("Accept all replaces with Claude's marks after asking", wait_for(lambda: pg.inner_text("#xt-total") == "3 / 8", 8) is not None, pg.inner_text("#xt-total"))
