@@ -90,7 +90,7 @@ with sync_playwright() as p:
     def side(name, *a):
         pg.evaluate("__t('INK.pages[INK.key].push({t:\"pen\",c:0,w:1,p:[[0.3,0.6],[0.6,0.6]]});inkDraw()')"); k = n()
         stroke(*a); check("the side button rubs out: " + name, n() == k - 1, (k, n(), pg.inner_text("#inkdiag")))
-    side("buttons 2 at the touch", "pen", 640, 520, 640, 560, 2)
+    side("held as the tip touches (buttons 3)", "pen", 640, 520, 640, 560, 3)
     side("eraser end (buttons 32)", "pen", 640, 520, 640, 560, 32)
     side("pressed halfway through the stroke", "pen", 640, 480, 640, 560, 1, 3, 4)
     k0 = n(); stroke("pen", 300, 760, 400, 760, 1, 3, 4)
@@ -119,6 +119,15 @@ with sync_playwright() as p:
     pg.evaluate("""() => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 12, clientX: x, clientY: y, buttons: b, bubbles: true, cancelable: true }));
       ev('pointermove', 640, 500, 2); ev('pointerdown', 640, 520, 1); ev('pointermove', 640, 560, 1); ev('pointerup', 640, 560, 0); }"""); pg.wait_for_timeout(150)
     check("the button pressed while the pen hovers makes the next touch rub out (one quick flick across the stroke)", n() == k - 1, (k, n()))
+    # Pointer Events: a button pressed above the screen fires pointerdown with buttons 2; the touch that follows is only a pointermove (buttons 3)
+    pg.evaluate("__t('INK.pages[INK.key].push({t:\"pen\",c:0,w:1,p:[[0.3,0.6],[0.6,0.6]]});inkDraw()')"); k = n()
+    pg.evaluate("""() => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b, btn) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 14, clientX: x, clientY: y, buttons: b, button: btn, bubbles: true, cancelable: true }));
+      ev('pointerdown', 640, 500, 2, 2); ev('pointermove', 640, 545, 2, -1); window.__hov = __t('INK.pages[INK.key].length'); }"""); 
+    check("a button pressed above the screen rubs nothing out while the pen still hovers", pg.evaluate("window.__hov") == k, (k, pg.evaluate("window.__hov")))
+    pg.evaluate("""() => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 14, clientX: x, clientY: y, buttons: b, button: -1, bubbles: true, cancelable: true }));
+      __t('INK.pages[INK.key].push({t:"pen",c:0,w:1,p:[[0.3,0.7],[0.6,0.7]]})');   // a second line, only crossed after the pen lifts
+      ev('pointermove', 640, 520, 3); ev('pointermove', 640, 560, 3); ev('pointermove', 640, 600, 2); ev('pointermove', 640, 680, 2); ev('pointerup', 640, 680, 0); }"""); pg.wait_for_timeout(150)
+    check("  ...then touching down with it held rubs out, and lifting stops the rubbing", n() == k and pg.evaluate("__t('INK.cur')") is None, (k, n()))
     stroke("pen", 300, 760, 400, 760, 1)
     check("  ...and only that touch: the next one writes again", not last().get("rub") and last()["p"][0][1] > 0.8, last())
     pg.screenshot(path=os.path.join(SHOTS, "r34-tools-1440.png"))

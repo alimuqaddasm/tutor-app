@@ -2319,20 +2319,30 @@ function inkSeen(e, how) { var side = how || (inkSide(e) ? "seen" : ""), c = INK
 function inkHold(c) { clearTimeout(c.tm); c.tm = setTimeout(function () { var s = c.s; if (INK.cur !== c || !s || s.line || s.p.length < 3) return;
   var a = s.p[0], z = s.p[s.p.length - 1]; if (Math.hypot((z[0] - a[0]) * innerWidth, (z[1] - a[1]) * innerHeight) < 24) return;
   s.p = [a, z]; s.line = true; inkDraw(); }, 600); }
-document.addEventListener("pointerdown", function (e) {
-  INK.pen = e.pointerType === "pen";   // Chrome sends the S Pen's touch events too: while it is down they are not a swipe
-  if (MODE !== "student" || !STU || STU.drawer || !INK.cv) return;
-  var t = e.target; if (!t.closest || !t.closest(".stu-view") || t.closest("button, a, input, select, textarea, video")) return;   // a tap on a button still works
-  if (e.pointerType !== "touch" || INK.finger) inkSeen(e);
-  if (e.pointerType !== "pen" && !INK.finger && !(e.pointerType === "mouse" && inkSide(e))) return;   // a right-button press rubs out: some tablets send the S Pen with its button held that way
-  e.preventDefault();
+function inkCan(e) { if (MODE !== "student" || !STU || STU.drawer || !INK.cv) return false;
+  var t = e.target; return !!(t.closest && t.closest(".stu-view") && !t.closest("button, a, input, select, textarea, video")); }   // a tap on a button still works
+function inkTouch(e) { return !!(e.buttons & 33); }   // the pen tip (1) or its eraser end (32) is on the screen; a button alone means it hovers
+function inkStart(e) { e.preventDefault();
   var rub = INK.tool === "rub" || inkSide(e) || INK.arm, pt = inkPt(e), redo = inkStack(INK.redo); inkSnap();
   INK.cur = { id: e.pointerId, rub: rub, s: rub ? null : { t: INK.tool, c: INK.tool === "hl" ? INK.hc : INK.pc, w: INK.tool === "hl" ? INK.hs : INK.ps, p: [pt] }, n: inkPage().length, redo: redo, ax: e.clientX, ay: e.clientY, seen: inkSide(e) };
   if (rub) inkRubTo(INK.cur, pt); else { inkPage().push(INK.cur.s); inkDraw(); inkHold(INK.cur); }
-  try { t.setPointerCapture(e.pointerId); } catch (x) {}
+  try { e.target.setPointerCapture(e.pointerId); } catch (x) {} }
+function inkEnd(c) { clearTimeout(c.tm); INK.cur = null;
+  if (c.rub && inkPage().length === c.n) { inkStack(INK.undo).pop(); INK.redo[INK.key] = c.redo; }   // rubbed nothing out: nothing to undo, and Redo stays
+  inkRefresh(); }
+document.addEventListener("pointerdown", function (e) {
+  INK.pen = e.pointerType === "pen";   // Chrome sends the S Pen's touch events too: while it is down they are not a swipe
+  if (!inkCan(e)) return;
+  if (e.pointerType !== "touch" || INK.finger) inkSeen(e);
+  if (e.pointerType !== "pen" && !INK.finger && !(e.pointerType === "mouse" && inkSide(e))) return;   // a right-button press rubs out: some tablets send the S Pen with its button held that way
+  if (e.pointerType === "pen" && !inkTouch(e)) { INK.arm = inkSide(e); if (INK.arm) inkSeen(e, "while hovering"); return; }   // the button pressed above the screen also fires pointerdown: nothing touches yet
+  inkStart(e);
 }, true);
 document.addEventListener("pointermove", function (e) { var c = INK.cur;
-  if (!c && e.pointerType === "pen" && MODE === "student" && !(e.buttons & 1)) { var arm = inkSide(e); if (arm && !INK.arm) inkSeen(e, "while hovering"); INK.arm = arm; }   // the pen above the screen, its button held: the next touch rubs out
+  if (e.pointerType === "pen" && MODE === "student" && !inkTouch(e)) {   // the pen above the screen
+    if (c && e.pointerId === c.id) inkEnd(c);   // lifted with its button still held: no pointerup comes yet
+    var arm = inkSide(e); if (arm && !INK.arm) inkSeen(e, "while hovering"); INK.arm = arm; return; }   // its button held: the next touch rubs out
+  if (!c && e.pointerType === "pen" && inkCan(e)) { inkSeen(e); inkStart(e); return; }   // touched down while a button was already pressed: no new pointerdown comes
   if (!c || e.pointerId !== c.id) return; e.preventDefault(); inkSeen(e);
   if (inkSide(e)) inkToRub(c);
   (e.getCoalescedEvents ? e.getCoalescedEvents() : []).concat([e]).forEach(function (m) { var pt = inkPt(m);
@@ -2346,9 +2356,7 @@ document.addEventListener("selectstart", function (e) { if (MODE !== "student") 
 document.addEventListener("selectionchange", function () { if (MODE !== "student") return; var sel = getSelection(); if (sel && !sel.isCollapsed) sel.removeAllRanges(); });
 ["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { if (e.pointerType === "pen") { INK.pen = false; INK.arm = false; } var c = INK.cur;
   if (n === "pointercancel" && c && e.pointerId === c.id) { INK.diag = "Pen button check: the browser took over the stroke · " + (e.pointerType || "?"); var d = $("#inkdiag"); if (d) d.textContent = INK.diag; }
-  if (c && e.pointerId === c.id) { clearTimeout(c.tm); INK.cur = null;
-    if (c.rub && inkPage().length === c.n) { inkStack(INK.undo).pop(); INK.redo[INK.key] = c.redo; }   // rubbed nothing out: nothing to undo, and Redo stays
-    inkRefresh(); } }, true); });
+  if (c && e.pointerId === c.id) inkEnd(c); }, true); });
 addEventListener("resize", function () { if (MODE === "student") inkDraw(); });
 
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
