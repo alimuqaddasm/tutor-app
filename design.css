@@ -25,6 +25,7 @@
   --none:#6B7385; --none-wash:#EEF0F3;
   /* asking him a question */
   --ask:#1F64A8; --ask-wash:#E7F0FA;
+  --ink-1:#1B2130; --ink-2:#C23B2B; --ink-3:#1F64A8;
   /* type */
   --font:"Plus Jakarta Sans","Segoe UI",system-ui,sans-serif;
   --font-aqa:Arial,Arimo,"Liberation Sans",Helvetica,sans-serif;

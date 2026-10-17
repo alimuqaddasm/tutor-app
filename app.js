@@ -2195,11 +2195,11 @@ function drawStudent() {
   STU.items.forEach(function (q) { if (q.kind === "exam" && !q.lab) { var b0 = null; (function find(bs) { (bs || []).forEach(function (b) { if (b.id === q.id) b0 = b; if (b.blocks) find(b.blocks); }); })(q.p.blocks); q.lab = b0 && (b0.label || b0.source) || ""; } });
   var from = Math.max(0, Math.min(at - 2, STU.items.length - 6)), chips = STU.items.slice(from, from + 6);
   var CHEV = function (d) { return '<svg class="icon lg" viewBox="0 0 24 24" aria-hidden="true"><path d="' + (d < 0 ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6") + '"></path></svg>'; };
-  app.innerHTML = '<div class="stu clean"><header class="stu-top"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button><span class="push"></span><div class="seg stu-n" role="group" aria-label="Questions on screen">' + [1, 2, 3, 4].map(function (n) { return '<button type="button" data-stun="' + n + '" aria-pressed="' + (stuN() === n) + '" title="' + (n === 1 ? "One question at a time" : n + " questions together") + '">' + n + '</button>'; }).join("") + '</div>' + (cur ? tag((grp.length > 1 ? (at + 1) + " to " + (STU.items.indexOf(grp[grp.length - 1]) + 1) : (at + 1)) + " of " + STU.items.length, "num") : "") + '</header><main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
+  app.innerHTML = '<div class="stu clean"><header class="stu-top"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>' + inkButton() + '<span class="push"></span><div class="seg stu-n" role="group" aria-label="Questions on screen">' + [1, 2, 3, 4].map(function (n) { return '<button type="button" data-stun="' + n + '" aria-pressed="' + (stuN() === n) + '" title="' + (n === 1 ? "One question at a time" : n + " questions together") + '">' + n + '</button>'; }).join("") + '</div>' + (cur ? tag((grp.length > 1 ? (at + 1) + " to " + (STU.items.indexOf(grp[grp.length - 1]) + 1) : (at + 1)) + " of " + STU.items.length, "num") : "") + '</header>' + inkTools() + '<main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
     '<button class="stu-edge prev" type="button" data-sgo="-1" aria-label="Previous question"' + (at <= 0 ? " disabled" : "") + '>' + CHEV(-1) + '</button><button class="stu-edge next" type="button" data-sgo="1" aria-label="Next question"' + (at < 0 || STU.items.indexOf(grp[grp.length - 1]) >= STU.items.length - 1 ? " disabled" : "") + '>' + CHEV(1) + '</button>' +
     (STU.items.length > 1 ? '<nav class="stu-chips" aria-label="Questions">' + chips.map(function (q) { return '<button type="button" class="it" data-si="' + q.i + '"' + (q === cur ? ' aria-current="true"' : "") + '>' + (q.kind === "video" ? '<svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"></path></svg>' : "") + (STU.items.indexOf(q) + 1) + ' \u00b7 ' + esc(short(q)) + '</button>'; }).join("") + (STU.items.length > 6 ? '<button type="button" class="it" id="stumore">More</button>' : "") + '</nav>' : "") + drawer + '</div>';
   var chh = $(".stu-chips"); if (chh) $(".stu").style.setProperty("--chipsh", chh.offsetHeight + "px");
-  $$(".stu-view img").forEach(showImg); loadImages(app); stuArrange(); boardMount(app, !!STU.banim); STU.banim = false; maths(app); prefetchLesson();
+  $$(".stu-view img").forEach(showImg); loadImages(app); stuArrange(); boardMount(app, !!STU.banim); STU.banim = false; maths(app); prefetchLesson(); inkMount();
   var ci = $(".stu-item.cur"); if (ci && STU.drawer) ci.scrollIntoView({ block: "nearest" });
   if (BC) BC.postMessage({ type: "alive", lesson: L.id });
 }
@@ -2225,7 +2225,7 @@ function stuN() { return Math.max(1, Math.min(4, +(ls("tutor.stun") || 1))); }
 function stuGroup(at) { var cur = STU.items[at], g = cur ? [cur] : []; if (!cur || cur.kind === "video") return g;
   for (var k = at + 1; k < STU.items.length && g.length < stuN(); k++) { var q = STU.items[k]; if (q.kind === "video") continue; if (q.kind !== cur.kind) break; g.push(q); } return g; }   // a walkthrough video between two questions does not split them
 (function () { var x0 = null, y0 = null;
-  document.addEventListener("touchstart", function (e) { if (MODE !== "student" || !STU || STU.drawer || e.touches.length !== 1) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  document.addEventListener("touchstart", function (e) { if (MODE !== "student" || !STU || STU.drawer || e.touches.length !== 1 || INK.pen || INK.finger) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
   document.addEventListener("touchend", function (e) { if (x0 == null || MODE !== "student" || !STU) return; var t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
     if (Math.abs(dx) > 60 && Math.abs(dx) > 1.5 * Math.abs(dy)) stuGo(dx < 0 ? 1 : -1); }, { passive: true }); })();
 document.addEventListener("click", function (e) { if (MODE !== "student" || !STU) return; var t = e.target.closest && e.target.closest("button"); if (!t) return;
@@ -2235,13 +2235,79 @@ document.addEventListener("click", function (e) { if (MODE !== "student" || !STU
   else if (t.hasAttribute("data-stun")) { ls("tutor.stun", t.getAttribute("data-stun")); drawStudent(); }
   else if (t.id === "stumenu" || t.id === "stumore") { STU.drawer = !STU.drawer; drawStudent(); }
   else if (t.id === "stux") { STU.drawer = false; drawStudent(); }
+  else if (t.id === "stupen" || t.hasAttribute("data-ink")) inkTool(t);
   else if (t.id === "stufs") { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (x) {} } });
 document.addEventListener("keydown", function (e) { if (MODE !== "student" || !STU || e.ctrlKey || e.altKey || e.metaKey || !$("#zoom").hidden) return; if (e.key === "Escape" && STU.drawer) { STU.drawer = false; drawStudent(); return; } if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); stuGo(1); } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); stuGo(-1); } });
+
+/* ---------------- pen on Student view (Ali, 17 Oct): he writes on his screen while sharing it, instead of the tablet's own screen-write ----------------
+   The S Pen always writes; a finger still swipes and taps (unless "Pen and finger" is on, which also lets a mouse write).
+   The side button, or Rub out, removes whole strokes. Ink belongs to the screen (the questions showing) and lives only in this
+   tab: it is never saved. When you move on, the ink stays for when you come back (Keep) or goes (Clear). */
+var INK = { pages: {}, key: "", col: 0, rub: false, finger: false, open: false, cur: null, cv: null, raf: 0, pen: false };
+var INKCOL = [["--ink-1", "Black"], ["--ink-2", "Red"], ["--ink-3", "Blue"]];
+function inkKeep() { return ls("tutor.inkkeep") !== "clear"; }
+function inkKey() { return STU && STU.i >= 0 ? L.id + ":" + stuGroup(STU.i).map(function (q) { return q.id; }).join("|") : ""; }
+function inkPage() { return INK.pages[INK.key] || (INK.pages[INK.key] = []); }
+function inkButton() { return '<button class="stu-menu stu-pen" type="button" id="stupen" aria-label="Pen" aria-expanded="' + INK.open + '"' + ((INK.pages[inkKey()] || []).length ? ' data-has="1"' : "") + '><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-4L16 5l3 3L8 19z"></path><path d="M14 7l3 3"></path></svg></button>'; }
+function inkTools() {
+  var seg = function (lab, items) { return '<div class="stack s2"><span class="lab">' + lab + '</span><div class="seg" role="group" aria-label="' + lab + '">' + items.join("") + '</div></div>'; };
+  var b = function (attr, on, txt) { return '<button type="button" data-ink="' + attr + '" aria-pressed="' + on + '">' + txt + '</button>'; };
+  return '<div class="stu-tools card raised"' + (INK.open ? "" : " hidden") + ' aria-label="Pen">' +
+    '<div class="row stu-inkrow">' + INKCOL.map(function (c, k) { return '<button type="button" class="stu-dot" data-ink="c' + k + '" aria-pressed="' + (!INK.rub && INK.col === k) + '" aria-label="' + c[1] + '" style="--dot:var(' + c[0] + ')"></button>'; }).join("") +
+      '<button class="btn small" type="button" data-ink="rub" aria-pressed="' + INK.rub + '">Rub out</button><button class="btn small" type="button" data-ink="clear">Clear ink</button></div>' +
+    seg("When you move on", [b("keep", inkKeep(), "Keep ink"), b("drop", !inkKeep(), "Clear ink")]) +
+    seg("Writes with", [b("pen", !INK.finger, "S Pen"), b("finger", INK.finger, "Pen and finger")]) + '</div>'; }
+function inkTool(t) { var a = t.getAttribute("data-ink");
+  if (t.id === "stupen") INK.open = !INK.open;
+  else if (/^c\d$/.test(a)) { INK.col = +a.slice(1); INK.rub = false; }
+  else if (a === "rub") INK.rub = !INK.rub;
+  else if (a === "clear") { INK.pages[INK.key] = []; inkDraw(); }
+  else if (a === "keep" || a === "drop") ls("tutor.inkkeep", a === "keep" ? "keep" : "clear");
+  else if (a === "pen" || a === "finger") INK.finger = a === "finger";
+  var tl = $(".stu-tools"), pb = $("#stupen");
+  if (tl) tl.outerHTML = inkTools(); if (pb) pb.outerHTML = inkButton();
+  $(".stu") && $(".stu").classList.toggle("inking", INK.finger); }
+/* after each draw of his screen: drop the last screen's ink if Clear is chosen, then show this screen's */
+function inkMount() { var k = inkKey();
+  if (INK.key && INK.key !== k && !inkKeep()) delete INK.pages[INK.key];
+  INK.key = k; INK.cur = null;
+  var st = $(".stu"); if (!st) return; st.classList.toggle("inking", INK.finger);
+  INK.cv = document.createElement("canvas"); INK.cv.className = "stu-ink"; INK.cv.setAttribute("aria-hidden", "true"); st.appendChild(INK.cv); inkDraw(); }
+function inkDraw() { cancelAnimationFrame(INK.raf); INK.raf = requestAnimationFrame(function () {
+  var cv = INK.cv; if (!cv || !cv.isConnected) return; var dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  var g = cv.getContext("2d"), css = getComputedStyle(document.documentElement); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H); g.lineCap = g.lineJoin = "round";
+  inkPage().forEach(function (s) { var p = s.p; g.strokeStyle = css.getPropertyValue(INKCOL[s.c][0]).trim() || "#1B2130"; g.lineWidth = 3; g.beginPath(); g.moveTo(p[0][0] * W, p[0][1] * H);
+    if (p.length === 1) g.lineTo(p[0][0] * W + .1, p[0][1] * H);
+    for (var i = 1; i < p.length - 1; i++) g.quadraticCurveTo(p[i][0] * W, p[i][1] * H, (p[i][0] + p[i + 1][0]) / 2 * W, (p[i][1] + p[i + 1][1]) / 2 * H);
+    if (p.length > 1) g.lineTo(p[p.length - 1][0] * W, p[p.length - 1][1] * H); g.stroke(); }); }); }
+function inkPt(e) { return [e.clientX / innerWidth, e.clientY / innerHeight]; }
+/* a stroke goes when the eraser comes within 16 px of any of its segments (a fast stroke's points can be far apart) */
+function inkRub(pt) { var r = 16, W = innerWidth, H = innerHeight, pg = inkPage(), n = pg.length, x = pt[0] * W, y = pt[1] * H;
+  var near = function (a, b) { var ax = a[0] * W, ay = a[1] * H, dx = b[0] * W - ax, dy = b[1] * H - ay, l = dx * dx + dy * dy, t = l ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l)) : 0;
+    return Math.hypot(ax + t * dx - x, ay + t * dy - y) < r; };
+  INK.pages[INK.key] = pg.filter(function (s) { var p = s.p; if (p.length === 1) return !near(p[0], p[0]); for (var i = 1; i < p.length; i++) if (near(p[i - 1], p[i])) return false; return true; });
+  if (INK.pages[INK.key].length !== n) inkDraw(); }
+document.addEventListener("pointerdown", function (e) {
+  INK.pen = e.pointerType === "pen";   // Chrome sends the S Pen's touch events too: while it is down they are not a swipe
+  if (MODE !== "student" || !STU || STU.drawer || !INK.cv || (e.pointerType !== "pen" && !INK.finger)) return;
+  var t = e.target; if (!t.closest || !t.closest(".stu-view") || t.closest("button, a, input, select, textarea, video")) return;   // a tap on a button still works
+  e.preventDefault();
+  var rub = INK.rub || (e.buttons & 2) || (e.buttons & 32);   // the S Pen side button, or a pen's eraser end
+  INK.cur = { id: e.pointerId, rub: !!rub, s: rub ? null : { c: INK.col, p: [inkPt(e)] } };
+  if (rub) inkRub(inkPt(e)); else { inkPage().push(INK.cur.s); inkDraw(); }
+  try { t.setPointerCapture(e.pointerId); } catch (x) {}
+}, true);
+document.addEventListener("pointermove", function (e) { var c = INK.cur; if (!c || e.pointerId !== c.id) return; e.preventDefault();
+  (e.getCoalescedEvents ? e.getCoalescedEvents() : []).concat([e]).forEach(function (m) { if (c.rub) inkRub(inkPt(m)); else c.s.p.push(inkPt(m)); });
+  if (!c.rub) inkDraw(); }, true);
+["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { if (e.pointerType === "pen") INK.pen = false; if (INK.cur && e.pointerId === INK.cur.id) { INK.cur = null; var pb = $("#stupen"); if (pb) pb.outerHTML = inkButton(); } }, true); });
+addEventListener("resize", function () { if (MODE === "student") inkDraw(); });
 
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v59", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v60", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
