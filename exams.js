@@ -567,9 +567,14 @@ function claudeLine(q, table) {
    with nothing unsure and no mark of Ali's yet. Judgement marks still wait for Accept. */
 function autoAccept() {
   if (!claudeMarks || readOnly(R)) return;
-  var chain = Promise.resolve(), n = 0;
-  R.questions.forEach(function (q) { var c = claudeOf(q.id); if (c && q.score == null && !c.unsure && (q.type === "mcq" || c.auto)) { n++; chain = chain.then(function () { return acceptClaude(q.id); }); } });
-  if (n) chain.then(function () { T.toast(n + " clear-cut mark" + (n === 1 ? "" : "s") + " accepted for you (multiple choice and exact answers)."); });
+  var r = R, chain = Promise.resolve(), n = 0;
+  R.questions.forEach(function (q) { var c = claudeOf(q.id); if (c && q.score == null && !c.unsure && (q.type === "mcq" || c.auto)) chain = chain.then(function () {
+    // the saves go one by one: skip it if another exam is open now, or Ali has typed or saved his own mark or comment meanwhile
+    var se = $('[data-score="' + q.id + '"]'), ce = $('[data-comment="' + q.id + '"]');
+    if (R !== r || q.score != null || !se || se.value !== "" || (ce && ce.value !== (q.comment || ""))) return;
+    return acceptClaude(q.id).then(function () { if (q.score != null) n++; });   // count only the marks that saved
+  }); });
+  return chain.then(function () { if (n && R === r) T.toast(n + " clear-cut mark" + (n === 1 ? "" : "s") + " accepted for you (multiple choice and exact answers)."); });
 }
 /* put Claude's mark, ticks and comment into the page's fields and save them as Ali's */
 function acceptClaude(qid) {
