@@ -2246,7 +2246,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
 var INK = { pages: {}, key: "", col: 0, rub: false, finger: false, open: false, cur: null, cv: null, raf: 0, pen: false };
 var INKCOL = [["--ink-1", "Black"], ["--ink-2", "Red"], ["--ink-3", "Blue"]];
 function inkKeep() { return ls("tutor.inkkeep") !== "clear"; }
-function inkKey() { return STU && STU.i >= 0 ? stuGroup(STU.i).map(function (q) { return q.id; }).join("|") : ""; }
+function inkKey() { return STU && STU.i >= 0 ? L.id + ":" + stuGroup(STU.i).map(function (q) { return q.id; }).join("|") : ""; }
 function inkPage() { return INK.pages[INK.key] || (INK.pages[INK.key] = []); }
 function inkButton() { return '<button class="stu-menu stu-pen" type="button" id="stupen" aria-label="Pen" aria-expanded="' + INK.open + '"' + ((INK.pages[inkKey()] || []).length ? ' data-has="1"' : "") + '><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-4L16 5l3 3L8 19z"></path><path d="M14 7l3 3"></path></svg></button>'; }
 function inkTools() {
@@ -2282,8 +2282,11 @@ function inkDraw() { cancelAnimationFrame(INK.raf); INK.raf = requestAnimationFr
     for (var i = 1; i < p.length - 1; i++) g.quadraticCurveTo(p[i][0] * W, p[i][1] * H, (p[i][0] + p[i + 1][0]) / 2 * W, (p[i][1] + p[i + 1][1]) / 2 * H);
     if (p.length > 1) g.lineTo(p[p.length - 1][0] * W, p[p.length - 1][1] * H); g.stroke(); }); }); }
 function inkPt(e) { return [e.clientX / innerWidth, e.clientY / innerHeight]; }
-function inkRub(pt) { var r = 16, W = innerWidth, H = innerHeight, pg = inkPage(), n = pg.length;
-  INK.pages[INK.key] = pg.filter(function (s) { return !s.p.some(function (q) { return Math.hypot((q[0] - pt[0]) * W, (q[1] - pt[1]) * H) < r; }); });
+/* a stroke goes when the eraser comes within 16 px of any of its segments (a fast stroke's points can be far apart) */
+function inkRub(pt) { var r = 16, W = innerWidth, H = innerHeight, pg = inkPage(), n = pg.length, x = pt[0] * W, y = pt[1] * H;
+  var near = function (a, b) { var ax = a[0] * W, ay = a[1] * H, dx = b[0] * W - ax, dy = b[1] * H - ay, l = dx * dx + dy * dy, t = l ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l)) : 0;
+    return Math.hypot(ax + t * dx - x, ay + t * dy - y) < r; };
+  INK.pages[INK.key] = pg.filter(function (s) { var p = s.p; if (p.length === 1) return !near(p[0], p[0]); for (var i = 1; i < p.length; i++) if (near(p[i - 1], p[i])) return false; return true; });
   if (INK.pages[INK.key].length !== n) inkDraw(); }
 document.addEventListener("pointerdown", function (e) {
   INK.pen = e.pointerType === "pen";   // Chrome sends the S Pen's touch events too: while it is down they are not a swipe

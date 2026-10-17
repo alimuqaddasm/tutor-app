@@ -66,6 +66,12 @@ with sync_playwright() as p:
     pg.evaluate(STROKE, ["pen", 520, 330, 560, 330, 32]); pg.wait_for_timeout(150)
     check("the side button rubs the stroke out", n() == 0 and inked() == 0, (n(), inked()))
 
+    # a fast stroke: two points far apart; rubbing the middle of the line still takes it
+    pg.evaluate("__t('INK.pages[INK.key].push({c:0,p:[[0.3,0.7],[0.7,0.7]]});inkDraw()')"); pg.wait_for_timeout(100)
+    pg.evaluate(STROKE, ["pen", 720, 630, 720, 632, 32]); pg.wait_for_timeout(150)
+    check("Rub out takes a fast stroke when touched between its points", n() == 0, n())
+    check("ink belongs to this lesson (the key starts with the lesson)", pg.evaluate("__t('INK.key')").startswith(LID + ":"), pg.evaluate("__t('INK.key')"))
+
     # keep ink (the default) across moving on and coming back
     pg.evaluate(STROKE, ["pen", 500, 300, 900, 420, 1]); pg.wait_for_timeout(150)
     i0 = at(); pg.evaluate(SWIPE, [-300, "direct"]); pg.wait_for_timeout(400)
