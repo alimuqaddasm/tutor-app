@@ -2240,47 +2240,63 @@ document.addEventListener("click", function (e) { if (MODE !== "student" || !STU
 document.addEventListener("keydown", function (e) { if (MODE !== "student" || !STU || e.ctrlKey || e.altKey || e.metaKey || !$("#zoom").hidden) return; if (e.key === "Escape" && STU.drawer) { STU.drawer = false; drawStudent(); return; } if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); stuGo(1); } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); stuGo(-1); } });
 
 /* ---------------- pen on Student view (Ali, 17 Oct): he writes on his screen while sharing it, instead of the tablet's own screen-write ----------------
-   The S Pen always writes; a finger still swipes and taps (unless "Pen and finger" is on, which also lets a mouse write).
-   The side button, or Rub out, removes whole strokes. Ink belongs to the screen (the questions showing) and lives only in this
-   tab: it is never saved. When you move on, the ink stays for when you come back (Keep) or goes (Clear). */
-var INK = { pages: {}, key: "", col: 0, rub: false, finger: false, open: false, cur: null, cv: null, raf: 0, pen: false };
-var INKCOL = [["--ink-1", "Black"], ["--ink-2", "Red"], ["--ink-3", "Blue"]];
+   Like Samsung Notes: a pen (8 colours) and a highlighter (4), three sizes, Rub out, Undo and Redo, and a stroke that is held still
+   at its end turns into a straight line. The S Pen always writes; a finger still swipes and taps (unless "Pen and finger" is on,
+   which also lets a mouse write). The S Pen's side button rubs out whole strokes. Ink belongs to the screen (the questions showing)
+   and lives only in this tab: it is never saved. When you move on, the ink stays for when you come back (Keep) or goes (Clear). */
+var INK = { pages: {}, undo: {}, redo: {}, key: "", tool: "pen", pc: 0, hc: 0, ps: 1, hs: 1, finger: false, open: false, more: false, cur: null, cv: null, raf: 0, pen: false, diag: "" };
+var INKCOL = { pen: [["--ink-1", "Black"], ["--ink-2", "Grey"], ["--ink-3", "Red"], ["--ink-4", "Orange"], ["--ink-5", "Green"], ["--ink-6", "Blue"], ["--ink-7", "Purple"], ["--ink-8", "Pink"]],
+  hl: [["--hl-1", "Yellow"], ["--hl-2", "Green"], ["--hl-3", "Pink"], ["--hl-4", "Blue"]] };
+var INKW = { pen: [2, 3.5, 6], hl: [12, 20, 32] };
 function inkKeep() { return ls("tutor.inkkeep") !== "clear"; }
 function inkKey() { return STU && STU.i >= 0 ? L.id + ":" + stuGroup(STU.i).map(function (q) { return q.id; }).join("|") : ""; }
 function inkPage() { return INK.pages[INK.key] || (INK.pages[INK.key] = []); }
+function inkStack(o) { return o[INK.key] || (o[INK.key] = []); }
+function inkSnap() { inkStack(INK.undo).push(inkPage().slice()); INK.redo[INK.key] = []; }   // before each change: what Undo goes back to
 function inkButton() { return '<button class="stu-menu stu-pen" type="button" id="stupen" aria-label="Pen" aria-expanded="' + INK.open + '"' + ((INK.pages[inkKey()] || []).length ? ' data-has="1"' : "") + '><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-4L16 5l3 3L8 19z"></path><path d="M14 7l3 3"></path></svg></button>'; }
 function inkTools() {
-  var seg = function (lab, items) { return '<div class="stack s2"><span class="lab">' + lab + '</span><div class="seg" role="group" aria-label="' + lab + '">' + items.join("") + '</div></div>'; };
+  var seg = function (lab, items, show) { return '<div class="stack s2">' + (show ? '<span class="lab">' + lab + '</span>' : "") + '<div class="seg" role="group" aria-label="' + lab + '">' + items.join("") + '</div></div>'; };
   var b = function (attr, on, txt) { return '<button type="button" data-ink="' + attr + '" aria-pressed="' + on + '">' + txt + '</button>'; };
+  var t = INK.tool, writes = t !== "rub", col = t === "hl" ? INK.hc : INK.pc, size = t === "hl" ? INK.hs : INK.ps;
   return '<div class="stu-tools card raised"' + (INK.open ? "" : " hidden") + ' aria-label="Pen">' +
-    '<div class="row stu-inkrow">' + INKCOL.map(function (c, k) { return '<button type="button" class="stu-dot" data-ink="c' + k + '" aria-pressed="' + (!INK.rub && INK.col === k) + '" aria-label="' + c[1] + '" style="--dot:var(' + c[0] + ')"></button>'; }).join("") +
-      '<button class="btn small" type="button" data-ink="rub" aria-pressed="' + INK.rub + '">Rub out</button><button class="btn small" type="button" data-ink="clear">Clear ink</button></div>' +
-    seg("When you move on", [b("keep", inkKeep(), "Keep ink"), b("drop", !inkKeep(), "Clear ink")]) +
-    seg("Writes with", [b("pen", !INK.finger, "S Pen"), b("finger", INK.finger, "Pen and finger")]) + '</div>'; }
-function inkTool(t) { var a = t.getAttribute("data-ink");
+    seg("Tool", [b("t-pen", t === "pen", "Pen"), b("t-hl", t === "hl", "Highlighter"), b("t-rub", t === "rub", "Rub out")]) +
+    (writes ? '<div class="stu-inkrow" role="group" aria-label="Colour">' + INKCOL[t].map(function (c, k) { return '<button type="button" class="stu-dot' + (t === "hl" ? " hl" : "") + '" data-ink="c' + k + '" aria-pressed="' + (col === k) + '" aria-label="' + c[1] + '" style="--dot:var(' + c[0] + ')"></button>'; }).join("") + '</div>' +
+      seg("Size", [b("w0", size === 0, "Thin"), b("w1", size === 1, "Medium"), b("w2", size === 2, "Thick")]) : "") +
+    '<div class="stu-inkrow"><button class="btn small" type="button" data-ink="undo"' + (inkStack(INK.undo).length ? "" : " disabled") + '>Undo</button><button class="btn small" type="button" data-ink="redo"' + (inkStack(INK.redo).length ? "" : " disabled") + '>Redo</button><button class="btn small" type="button" data-ink="clear"' + (inkPage().length ? "" : " disabled") + '>Clear ink</button>' +
+      '<button class="btn small" type="button" data-ink="more" aria-expanded="' + INK.more + '">More</button></div>' +
+    (INK.more ? '<div class="stu-inkmore">' + seg("When you move on", [b("keep", inkKeep(), "Keep ink"), b("drop", !inkKeep(), "Clear ink")], true) +
+      seg("Writes with", [b("pen", !INK.finger, "S Pen"), b("finger", INK.finger, "Pen and finger")], true) +
+      '<p class="hint" id="inkdiag">' + esc(INK.diag || "Pen button check: hold the S Pen button and touch the screen") + '</p></div>' : "") + '</div>'; }
+function inkRefresh() { var tl = $(".stu-tools"), pb = $("#stupen"); if (tl) tl.outerHTML = inkTools(); if (pb) pb.outerHTML = inkButton(); }
+function inkTool(t) { var a = t.getAttribute("data-ink"), pg;
   if (t.id === "stupen") INK.open = !INK.open;
-  else if (/^c\d$/.test(a)) { INK.col = +a.slice(1); INK.rub = false; }
-  else if (a === "rub") INK.rub = !INK.rub;
-  else if (a === "clear") { INK.pages[INK.key] = []; inkDraw(); }
+  else if (/^t-/.test(a)) INK.tool = a.slice(2);
+  else if (/^c\d$/.test(a)) INK[INK.tool === "hl" ? "hc" : "pc"] = +a.slice(1);
+  else if (/^w\d$/.test(a)) INK[INK.tool === "hl" ? "hs" : "ps"] = +a.slice(1);
+  else if (a === "undo" && inkStack(INK.undo).length) { inkStack(INK.redo).push(inkPage()); INK.pages[INK.key] = INK.undo[INK.key].pop(); inkDraw(); }
+  else if (a === "redo" && inkStack(INK.redo).length) { inkStack(INK.undo).push(inkPage()); INK.pages[INK.key] = INK.redo[INK.key].pop(); inkDraw(); }
+  else if (a === "clear" && inkPage().length) { inkSnap(); INK.pages[INK.key] = []; inkDraw(); }
   else if (a === "keep" || a === "drop") ls("tutor.inkkeep", a === "keep" ? "keep" : "clear");
   else if (a === "pen" || a === "finger") INK.finger = a === "finger";
-  var tl = $(".stu-tools"), pb = $("#stupen");
-  if (tl) tl.outerHTML = inkTools(); if (pb) pb.outerHTML = inkButton();
+  else if (a === "more") INK.more = !INK.more;
+  inkRefresh();
   $(".stu") && $(".stu").classList.toggle("inking", INK.finger); }
 /* after each draw of his screen: drop the last screen's ink if Clear is chosen, then show this screen's */
 function inkMount() { var k = inkKey();
-  if (INK.key && INK.key !== k && !inkKeep()) delete INK.pages[INK.key];
+  if (INK.key && INK.key !== k && !inkKeep()) { delete INK.pages[INK.key]; delete INK.undo[INK.key]; delete INK.redo[INK.key]; }
   INK.key = k; INK.cur = null;
   var st = $(".stu"); if (!st) return; st.classList.toggle("inking", INK.finger);
   INK.cv = document.createElement("canvas"); INK.cv.className = "stu-ink"; INK.cv.setAttribute("aria-hidden", "true"); st.appendChild(INK.cv); inkDraw(); }
 function inkDraw() { cancelAnimationFrame(INK.raf); INK.raf = requestAnimationFrame(function () {
   var cv = INK.cv; if (!cv || !cv.isConnected) return; var dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
-  var g = cv.getContext("2d"), css = getComputedStyle(document.documentElement); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H); g.lineCap = g.lineJoin = "round";
-  inkPage().forEach(function (s) { var p = s.p; g.strokeStyle = css.getPropertyValue(INKCOL[s.c][0]).trim() || "#1B2130"; g.lineWidth = 3; g.beginPath(); g.moveTo(p[0][0] * W, p[0][1] * H);
+  var g = cv.getContext("2d"), css = getComputedStyle(document.documentElement); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H); g.lineJoin = "round";
+  var pg = inkPage(), line = function (s) { var p = s.p, hl = s.t === "hl"; g.globalAlpha = hl ? .4 : 1; g.lineCap = hl ? "butt" : "round";
+    g.strokeStyle = css.getPropertyValue(INKCOL[hl ? "hl" : "pen"][s.c][0]).trim() || "#1B2130"; g.lineWidth = INKW[hl ? "hl" : "pen"][s.w]; g.beginPath(); g.moveTo(p[0][0] * W, p[0][1] * H);
     if (p.length === 1) g.lineTo(p[0][0] * W + .1, p[0][1] * H);
     for (var i = 1; i < p.length - 1; i++) g.quadraticCurveTo(p[i][0] * W, p[i][1] * H, (p[i][0] + p[i + 1][0]) / 2 * W, (p[i][1] + p[i + 1][1]) / 2 * H);
-    if (p.length > 1) g.lineTo(p[p.length - 1][0] * W, p[p.length - 1][1] * H); g.stroke(); }); }); }
+    if (p.length > 1) g.lineTo(p[p.length - 1][0] * W, p[p.length - 1][1] * H); g.stroke(); };
+  pg.filter(function (s) { return s.t === "hl"; }).forEach(line); pg.filter(function (s) { return s.t !== "hl"; }).forEach(line); g.globalAlpha = 1; }); }   // highlighter under the pen, as in Samsung Notes
 function inkPt(e) { return [e.clientX / innerWidth, e.clientY / innerHeight]; }
 /* a stroke goes when the eraser comes within 16 px of any of its segments (a fast stroke's points can be far apart) */
 function inkRub(pt) { var r = 16, W = innerWidth, H = innerHeight, pg = inkPage(), n = pg.length, x = pt[0] * W, y = pt[1] * H;
@@ -2288,26 +2304,47 @@ function inkRub(pt) { var r = 16, W = innerWidth, H = innerHeight, pg = inkPage(
     return Math.hypot(ax + t * dx - x, ay + t * dy - y) < r; };
   INK.pages[INK.key] = pg.filter(function (s) { var p = s.p; if (p.length === 1) return !near(p[0], p[0]); for (var i = 1; i < p.length; i++) if (near(p[i - 1], p[i])) return false; return true; });
   if (INK.pages[INK.key].length !== n) inkDraw(); }
+/* the S Pen side button: tablets report it as the right button (2), as an eraser (32), or only as a right-click; and it may be
+   pressed after the pen is already down. Any of these turns the stroke into rubbing out. */
+function inkSide(e) { return !!((e.buttons & 2) || (e.buttons & 32) || e.button === 2 || e.button === 5); }
+function inkToRub(c) { if (c.rub) return; c.rub = true; if (c.s) { var pg = inkPage(), k = pg.indexOf(c.s); if (k >= 0) pg.splice(k, 1); c.s = null; clearTimeout(c.tm); inkDraw(); } }
+function inkSeen(e, how) { var side = how || (inkSide(e) ? "seen" : ""), c = INK.cur;
+  if (c) { if (side) c.seen = true; else if (c.seen) return; }   // once seen in a stroke, the line keeps saying so until the next touch
+  var t = "Pen button check: " + (side ? "button seen (" + side + ")" : "no button") + " · " + (e.pointerType || "?") + " · buttons " + e.buttons + " · button " + e.button;
+  if (t !== INK.diag) { INK.diag = t; var d = $("#inkdiag"); if (d) d.textContent = t; } }
+/* a stroke held still at its end for a moment snaps to a straight line from where it began; moving on drags that line's end */
+function inkHold(c) { clearTimeout(c.tm); c.tm = setTimeout(function () { var s = c.s; if (INK.cur !== c || !s || s.line || s.p.length < 3) return;
+  var a = s.p[0], z = s.p[s.p.length - 1]; if (Math.hypot((z[0] - a[0]) * innerWidth, (z[1] - a[1]) * innerHeight) < 24) return;
+  s.p = [a, z]; s.line = true; inkDraw(); }, 600); }
 document.addEventListener("pointerdown", function (e) {
   INK.pen = e.pointerType === "pen";   // Chrome sends the S Pen's touch events too: while it is down they are not a swipe
-  if (MODE !== "student" || !STU || STU.drawer || !INK.cv || (e.pointerType !== "pen" && !INK.finger)) return;
+  if (MODE !== "student" || !STU || STU.drawer || !INK.cv) return;
   var t = e.target; if (!t.closest || !t.closest(".stu-view") || t.closest("button, a, input, select, textarea, video")) return;   // a tap on a button still works
+  if (e.pointerType !== "touch" || INK.finger) inkSeen(e);
+  if (e.pointerType !== "pen" && !INK.finger && !(e.pointerType === "mouse" && inkSide(e))) return;   // a right-button press rubs out: some tablets send the S Pen with its button held that way
   e.preventDefault();
-  var rub = INK.rub || (e.buttons & 2) || (e.buttons & 32);   // the S Pen side button, or a pen's eraser end
-  INK.cur = { id: e.pointerId, rub: !!rub, s: rub ? null : { c: INK.col, p: [inkPt(e)] } };
-  if (rub) inkRub(inkPt(e)); else { inkPage().push(INK.cur.s); inkDraw(); }
+  var rub = INK.tool === "rub" || inkSide(e), pt = inkPt(e); inkSnap();
+  INK.cur = { id: e.pointerId, rub: rub, s: rub ? null : { t: INK.tool, c: INK.tool === "hl" ? INK.hc : INK.pc, w: INK.tool === "hl" ? INK.hs : INK.ps, p: [pt] }, n: inkPage().length, ax: e.clientX, ay: e.clientY, seen: inkSide(e) };
+  if (rub) inkRub(pt); else { inkPage().push(INK.cur.s); inkDraw(); inkHold(INK.cur); }
   try { t.setPointerCapture(e.pointerId); } catch (x) {}
 }, true);
-document.addEventListener("pointermove", function (e) { var c = INK.cur; if (!c || e.pointerId !== c.id) return; e.preventDefault();
-  (e.getCoalescedEvents ? e.getCoalescedEvents() : []).concat([e]).forEach(function (m) { if (c.rub) inkRub(inkPt(m)); else c.s.p.push(inkPt(m)); });
-  if (!c.rub) inkDraw(); }, true);
-["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { if (e.pointerType === "pen") INK.pen = false; if (INK.cur && e.pointerId === INK.cur.id) { INK.cur = null; var pb = $("#stupen"); if (pb) pb.outerHTML = inkButton(); } }, true); });
+document.addEventListener("pointermove", function (e) { var c = INK.cur; if (!c || e.pointerId !== c.id) return; e.preventDefault(); inkSeen(e);
+  if (inkSide(e)) inkToRub(c);
+  (e.getCoalescedEvents ? e.getCoalescedEvents() : []).concat([e]).forEach(function (m) { var pt = inkPt(m);
+    if (c.rub) inkRub(pt); else if (c.s.line) c.s.p[1] = pt; else c.s.p.push(pt); });
+  if (!c.rub) { inkDraw(); if (Math.hypot(e.clientX - c.ax, e.clientY - c.ay) > 3) { c.ax = e.clientX; c.ay = e.clientY; if (!c.s.line) inkHold(c); } } }, true);
+/* some tablets send the side button as a right-click: no menu on his screen, and the stroke becomes rubbing out */
+document.addEventListener("contextmenu", function (e) { if (MODE !== "student" || !(INK.cur || INK.pen)) return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "right-click"); if (INK.cur) inkToRub(INK.cur); }, true);
+["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { if (e.pointerType === "pen") INK.pen = false; var c = INK.cur;
+  if (c && e.pointerId === c.id) { clearTimeout(c.tm); INK.cur = null;
+    if (c.rub && inkPage().length === c.n) INK.undo[INK.key].pop();   // rubbed nothing out: nothing to undo
+    inkRefresh(); } }, true); });
 addEventListener("resize", function () { if (MODE === "student") inkDraw(); });
 
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v60", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v61", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];

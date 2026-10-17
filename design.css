@@ -25,7 +25,8 @@
   --none:#6B7385; --none-wash:#EEF0F3;
   /* asking him a question */
   --ask:#1F64A8; --ask-wash:#E7F0FA;
-  --ink-1:#1B2130; --ink-2:#C23B2B; --ink-3:#1F64A8;
+  --ink-1:#1B2130; --ink-2:#6B7385; --ink-3:#C23B2B; --ink-4:#C25E00; --ink-5:#1E7B45; --ink-6:#1F64A8; --ink-7:#5A45D1; --ink-8:#A8306A;
+  --hl-1:#FFE14D; --hl-2:#7DDB95; --hl-3:#FF9FCB; --hl-4:#86C5FF;
   /* type */
   --font:"Plus Jakarta Sans","Segoe UI",system-ui,sans-serif;
   --font-aqa:Arial,Arimo,"Liberation Sans",Helvetica,sans-serif;

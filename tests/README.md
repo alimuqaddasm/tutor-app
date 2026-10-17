@@ -25,6 +25,7 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/test_round32.py            # round 32 (17 Oct, app v58): clear-cut auto-checker marks accepted on their own; the message counts only saved marks; a mark Ali is typing is never overwritten (11 checks; needs the local exam server)
     python tests/test_offline_list.py       # every ?v= file index.html and exam.html ask for is in the sw.js offline list (no browser needed)
     python tests/runtest.py tests/test_round33.py   # round 33 (17 Oct, app v60): the pen on Student view: S Pen writes, a finger still swipes, rub out, Keep or Clear ink when you move on, Pen and finger, never saved (26 checks)
+    python tests/runtest.py tests/test_round34.py   # round 34 (17 Oct, app v61): the pen like Samsung Notes: 8 colours, highlighter, sizes, Undo and Redo, straight lines, the S Pen button however the tablet reports it (30 checks)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
 On Windows run with PYTHONIOENCODING=utf-8, or printing ★ crashes the console.
