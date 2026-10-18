@@ -2388,7 +2388,7 @@ function cvSend(acts) { if (!L) return Promise.resolve(false); cvReset(L.id);
   return cvFetch("POST", { actions: acts }).then(function () { cvPoll(); return true; }, function (e) { var ks = acts.map(function (a) { return a.k; });
     CV.local = CV.local.filter(function (a) { return ks.indexOf(a.k) < 0; }); cvChanged(); toast("Couldn’t reach the exam server: " + e.message); return false; }); }
 function cvPoll() { if (!CV.id || CV.busy || !cvReady()) return Promise.resolve(); CV.busy = true; var id = CV.id;
-  return cvFetch("GET").then(function (d) { CV.busy = false; if (CV.id !== id) return; var n = (d.actions || []).length, was = CV.err || !CV.loaded; CV.err = ""; CV.loaded = true;
+  return cvFetch("GET").then(function (d) { CV.busy = false; if (CV.id !== id) return; var n = (d.actions || []).length, was = CV.err || !CV.loaded; CV.err = ""; if (!d.more) CV.loaded = true;   // loaded only once the whole log is in, or ink of later pieces would look orphaned
     if (n) { CV.log = CV.log.concat(d.actions); CV.seq = d.actions[n - 1].seq; var seen = {}; CV.log.forEach(function (x) { if (x.a.k) seen[x.a.k] = 1; });
       CV.local = CV.local.filter(function (a) { return !seen[a.k]; }); cvChanged(); if (d.more) return cvPoll(); }
     else if (was) cvChanged(); },
@@ -2544,7 +2544,10 @@ function cvPanel() { var el = $("#cvp"); if (!CV.open || MODE !== "teach" || !L)
       list.map(function (q) { var on = cvWhere(st, q.id); n++; return '<div class="cvrow"><span class="n num">' + n + '</span><span class="cvlab">' + esc(cvLabel(q)) + '</span><span class="row s2 push">' + (on >= 0 ? tag("Page " + (on + 1), on === st.cur ? "ok" : "") : "") + (on === st.cur ? "" : '<button class="btn sm" type="button" data-cvadd="' + esc(q.id) + '">Add</button>') + '</span></div>'; }).join("") + '</div>'; }).join("") + '</section><div class="row"><button class="btn sm quiet" type="button" data-cvreset>Clear canvas</button><span class="hint">Every page and his writing go.</span></div></div>';
   el.innerHTML = h; var b = el.querySelector(".cvp-body"); if (b) b.scrollTop = top; loadImages(el); maths(el);
   $$("[data-cvp]").forEach(function (cb) { cb.setAttribute("aria-expanded", "true"); }); }
-function cvAdd(refs) { cvPoll().then(function () { cvAddNow(refs); }); }   // the page he is on now, not the one last seen
+/* act on the canvas as it is now (this lesson's log, read to the end), not as last seen: Add from a Teach screen can come before Canvas was ever opened */
+function cvFresh(fn) { if (!L) return; cvReset(L.id); if (!cvReady()) { toast("Set the exam password on this device first (Exams tab)"); return; }
+  cvPoll().then(function () { if (!CV.loaded) { toast(CV.err ? "Couldn\u2019t reach the exam server: " + CV.err : "The canvas is still loading. Try again."); return; } fn(); }); }
+function cvAdd(refs) { cvFresh(function () { cvAddNow(refs); }); }
 function cvAddNow(refs) { var st = cvState(); refs = refs.filter(function (r) { return !cvPage(st).items.some(function (x) { return x.ref === r; }); });
   if (!refs.length) { toast("Already on his canvas"); return; }
   cvSend(refs.map(function (r) { return { t: "add", u: Math.random().toString(36).slice(2, 10), ref: r, pg: st.cur }; })).then(function (ok) { if (ok) toast(refs.length > 1 ? "Added " + refs.length + " to his canvas" : "Added to his canvas"); }); }

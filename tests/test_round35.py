@@ -27,9 +27,13 @@ def post(actions):
     r = urllib.request.Request(API + "/api/t/canvas/" + LID, data=json.dumps({"actions": actions}).encode(), method="POST",
                                headers={"X-Exam-Password": PW, "Content-Type": "application/json", "Origin": "http://localhost:8765"})
     return json.load(urllib.request.urlopen(r))
-def log():
-    r = urllib.request.Request(API + "/api/t/canvas/" + LID + "?after=0", headers={"X-Exam-Password": PW})
-    return [x["a"] for x in json.load(urllib.request.urlopen(r))["actions"]]
+def log():   # the whole log, read 500 at a time
+    out, after = [], 0
+    while True:
+        r = urllib.request.Request(API + "/api/t/canvas/" + LID + "?after=%d" % after, headers={"X-Exam-Password": PW})
+        d = json.load(urllib.request.urlopen(r)); out += [x["a"] for x in d["actions"]]
+        if not d.get("more"): return out
+        after = d["actions"][-1]["seq"]
 
 STROKE = """([kind, x0, y0, x1, y1, buttons]) => {
   const at = (x, y) => document.elementFromPoint(x, y) || document.body;
@@ -43,7 +47,12 @@ DRAG = """([sel, kind, dx, dy]) => { const el = document.querySelector(sel), r =
   const ev = (type, x, y) => el.dispatchEvent(new PointerEvent(type, { pointerType: kind, pointerId: 9, isPrimary: true, clientX: x, clientY: y, buttons: type === 'pointerup' ? 0 : 1, bubbles: true, cancelable: true }));
   ev('pointerdown', x, y); for (let i = 1; i <= 6; i++) ev('pointermove', x + dx * i / 6, y + dy * i / 6); ev('pointerup', x + dx, y + dy); }"""
 
-post([{"t": "reset"}])   # a clean canvas for this lesson on the local server
+# a clean canvas for this lesson on the local server: its old rows go (so the log is only this run), then a reset
+import subprocess
+subprocess.run(["npx", "wrangler", "d1", "execute", "tutor-exams", "--local", "--command", "DELETE FROM canvas_actions WHERE room = '%s'" % LID],
+               cwd=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "worker"), capture_output=True, timeout=120)
+post([{"t": "reset"}])
+for k in range(11): post([{"t": "noop"}] * 50)   # a long log: everything in this test comes after the first 500 actions (one read)
 errs = []
 with sync_playwright() as p:
     launch = {"executable_path": os.environ["CHROMIUM_PATH"]} if os.environ.get("CHROMIUM_PATH") else {}
@@ -167,14 +176,33 @@ with sync_playwright() as p:
     check("  ...Teach shows page 2 too", "Page 2 of 2" in lap.locator("#cvp").inner_text())
     lap.click('#cvp [data-cvadd="%s"]' % ids[0]); tab.wait_for_function("document.querySelectorAll('.cv-item:not(.unplaced)').length === 1", timeout=8000)
     check("  ...a question already on page 1 can go on page 2 as well", tab.locator(".cv-item").count() == 1)
+    # Add to canvas from a Teach screen on a laptop that never opened Canvas: still his current page (2), once
+    l2 = ctx(1440, 900).new_page(); l2.on("pageerror", lambda e: errs.append("laptop 2: " + str(e)))
+    l2.goto(APP + "#/lesson/" + LID + "/teach"); l2.wait_for_selector(".tbar", timeout=30000); l2.wait_for_timeout(800)
+    l2.evaluate("__t('tmove(seqIndex(function (c) { return c.t === \"question\" && c.b.id === \"%s\"; }) - TCH.pos, \"jump\")')" % ids[2]); l2.wait_for_timeout(600)
+    l2.click(".tfoot [data-cvadd]"); tab.wait_for_timeout(2500)
+    on2 = [x["ref"] for x in items(tab)]
+    check("Add to canvas on a Teach screen, Canvas never opened: lands on his current page", json.loads(st(tab))["cur"] == 1 and ids[2] in on2, on2)
+    l2.click(".tfoot [data-cvadd]"); tab.wait_for_timeout(2000)
+    check("  ...and a second press does not add it twice", [x["ref"] for x in items(tab)].count(ids[2]) == 1)
+    l2.close()
     tab.click('[data-cvgo="-1"]'); tab.wait_for_timeout(1500)
     ink5 = json.loads(tab.evaluate("__t('JSON.stringify(INK.pages[INK.key]||[])')"))
     check("flip back to page 1: its pieces and its ink are still there", tab.locator(".cv-item").count() == 1 and len(ink5) >= 1, (tab.locator(".cv-item").count(), len(ink5)))
 
-    # reload: the page comes back from the server, the ink from the device
+    # reload: the page comes back from the server, the ink from the device, even when the log is longer than one read (500)
+    kept = items(tab)[0]
+    tab.evaluate("(y) => document.querySelector('.cv-view').scrollTop = y", kept["y"] * 1.2); tab.wait_for_timeout(300)
+    m = json.loads(tab.evaluate("__t('inkMap(), JSON.stringify(INK.map)')"))
+    xa, ya = px(200, kept["y"] + 300); xb, yb = px(500, kept["y"] + 300)
+    tab.evaluate(STROKE, ["pen", xa, ya, xb, yb, 1]); tab.wait_for_timeout(1200)   # writing that belongs to a question added after the first 500 actions
+    ink5 = json.loads(tab.evaluate("__t('JSON.stringify(INK.pages[INK.key]||[])')"))
+    check("  ...new writing under it belongs to it", any(x.get("o") == kept["u"] for x in ink5), (kept, [(x.get("o"), x["p"][0]) for x in ink5], (xa, ya)))
+    tab.evaluate("__t('CV.log = []; CV.seq = 0; CV.local = []; CV.loaded = false; cvPoll()')"); tab.wait_for_timeout(2500)   # read the log again from the start, ink in place
+    check("reading a log of over 500 actions again keeps the writing of pieces added after the first 500", len(json.loads(tab.evaluate("__t('JSON.stringify(INK.pages[INK.key]||[])')"))) == len(ink5))
     tab.reload(); tab.wait_for_selector(".cv-page", timeout=30000); tab.wait_for_timeout(2500)
     ink6 = json.loads(tab.evaluate("__t('JSON.stringify(INK.pages[INK.key]||[])')"))
-    check("after a reload the tablet has the same page, pieces and ink", "Page 1 of 2" in tab.locator(".cv-pages").inner_text() and tab.locator(".cv-item").count() == 1 and len(ink6) == len(ink5), (tab.locator(".cv-item").count(), len(ink6)))
+    check("after a reload (a log of over 500 actions) the tablet has the same page, pieces and ink", "Page 1 of 2" in tab.locator(".cv-pages").inner_text() and tab.locator(".cv-item").count() == 1 and len(ink6) == len(ink5), (tab.locator(".cv-item").count(), len(ink6)))
 
     # questions view and back
     tab.click('[data-cvmode="questions"]'); tab.wait_for_timeout(800)
