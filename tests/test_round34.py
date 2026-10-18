@@ -134,8 +134,9 @@ with sync_playwright() as p:
     # Ali, 18 Oct (after v66): on his tablet the button is only reported while the pen hovers; the touch itself says just "tip".
     # Button pressed above the screen, then touching: erases, as in Samsung Notes; nothing happens in the air
     pg.evaluate("__t('INK.pages[INK.key].push({t:\"pen\",c:0,w:1,p:[[0.3,0.6],[0.6,0.6]]});inkDraw()')"); k = n()
-    pg.evaluate("""() => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b, pr) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 16, clientX: x, clientY: y, buttons: b, pressure: pr, bubbles: true, cancelable: true }));
-      ev('pointermove', 640, 480, 0, 0); ev('pointerdown', 640, 490, 2, 0); ev('pointermove', 640, 500, 2, 0); ev('pointermove', 640, 520, 1, .5); ev('pointermove', 640, 560, 1, .5); ev('pointermove', 640, 600, 2, 0); }"""); pg.wait_for_timeout(150)
+    pg.evaluate("""async () => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b, pr) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 16, clientX: x, clientY: y, buttons: b, pressure: pr, bubbles: true, cancelable: true }));
+      ev('pointermove', 640, 480, 0, 0); ev('pointerdown', 640, 490, 2, 0); ev('pointermove', 640, 500, 2, 0); await new Promise(r => setTimeout(r, 150));   // a person presses the button, then touches
+      ev('pointermove', 640, 520, 1, .5); ev('pointermove', 640, 560, 1, .5); ev('pointermove', 640, 600, 2, 0); }"""); pg.wait_for_timeout(150)
     check("button pressed while hovering, then touching (the touch reports no button): erases", n() == k - 1 and pg.evaluate("__t('INK.cur')") is None, (k, n(), pg.inner_text("#inkdiag")))
     check("  ...the check line says the button was seen while hovering", "while hovering" in pg.inner_text("#inkdiag"), pg.inner_text("#inkdiag"))
     pg.evaluate("""() => document.querySelector('.stu-view').dispatchEvent(new PointerEvent('pointerup', { pointerType: 'pen', pointerId: 16, clientX: 640, clientY: 600, buttons: 0, bubbles: true }))""")
@@ -149,6 +150,24 @@ with sync_playwright() as p:
       el.dispatchEvent(new PointerEvent('pointerout', { pointerType: 'pen', pointerId: 18, clientX: 300, clientY: 700, buttons: 2, relatedTarget: null, bubbles: true })); }""")
     stroke("pen", 300, 820, 400, 820, 1)
     check("  ...nor does the pen taken out of range with the button held", n() == k + 2 and not last().get("rub"), (k, n()))
+    # Ali, 18 Oct (v67 check line: "no button · pen · buttons 1 · button -1"): his Tab S7 FE never reports the button itself. Held while
+    # hovering, it comes as the tip being down (buttons 1) with no pressure; the touch that follows says only "tip"
+    put = lambda: pg.evaluate("__t('INK.pages[INK.key].push({t:\"pen\",c:0,w:1,p:[[0.3,0.6],[0.6,0.6]]});inkDraw()')")
+    put(); k = n()
+    pg.evaluate("""async () => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b, pr) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 19, clientX: x, clientY: y, buttons: b, pressure: pr, bubbles: true, cancelable: true }));
+      ev('pointermove', 640, 470, 0, 0); ev('pointerdown', 640, 480, 1, 0); ev('pointermove', 640, 490, 1, 0); await new Promise(r => setTimeout(r, 150));
+      ev('pointermove', 640, 520, 1, .4); ev('pointermove', 640, 560, 1, .4); ev('pointermove', 640, 600, 1, 0); }"""); pg.wait_for_timeout(150)
+    check("S7 FE: button held above the screen (tip down, no pressure), then touching: erases", n() == k - 1 and pg.evaluate("__t('INK.cur')") is None, (k, n(), pg.inner_text("#inkdiag")))
+    check("  ...the check line says so, with the pressure", "while hovering" in pg.inner_text("#inkdiag") and "pressure" in pg.inner_text("#inkdiag"), pg.inner_text("#inkdiag"))
+    put(); k = n()
+    pg.evaluate("""async () => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b, pr) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 19, clientX: x, clientY: y, buttons: b, pressure: pr, bubbles: true, cancelable: true }));
+      ev('pointermove', 640, 610, 1, .4); ev('pointermove', 640, 520, 1, .4); ev('pointermove', 640, 480, 1, .4); ev('pointermove', 640, 470, 1, 0); }"""); pg.wait_for_timeout(150)
+    check("  ...lifted and touched again with the button still held: erases again", n() < k, (k, n()))
+    pg.evaluate("""() => document.querySelector('.stu-view').dispatchEvent(new PointerEvent('pointerup', { pointerType: 'pen', pointerId: 19, clientX: 640, clientY: 470, buttons: 0, bubbles: true }))""")
+    put(); k = n()
+    pg.evaluate("""() => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b, pr) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 20, clientX: x, clientY: y, buttons: b, pressure: pr, bubbles: true, cancelable: true }));
+      ev('pointermove', 640, 470, 0, 0); ev('pointerdown', 640, 480, 1, 0); ev('pointermove', 640, 520, 1, .4); ev('pointermove', 640, 560, 1, .4); ev('pointermove', 640, 600, 1, .4); ev('pointerup', 640, 600, 0, 0); }"""); pg.wait_for_timeout(150)
+    check("  ...but a pen just landing (no pressure for a moment, then pressing) writes", n() == k + 1 and not last().get("rub"), (k, n(), pg.inner_text("#inkdiag")))
     pg.screenshot(path=os.path.join(SHOTS, "r34-tools-1440.png"))
     pg.click('[data-ink="t-hl"]'); pg.wait_for_timeout(100); pg.screenshot(path=os.path.join(SHOTS, "r34-highlighter-1440.png"))
 

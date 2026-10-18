@@ -2249,7 +2249,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
    write). The S Pen's side button erases. Only a pen that presses (pressure above 0) writes: a hovering pen never does, whatever its
    buttons say (some tablets report the button held in the air as the tip being down). Ink belongs to the screen (the questions showing)
    and lives only in this tab: it is never saved. When you move on, the ink stays for when you come back (Keep) or goes (Clear). */
-var INK = { pages: {}, undo: {}, redo: {}, key: "", tool: "pen", pc: 0, hc: 0, ps: 1, hs: 1, finger: false, open: false, more: false, cur: null, cv: null, raf: 0, pen: false, diag: "", arm: false, rs: /^[012]$/.test(ls("tutor.inkrs")) ? +ls("tutor.inkrs") : 1, ec: null, em: ls("tutor.inkem") === "area" ? "area" : "line" };
+var INK = { pages: {}, undo: {}, redo: {}, key: "", tool: "pen", pc: 0, hc: 0, ps: 1, hs: 1, finger: false, open: false, more: false, cur: null, cv: null, raf: 0, pen: false, diag: "", arm: 0, rs: /^[012]$/.test(ls("tutor.inkrs")) ? +ls("tutor.inkrs") : 1, ec: null, em: ls("tutor.inkem") === "area" ? "area" : "line" };
 var INKCOL = { pen: [["--ink-1", "Black"], ["--ink-2", "Grey"], ["--ink-3", "Red"], ["--ink-4", "Orange"], ["--ink-5", "Green"], ["--ink-6", "Blue"], ["--ink-7", "Purple"], ["--ink-8", "Pink"]],
   hl: [["--hl-1", "Yellow"], ["--hl-2", "Green"], ["--hl-3", "Pink"], ["--hl-4", "Blue"]] };
 var INKW = { pen: [2, 3.5, 6], hl: [12, 20, 32] }, INKER = [8, 14, 24];   // eraser radius in px: Thin, Medium, Thick
@@ -2349,9 +2349,9 @@ function inkRubTo(c, pts) { var list = [], step = Math.max(3, INKER[INK.rs] / 2)
     for (var i = 1; i <= k; i++) list.push([a[0] + (pp[0] - a[0]) * i / k, a[1] + (pp[1] - a[1]) * i / k]); c.lp = pp; });
   if (!c.sc) c.sc = inkScreen(); inkRub(c, list); }
 function inkToRub(c) { if (c.rub) return; c.rub = true; if (c.s) { var pg = inkPage(), k = pg.indexOf(c.s); if (k >= 0) pg.splice(k, 1); c.s = null; clearTimeout(c.tm); c.sc = null; inkDraw(); } }
-function inkSeen(e, how) { var side = how || (inkSide(e) ? "seen" : e.pointerType === "pen" && INK.arm ? "while hovering" : ""), c = INK.cur;
+function inkSeen(e, how) { var side = how || (inkSide(e) ? "seen" : inkArmed(e) ? "while hovering" : ""), c = INK.cur;
   if (c) { if (side) c.seen = true; else if (c.seen) return; }   // once seen in a stroke, the line keeps saying so until the next touch
-  var t = "Pen button check: " + (side ? "button seen (" + side + ")" : "no button") + " · " + (e.pointerType || "?") + " · buttons " + e.buttons + " · button " + e.button;
+  var t = "Pen button check: " + (side ? "button seen (" + side + ")" : "no button") + " · " + (e.pointerType || "?") + " · buttons " + e.buttons + " · button " + e.button + " · pressure " + (e.pressure == null ? "?" : Math.round(e.pressure * 100) / 100);
   if (t !== INK.diag) { INK.diag = t; var d = $("#inkdiag"); if (d) d.textContent = t; } }
 /* a stroke held still at its end for a moment snaps to a straight line from where it began; moving on drags that line's end */
 function inkHold(c) { clearTimeout(c.tm); c.tm = setTimeout(function () { var s = c.s; if (INK.cur !== c || !s || s.line || s.p.length < 3) return;
@@ -2360,10 +2360,14 @@ function inkHold(c) { clearTimeout(c.tm); c.tm = setTimeout(function () { var s 
 function inkCan(e) { if (MODE !== "student" || !STU || STU.drawer || !INK.cv) return false;
   var t = e.target; return !!(t.closest && t.closest(".stu-view, .cv-view") && !t.closest("button, a, input, select, textarea, video")); }   // a tap on a button still works
 function inkPress(e) { return e.pointerType !== "pen" || e.pressure > 0; }   // a pen writes only while it presses: hovering, its pressure is 0
-/* the S Pen button pressed while the pen hovers (as in Samsung Notes): nothing is drawn in the air, the next touch erases */
-function inkArm(e) { var a = inkSide(e); if (a && !INK.arm) inkSeen(e, "while hovering"); INK.arm = a; }
+/* the S Pen button pressed while the pen hovers (as in Samsung Notes): nothing is drawn in the air, the next touch erases.
+   Some tablets send the button as buttons 2 or 32; Ali's Tab S7 FE sends it as the tip being down (buttons 1) with no pressure,
+   and the touch that follows says only "tip". A pen that is simply landing passes through that state for a moment too, so the
+   button counts only once it has been held above the screen for more than 80 ms. */
+function inkArm(e) { if (!(inkSide(e) || (e.buttons & 1))) { INK.arm = 0; return; } if (!INK.arm) INK.arm = e.timeStamp || 1; }
+function inkArmed(e) { return e.pointerType === "pen" && !!INK.arm && (e.timeStamp || 0) - INK.arm > 80; }
 function inkStart(e) { e.preventDefault(); inkMap();
-  var rub = INK.tool === "rub" || inkSide(e) || (e.pointerType === "pen" && INK.arm), pt = inkPt(e), redo = inkStack(INK.redo); inkSnap();
+  var rub = INK.tool === "rub" || inkSide(e) || inkArmed(e), pt = inkPt(e), redo = inkStack(INK.redo); inkSnap();
   INK.cur = { id: e.pointerId, rub: rub, s: rub ? null : { t: INK.tool, c: INK.tool === "hl" ? INK.hc : INK.pc, w: INK.tool === "hl" ? INK.hs : INK.ps, p: [pt] }, redo: redo, ax: e.clientX, ay: e.clientY, seen: inkSide(e) };
   if (rub) inkRubTo(INK.cur, [pt]); else { inkPage().push(INK.cur.s); inkDraw(); inkHold(INK.cur); }
   try { e.target.setPointerCapture(e.pointerId); INK.cur.el = e.target; } catch (x) {} }
@@ -2395,10 +2399,10 @@ document.addEventListener("contextmenu", function (e) { if (MODE !== "student" |
    screen is ever selectable (app.css), and any selection Chrome still starts is stopped and noted in the pen button check */
 document.addEventListener("selectstart", function (e) { if (MODE !== "student" || e.target.closest && e.target.closest("input, textarea")) return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "Chrome tried to select text"); if (INK.cur) inkToRub(INK.cur); }, true);
 document.addEventListener("selectionchange", function () { if (MODE !== "student" || document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return; var sel = getSelection(); if (sel && !sel.isCollapsed) sel.removeAllRanges(); });
-["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { if (e.pointerType === "pen") { INK.pen = false; INK.arm = false; } var c = INK.cur;
+["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { if (e.pointerType === "pen") { INK.pen = false; INK.arm = 0; } var c = INK.cur;
   if (n === "pointercancel" && c && e.pointerId === c.id) { INK.diag = "Pen button check: the browser took over the stroke · " + (e.pointerType || "?"); var d = $("#inkdiag"); if (d) d.textContent = INK.diag; }
   if (c && e.pointerId === c.id) inkEnd(c); }, true); });
-document.addEventListener("pointerout", function (e) { if (e.pointerType === "pen" && !e.relatedTarget) INK.arm = false; }, true);   // the pen taken out of range with its button held: the next touch writes
+document.addEventListener("pointerout", function (e) { if (e.pointerType === "pen" && !e.relatedTarget) INK.arm = 0; }, true);   // the pen taken out of range with its button held: the next touch writes
 addEventListener("resize", function () { if (MODE === "student") inkDraw(); });
 
 /* ---------------- the teaching canvas (Ali, 17 Oct: "a blank canvas onto which ready-made pieces are dropped") ----------------
@@ -2669,7 +2673,7 @@ addEventListener("hashchange", function () { setTimeout(function () { if (MODE !
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v67", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v68", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
