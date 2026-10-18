@@ -1721,8 +1721,8 @@ function drawTeach() {
   var h = '<div class="teach3">' + runwayHTML(c) + '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
     '<button class="btn sm outl" type="button" id="toc" aria-label="Outline">☰<span class="olab"> Outline</span></button>' + (PREP ? '<a class="btn sm quiet back" href="#/">Lessons</a>' : '<a class="btn sm quiet back" href="#/lesson/' + encodeURIComponent(L.id) + '" title="Prepare: the same screens, nothing recorded">Prepare</a>') + '' + (pk ? tag(esc(pk), pk === "If time" ? "dash" : "line") : "") + '<b>' + esc(c.p ? (partTitle(c.p.name)) : "End") + '</b>' + (c.mod ? '<span class="hint">· ' + esc(c.mod) + '</span>' : "") + '</div>' +
     '<div class="tmini"><span class="tmore"><button class="btn sm" type="button" data-tmore aria-expanded="false" aria-label="More: warm-up, suggest a change, try-out">⋯<span class="tdot" id="wudot" hidden></span></button>' +
-      '<div class="tmenu" hidden>' + (PREP ? '<a class="btn sm pri" href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach this lesson</a>' : "") + '<button class="btn sm" type="button" data-store>Add from the Store</button><button class="btn sm" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn sm" type="button" data-suggest>Suggest a change</button><button class="btn sm trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button>' + LPAGES.map(function (q) { return '<button class="btn sm" type="button" data-phase="' + q[0] + '" data-real="">' + q[1] + '</button>'; }).join("") + '</div></span>' +
-      '<a class="btn sm" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"></path></svg></a>' +
+      '<div class="tmenu" hidden>' + (PREP ? '<a class="btn sm pri" href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach this lesson</a>' : "") + '<button class="btn sm" type="button" data-store>Add from the Store</button>' + (PREP ? "" : '<button class="btn sm" type="button" data-cvp>Canvas</button>') + '<button class="btn sm" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn sm" type="button" data-suggest>Suggest a change</button><button class="btn sm trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button>' + LPAGES.map(function (q) { return '<button class="btn sm" type="button" data-phase="' + q[0] + '" data-real="">' + q[1] + '</button>'; }).join("") + '</div></span>' +
+      (PREP ? "" : '<button class="btn sm" type="button" data-cvp aria-expanded="' + CV.open + '">Canvas</button>') + '<a class="btn sm" href="#/lesson/' + encodeURIComponent(L.id) + '/student" target="_blank" rel="noopener">Student view <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"></path></svg></a>' +
       '<span class="tag num"><span class="olab">Step </span>' + (TCH.pos + 1) + ' of ' + TCH.seq.length + '</span>' +
       (PREP ? tag("Prepare", "line") + '<a class="btn sm pri" href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach</a></div></div>' : (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a step by hand.">Preview</button>'
         : '<button type="button" class="preview stopped" data-pvhelp title="The clock is stopped. Taught, Skip and verdicts still count.">Clock stopped</button>') +
@@ -1762,6 +1762,7 @@ function footHTML(c, lv) {
   var taughtable = { step: 1, mod: 1, concept: 1, board: 1 }[c.t] || (c.t === "text" && c.key), mid = "";
   if (c.bd) mid += '<button class="btn accent-soft" type="button" data-line="' + esc(c.bd.id) + '">' + esc(lineBtn(c)) + '</button>';
   if (c.bd) {} else if (c.t === "question" && (c.b.img || []).length && !PREP) mid += '<button class="btn accent-soft" type="button" data-show="' + esc(c.b.id) + '">Show him</button>';
+  if (!c.bd && c.t === "question" && ((c.b.img || []).length || (c.b.parts || []).length) && !PREP) mid += '<button class="btn accent-soft" type="button" data-cvadd="' + esc(c.b.id) + '">Add to canvas</button>';
   if (c.t === "mod") mid += '<button class="btn quiet" type="button" data-tskip="mod">Skip this section</button>';
   if (c.t === "phase") mid += '<button class="btn quiet" type="button" data-tskip="phase">Skip this part</button>';
   // Taught / Skip / Next once the lesson has started (clock running, paused or ended); before that only Next
@@ -2177,6 +2178,7 @@ function drawStudent() {
   var sig = addedList().map(function (a) { return a.part; }).join();
   if (!STU || STU.id !== L.id) STU = { id: L.id, items: studentItems(), tab: "exam", i: -1, drawer: false, sig: sig };
   else if (STU.sig !== sig) { var keep = STU.items[STU.i]; STU.items = studentItems(); STU.sig = sig; STU.i = keep ? Math.max(0, STU.items.findIndex(function (q) { return q.id === keep.id; })) : -1; }
+  STU.canvas = ls("tutor.stumode") !== "questions"; if (STU.canvas) return drawCanvas();
   var list = STU.items.map(function (q, i) { q.i = i; return q; }).filter(function (q) { return q.kind === STU.tab; });
   if (STU.i < 0 || !STU.items[STU.i] || STU.items[STU.i].kind !== STU.tab) STU.i = list.length ? list[0].i : -1;
   var cnt = function (k) { return STU.items.filter(function (q) { return q.kind === k; }).length; }, ne = cnt("exam"), nq = cnt("quick"), nv = cnt("video"), cur = STU.items[STU.i], pos = list.indexOf(cur);
@@ -2195,7 +2197,7 @@ function drawStudent() {
   STU.items.forEach(function (q) { if (q.kind === "exam" && !q.lab) { var b0 = null; (function find(bs) { (bs || []).forEach(function (b) { if (b.id === q.id) b0 = b; if (b.blocks) find(b.blocks); }); })(q.p.blocks); q.lab = b0 && (b0.label || b0.source) || ""; } });
   var from = Math.max(0, Math.min(at - 2, STU.items.length - 6)), chips = STU.items.slice(from, from + 6);
   var CHEV = function (d) { return '<svg class="icon lg" viewBox="0 0 24 24" aria-hidden="true"><path d="' + (d < 0 ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6") + '"></path></svg>'; };
-  app.innerHTML = '<div class="stu clean"><header class="stu-top"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>' + inkButton() + '<span class="push"></span><div class="seg stu-n" role="group" aria-label="Questions on screen">' + [1, 2, 3, 4].map(function (n) { return '<button type="button" data-stun="' + n + '" aria-pressed="' + (stuN() === n) + '" title="' + (n === 1 ? "One question at a time" : n + " questions together") + '">' + n + '</button>'; }).join("") + '</div>' + (cur ? tag((grp.length > 1 ? (at + 1) + " to " + (STU.items.indexOf(grp[grp.length - 1]) + 1) : (at + 1)) + " of " + STU.items.length, "num") : "") + '</header>' + inkTools() + '<main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
+  app.innerHTML = '<div class="stu clean"><header class="stu-top"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>' + inkButton() + '<span class="push"></span>' + cvModeSeg() + '<div class="seg stu-n" role="group" aria-label="Questions on screen">' + [1, 2, 3, 4].map(function (n) { return '<button type="button" data-stun="' + n + '" aria-pressed="' + (stuN() === n) + '" title="' + (n === 1 ? "One question at a time" : n + " questions together") + '">' + n + '</button>'; }).join("") + '</div>' + (cur ? tag((grp.length > 1 ? (at + 1) + " to " + (STU.items.indexOf(grp[grp.length - 1]) + 1) : (at + 1)) + " of " + STU.items.length, "num") : "") + '</header>' + inkTools() + '<main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
     '<button class="stu-edge prev" type="button" data-sgo="-1" aria-label="Previous question"' + (at <= 0 ? " disabled" : "") + '>' + CHEV(-1) + '</button><button class="stu-edge next" type="button" data-sgo="1" aria-label="Next question"' + (at < 0 || STU.items.indexOf(grp[grp.length - 1]) >= STU.items.length - 1 ? " disabled" : "") + '>' + CHEV(1) + '</button>' +
     (STU.items.length > 1 ? '<nav class="stu-chips" aria-label="Questions">' + chips.map(function (q) { return '<button type="button" class="it" data-si="' + q.i + '"' + (q === cur ? ' aria-current="true"' : "") + '>' + (q.kind === "video" ? '<svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"></path></svg>' : "") + (STU.items.indexOf(q) + 1) + ' \u00b7 ' + esc(short(q)) + '</button>'; }).join("") + (STU.items.length > 6 ? '<button type="button" class="it" id="stumore">More</button>' : "") + '</nav>' : "") + drawer + '</div>';
   var chh = $(".stu-chips"); if (chh) $(".stu").style.setProperty("--chipsh", chh.offsetHeight + "px");
@@ -2225,7 +2227,7 @@ function stuN() { return Math.max(1, Math.min(4, +(ls("tutor.stun") || 1))); }
 function stuGroup(at) { var cur = STU.items[at], g = cur ? [cur] : []; if (!cur || cur.kind === "video") return g;
   for (var k = at + 1; k < STU.items.length && g.length < stuN(); k++) { var q = STU.items[k]; if (q.kind === "video") continue; if (q.kind !== cur.kind) break; g.push(q); } return g; }   // a walkthrough video between two questions does not split them
 (function () { var x0 = null, y0 = null;
-  document.addEventListener("touchstart", function (e) { if (MODE !== "student" || !STU || STU.drawer || e.touches.length !== 1 || INK.pen || INK.finger) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  document.addEventListener("touchstart", function (e) { if (MODE !== "student" || !STU || STU.canvas || STU.drawer || e.touches.length !== 1 || INK.pen || INK.finger) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
   document.addEventListener("touchend", function (e) { if (x0 == null || MODE !== "student" || !STU) return; var t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null;
     if (Math.abs(dx) > 60 && Math.abs(dx) > 1.5 * Math.abs(dy)) stuGo(dx < 0 ? 1 : -1); }, { passive: true }); })();
 document.addEventListener("click", function (e) { if (MODE !== "student" || !STU) return; var t = e.target.closest && e.target.closest("button"); if (!t) return;
@@ -2237,7 +2239,7 @@ document.addEventListener("click", function (e) { if (MODE !== "student" || !STU
   else if (t.id === "stux") { STU.drawer = false; drawStudent(); }
   else if (t.id === "stupen" || t.hasAttribute("data-ink")) inkTool(t);
   else if (t.id === "stufs") { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (x) {} } });
-document.addEventListener("keydown", function (e) { if (MODE !== "student" || !STU || e.ctrlKey || e.altKey || e.metaKey || !$("#zoom").hidden) return; if (e.key === "Escape" && STU.drawer) { STU.drawer = false; drawStudent(); return; } if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); stuGo(1); } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); stuGo(-1); } });
+document.addEventListener("keydown", function (e) { if (MODE !== "student" || !STU || STU.canvas || e.ctrlKey || e.altKey || e.metaKey || !$("#zoom").hidden) return; if (e.key === "Escape" && STU.drawer) { STU.drawer = false; drawStudent(); return; } if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); stuGo(1); } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); stuGo(-1); } });
 
 /* ---------------- pen on Student view (Ali, 17 Oct): he writes on his screen while sharing it, instead of the tablet's own screen-write ----------------
    Like Samsung Notes: a pen (8 colours) and a highlighter (4), three sizes, Rub out, Undo and Redo, and a stroke that is held still
@@ -2249,7 +2251,7 @@ var INKCOL = { pen: [["--ink-1", "Black"], ["--ink-2", "Grey"], ["--ink-3", "Red
   hl: [["--hl-1", "Yellow"], ["--hl-2", "Green"], ["--hl-3", "Pink"], ["--hl-4", "Blue"]] };
 var INKW = { pen: [2, 3.5, 6], hl: [12, 20, 32] };
 function inkKeep() { return ls("tutor.inkkeep") !== "clear"; }
-function inkKey() { return STU && STU.i >= 0 ? L.id + ":" + stuGroup(STU.i).map(function (q) { return q.id; }).join("|") : ""; }
+function inkKey() { if (STU && STU.canvas) { var cs = cvState(); return L.id + ":cv:" + cs.ep + ":" + cs.cur; } return STU && STU.i >= 0 ? L.id + ":" + stuGroup(STU.i).map(function (q) { return q.id; }).join("|") : ""; }
 function inkPage() { return INK.pages[INK.key] || (INK.pages[INK.key] = []); }
 function inkStack(o) { return o[INK.key] || (o[INK.key] = []); }
 function inkSnap() { inkStack(INK.undo).push(inkPage().slice()); INK.redo[INK.key] = []; }   // before each change: what Undo goes back to
@@ -2264,10 +2266,10 @@ function inkTools() {
       seg("Size", [b("w0", size === 0, "Thin"), b("w1", size === 1, "Medium"), b("w2", size === 2, "Thick")]) : "") +
     '<div class="stu-inkrow"><button class="btn small" type="button" data-ink="undo"' + (inkStack(INK.undo).length ? "" : " disabled") + '>Undo</button><button class="btn small" type="button" data-ink="redo"' + (inkStack(INK.redo).length ? "" : " disabled") + '>Redo</button><button class="btn small" type="button" data-ink="clear"' + (inkPage().length ? "" : " disabled") + '>Clear ink</button>' +
       '<button class="btn small" type="button" data-ink="more" aria-expanded="' + INK.more + '">More</button></div>' +
-    (INK.more ? '<div class="stu-inkmore">' + seg("When you move on", [b("keep", inkKeep(), "Keep ink"), b("drop", !inkKeep(), "Clear ink")], true) +
+    (INK.more ? '<div class="stu-inkmore">' + (STU && STU.canvas ? "" : seg("When you move on", [b("keep", inkKeep(), "Keep ink"), b("drop", !inkKeep(), "Clear ink")], true)) +
       seg("Writes with", [b("pen", !INK.finger, "S Pen"), b("finger", INK.finger, "Pen and finger")], true) +
       '<p class="hint" id="inkdiag">' + esc(INK.diag || "Pen button check: hold the S Pen button and touch the screen") + '</p></div>' : "") + '</div>'; }
-function inkRefresh() { var tl = $(".stu-tools"), pb = $("#stupen"); if (tl) tl.outerHTML = inkTools(); if (pb) pb.outerHTML = inkButton(); }
+function inkRefresh() { var tl = $(".stu-tools"), pb = $("#stupen"); if (tl) tl.outerHTML = inkTools(); if (pb) pb.outerHTML = inkButton(); if (STU && STU.canvas) cvInkSave(); }
 function inkTool(t) { var a = t.getAttribute("data-ink"), pg;
   if (t.id === "stupen") INK.open = !INK.open;
   else if (/^t-/.test(a)) INK.tool = a.slice(2);
@@ -2283,24 +2285,27 @@ function inkTool(t) { var a = t.getAttribute("data-ink"), pg;
   $(".stu") && $(".stu").classList.toggle("inking", INK.finger); }
 /* after each draw of his screen: drop the last screen's ink if Clear is chosen, then show this screen's */
 function inkMount() { var k = inkKey();
-  if (INK.key && INK.key !== k && !inkKeep()) { delete INK.pages[INK.key]; delete INK.undo[INK.key]; delete INK.redo[INK.key]; }
+  if (INK.key && INK.key !== k && !inkKeep() && INK.key.indexOf(":cv:") < 0) { delete INK.pages[INK.key]; delete INK.undo[INK.key]; delete INK.redo[INK.key]; }
   INK.key = k; INK.cur = null;
   var st = $(".stu"); if (!st) return; st.classList.toggle("inking", INK.finger);
   INK.cv = document.createElement("canvas"); INK.cv.className = "stu-ink"; INK.cv.setAttribute("aria-hidden", "true"); st.appendChild(INK.cv); inkDraw(); }
 function inkDraw() { cancelAnimationFrame(INK.raf); INK.raf = requestAnimationFrame(function () {
-  var cv = INK.cv; if (!cv || !cv.isConnected) return; var dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
+  var cv = INK.cv; if (!cv || !cv.isConnected) return; var dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight; inkMap();
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
   var g = cv.getContext("2d"), css = getComputedStyle(document.documentElement); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H); g.lineJoin = "round";
-  var pg = inkPage(), line = function (s) { var p = s.p, hl = s.t === "hl"; g.globalAlpha = hl ? .4 : 1; g.lineCap = hl ? "butt" : "round";
-    g.strokeStyle = css.getPropertyValue(INKCOL[hl ? "hl" : "pen"][s.c][0]).trim() || "#1B2130"; g.lineWidth = INKW[hl ? "hl" : "pen"][s.w]; g.beginPath(); g.moveTo(p[0][0] * W, p[0][1] * H);
-    if (p.length === 1) g.lineTo(p[0][0] * W + .1, p[0][1] * H);
-    for (var i = 1; i < p.length - 1; i++) g.quadraticCurveTo(p[i][0] * W, p[i][1] * H, (p[i][0] + p[i + 1][0]) / 2 * W, (p[i][1] + p[i + 1][1]) / 2 * H);
-    if (p.length > 1) g.lineTo(p[p.length - 1][0] * W, p[p.length - 1][1] * H); g.stroke(); };
+  var pg = inkPage(), line = function (s) { var p = s.p.map(inkXY), hl = s.t === "hl"; g.globalAlpha = hl ? .4 : 1; g.lineCap = hl ? "butt" : "round";
+    g.strokeStyle = css.getPropertyValue(INKCOL[hl ? "hl" : "pen"][s.c][0]).trim() || "#1B2130"; g.lineWidth = INKW[hl ? "hl" : "pen"][s.w] * (INK.map ? INK.map.s : 1); g.beginPath(); g.moveTo(p[0][0], p[0][1]);
+    if (p.length === 1) g.lineTo(p[0][0] + .1, p[0][1]);
+    for (var i = 1; i < p.length - 1; i++) g.quadraticCurveTo(p[i][0], p[i][1], (p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2);
+    if (p.length > 1) g.lineTo(p[p.length - 1][0], p[p.length - 1][1]); g.stroke(); };
   pg.filter(function (s) { return s.t === "hl"; }).forEach(line); pg.filter(function (s) { return s.t !== "hl"; }).forEach(line); g.globalAlpha = 1; }); }   // highlighter under the pen, as in Samsung Notes
-function inkPt(e) { return [e.clientX / innerWidth, e.clientY / innerHeight]; }
+/* a point is kept as fractions of the screen; on the canvas, in page units (the page is 1000 wide) so it scrolls and moves with the page */
+function inkMap() { var pg = STU && STU.canvas && $(".cv-page"), r = pg && pg.getBoundingClientRect(); INK.map = r && r.width ? { l: r.left, t: r.top, s: r.width / CVW } : null; return INK.map; }
+function inkXY(p) { var m = INK.map; return m ? [m.l + p[0] * m.s, m.t + p[1] * m.s] : [p[0] * innerWidth, p[1] * innerHeight]; }
+function inkPt(e) { var m = INK.map; return m ? [(e.clientX - m.l) / m.s, (e.clientY - m.t) / m.s] : [e.clientX / innerWidth, e.clientY / innerHeight]; }
 /* a stroke goes when the eraser comes within 16 px of any of its segments (a fast stroke's points can be far apart) */
-function inkRub(pt) { var r = 16, W = innerWidth, H = innerHeight, pg = inkPage(), n = pg.length, x = pt[0] * W, y = pt[1] * H;
-  var near = function (a, b) { var ax = a[0] * W, ay = a[1] * H, dx = b[0] * W - ax, dy = b[1] * H - ay, l = dx * dx + dy * dy, t = l ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l)) : 0;
+function inkRub(pt) { var r = 16, pg = inkPage(), n = pg.length, xy = inkXY(pt), x = xy[0], y = xy[1];
+  var near = function (a, b) { a = inkXY(a); b = inkXY(b); var ax = a[0], ay = a[1], dx = b[0] - ax, dy = b[1] - ay, l = dx * dx + dy * dy, t = l ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l)) : 0;
     return Math.hypot(ax + t * dx - x, ay + t * dy - y) < r; };
   INK.pages[INK.key] = pg.filter(function (s) { var p = s.p; if (p.length === 1) return !near(p[0], p[0]); for (var i = 1; i < p.length; i++) if (near(p[i - 1], p[i])) return false; return true; });
   if (INK.pages[INK.key].length !== n) inkDraw(); }
@@ -2308,7 +2313,7 @@ function inkRub(pt) { var r = 16, W = innerWidth, H = innerHeight, pg = inkPage(
    pressed after the pen is already down. Any of these turns the stroke into rubbing out. */
 function inkSide(e) { return !!((e.buttons & 2) || (e.buttons & 32) || e.button === 2 || e.button === 5); }
 /* rubbing along the path, every 8 px from the last point, so a quick flick can't jump over a thin stroke */
-function inkRubTo(c, pt) { var a = c.lp || pt, d = Math.hypot((pt[0] - a[0]) * innerWidth, (pt[1] - a[1]) * innerHeight), k = Math.max(1, Math.ceil(d / 8));
+function inkRubTo(c, pt) { var a = c.lp || pt, pa = inkXY(a), pp = inkXY(pt), d = Math.hypot(pp[0] - pa[0], pp[1] - pa[1]), k = Math.max(1, Math.ceil(d / 8));
   for (var i = 1; i <= k; i++) inkRub([a[0] + (pt[0] - a[0]) * i / k, a[1] + (pt[1] - a[1]) * i / k]); c.lp = pt; }
 function inkToRub(c) { if (c.rub) return; c.rub = true; if (c.s) { var pg = inkPage(), k = pg.indexOf(c.s); if (k >= 0) pg.splice(k, 1); c.s = null; clearTimeout(c.tm); inkDraw(); } }
 function inkSeen(e, how) { var side = how || (inkSide(e) ? "seen" : ""), c = INK.cur;
@@ -2317,17 +2322,17 @@ function inkSeen(e, how) { var side = how || (inkSide(e) ? "seen" : ""), c = INK
   if (t !== INK.diag) { INK.diag = t; var d = $("#inkdiag"); if (d) d.textContent = t; } }
 /* a stroke held still at its end for a moment snaps to a straight line from where it began; moving on drags that line's end */
 function inkHold(c) { clearTimeout(c.tm); c.tm = setTimeout(function () { var s = c.s; if (INK.cur !== c || !s || s.line || s.p.length < 3) return;
-  var a = s.p[0], z = s.p[s.p.length - 1]; if (Math.hypot((z[0] - a[0]) * innerWidth, (z[1] - a[1]) * innerHeight) < 24) return;
+  var a = s.p[0], z = s.p[s.p.length - 1], az = inkXY(a), zz = inkXY(z); if (Math.hypot(zz[0] - az[0], zz[1] - az[1]) < 24) return;
   s.p = [a, z]; s.line = true; inkDraw(); }, 600); }
 function inkCan(e) { if (MODE !== "student" || !STU || STU.drawer || !INK.cv) return false;
-  var t = e.target; return !!(t.closest && t.closest(".stu-view") && !t.closest("button, a, input, select, textarea, video")); }   // a tap on a button still works
+  var t = e.target; return !!(t.closest && t.closest(".stu-view, .cv-view") && !t.closest("button, a, input, select, textarea, video")); }   // a tap on a button still works
 function inkTouch(e) { return !!(e.buttons & 33); }   // the pen tip (1) or its eraser end (32) is on the screen; a button alone means it hovers
-function inkStart(e) { e.preventDefault();
+function inkStart(e) { e.preventDefault(); inkMap();
   var rub = INK.tool === "rub" || inkSide(e) || (e.pointerType === "pen" && INK.arm), pt = inkPt(e), redo = inkStack(INK.redo); inkSnap();
   INK.cur = { id: e.pointerId, rub: rub, s: rub ? null : { t: INK.tool, c: INK.tool === "hl" ? INK.hc : INK.pc, w: INK.tool === "hl" ? INK.hs : INK.ps, p: [pt] }, n: inkPage().length, redo: redo, ax: e.clientX, ay: e.clientY, seen: inkSide(e) };
   if (rub) inkRubTo(INK.cur, pt); else { inkPage().push(INK.cur.s); inkDraw(); inkHold(INK.cur); }
   try { e.target.setPointerCapture(e.pointerId); INK.cur.el = e.target; } catch (x) {} }
-function inkEnd(c) { clearTimeout(c.tm); INK.cur = null;
+function inkEnd(c) { clearTimeout(c.tm); INK.cur = null; if (c.s && STU && STU.canvas) cvStrokeDone(c.s);
   if (c.rub && inkPage().length === c.n) { inkStack(INK.undo).pop(); INK.redo[INK.key] = c.redo; }   // rubbed nothing out: nothing to undo, and Redo stays
   inkRefresh(); }
 document.addEventListener("pointerdown", function (e) {
@@ -2343,7 +2348,7 @@ document.addEventListener("pointermove", function (e) { var c = INK.cur;
     if (c && e.pointerId === c.id) { try { if (c.el && c.el.hasPointerCapture(c.id)) c.el.releasePointerCapture(c.id); } catch (x) {} inkEnd(c); }   // lifted with its button still held: no pointerup comes yet, so let go of the screen too
     var arm = inkSide(e); if (arm && !INK.arm) inkSeen(e, "while hovering"); INK.arm = arm; return; }   // its button held: the next touch rubs out
   if (!c && e.pointerType === "pen" && inkCan(e)) { inkSeen(e); inkStart(e); return; }   // touched down while a button was already pressed: no new pointerdown comes
-  if (!c || e.pointerId !== c.id) return; e.preventDefault(); inkSeen(e);
+  if (!c || e.pointerId !== c.id) return; e.preventDefault(); inkSeen(e); inkMap();
   if (inkSide(e)) inkToRub(c);
   (e.getCoalescedEvents ? e.getCoalescedEvents() : []).concat([e]).forEach(function (m) { var pt = inkPt(m);
     if (c.rub) inkRubTo(c, pt); else if (c.s.line) c.s.p[1] = pt; else c.s.p.push(pt); });
@@ -2359,10 +2364,211 @@ document.addEventListener("selectionchange", function () { if (MODE !== "student
   if (c && e.pointerId === c.id) inkEnd(c); }, true); });
 addEventListener("resize", function () { if (MODE === "student") inkDraw(); });
 
+/* ---------------- the teaching canvas (Ali, 17 Oct: "a blank canvas onto which ready-made pieces are dropped") ----------------
+   Student view on the tablet is a page he writes on with the S Pen; Teach on the laptop puts questions onto it. The two are
+   different devices, so each action goes through the exam server (/api/t/canvas/<lesson>) and both screens replay the same
+   log: add, rm (remove), top (move to the top), new (new page), go (show a page), pos (where a piece sits), reset (clear it all). Only the tablet
+   knows how tall a piece is, so it lays the pieces out and sends their places back; the laptop's list follows them.
+   Pages are 1000 units wide and grow down. Ink stays on the tablet, one ink page per canvas page, kept on the device.
+   A stroke belongs to the piece above it, so it moves, scales and goes with that piece; writing that reaches the next
+   question pushes it down. The student sees the page and the pen only: the list lives in Teach. */
+var CVW = 1000, CVGAP = 360, CVX = 40, CVWD = 920;   // page width, writing space under a question, left edge and width of a new piece
+var CV = { id: null, log: [], seq: 0, local: [], busy: false, err: "", sel: null, laying: false, open: false, ans: {}, drag: null, ptr: "" };
+function cvApi() { return (ls("tutor.examApi") || window.EXAM_API || "").replace(/\/+$/, ""); }
+function cvReady() { return !!(cvApi() && ls("tutor.examPw")); }
+function cvReset(id) { if (CV.id !== id) CV = { id: id, log: [], seq: 0, local: [], busy: false, err: "", sel: null, laying: false, open: CV.open, ans: {}, drag: null, ptr: "" }; }
+function cvFetch(method, body) {
+  return fetch(cvApi() + "/api/t/canvas/" + encodeURIComponent(CV.id) + (method === "GET" ? "?after=" + CV.seq : ""), { method: method, cache: "no-store",
+    headers: Object.assign({ "X-Exam-Password": ls("tutor.examPw") || "" }, body ? { "Content-Type": "application/json" } : {}), body: body ? JSON.stringify(body) : undefined })
+    .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.error || "exam server " + r.status); return d; }); }); }
+/* send actions: shown at once (kept in CV.local until the server's copy comes back), taken back if the server refuses */
+function cvSend(acts) { if (!L) return Promise.resolve(false); cvReset(L.id);
+  if (!cvReady()) { toast("Set the exam password on this device first (Exams tab)"); return Promise.resolve(false); }
+  acts.forEach(function (a) { a.k = a.k || Math.random().toString(36).slice(2, 10); }); CV.local = CV.local.concat(acts); cvChanged();
+  return cvFetch("POST", { actions: acts }).then(function () { cvPoll(); return true; }, function (e) { var ks = acts.map(function (a) { return a.k; });
+    CV.local = CV.local.filter(function (a) { return ks.indexOf(a.k) < 0; }); cvChanged(); toast("Couldn’t reach the exam server: " + e.message); return false; }); }
+function cvPoll() { if (!CV.id || CV.busy || !cvReady()) return Promise.resolve(); CV.busy = true; var id = CV.id;
+  return cvFetch("GET").then(function (d) { CV.busy = false; if (CV.id !== id) return; var n = (d.actions || []).length, was = CV.err || !CV.loaded; CV.err = ""; if (!d.more) CV.loaded = true;   // loaded only once the whole log is in, or ink of later pieces would look orphaned
+    if (n) { CV.log = CV.log.concat(d.actions); CV.seq = d.actions[n - 1].seq; var seen = {}; CV.log.forEach(function (x) { if (x.a.k) seen[x.a.k] = 1; });
+      CV.local = CV.local.filter(function (a) { return !seen[a.k]; }); cvChanged(); if (d.more) return cvPoll(); }
+    else if (was) cvChanged(); },
+    function (e) { CV.busy = false; if (CV.err !== e.message) { CV.err = e.message; cvChanged(); } }); }
+/* the canvas as the log leaves it: pages of pieces, each piece {u, ref, x, y, w}; y is null until the tablet has placed it */
+function cvState() { var st = { pages: [{ items: [] }], cur: 0, ep: 0 }, n = 0;
+  var find = function (u) { for (var i = 0; i < st.pages.length; i++) for (var j = 0; j < st.pages[i].items.length; j++) if (st.pages[i].items[j].u === u) return { it: st.pages[i].items[j], pg: st.pages[i] }; return null; };
+  CV.log.map(function (x) { return x.a; }).concat(CV.local).forEach(function (a) { var f = a.u ? find(a.u) : null;
+    if (a.t === "add" && !f && a.ref) (st.pages[a.pg] || st.pages[st.cur]).items.push({ u: a.u, ref: String(a.ref), x: CVX, y: null, w: CVWD, n: n++ });
+    else if (a.t === "rm" && f) f.pg.items.splice(f.pg.items.indexOf(f.it), 1);
+    else if (a.t === "pos" && f) { f.it.x = +a.x || 0; f.it.y = +a.y || 0; f.it.w = +a.w || CVWD; f.it.top = false; }
+    else if (a.t === "top" && f) f.it.top = true;
+    else if (a.t === "new") { st.pages.push({ items: [] }); st.cur = st.pages.length - 1; }
+    else if (a.t === "go" && st.pages[a.n]) st.cur = a.n;
+    else if (a.t === "reset") st = { pages: [{ items: [] }], cur: 0, ep: st.ep + 1 }; });   // Clear canvas: ink is kept by clearing round (ep), so the old ink is left behind
+  st.pages.forEach(function (pg) { pg.items.sort(function (a, b) { return (a.y == null ? 1e9 + a.n : a.y) - (b.y == null ? 1e9 + b.n : b.y); }); });
+  return st; }
+function cvWhere(st, ref) { for (var i = 0; i < st.pages.length; i++) if (st.pages[i].items.some(function (x) { return x.ref === ref; })) return i; return -1; }
+/* what a piece shows, from the lesson: the same items as the questions view (exam pictures, typed parts, quick questions) */
+function cvItems() { var m = {}; (STU && STU.id === L.id ? STU.items : studentItems()).forEach(function (q) { if (q.kind !== "video") m[q.id] = q; }); return m; }
+function cvLabel(q) { if (!q) return "Not in this lesson"; var f = cvFind(q.id), b = f && f.q; return q.kind === "exam" ? (b && (b.label || b.source) || "Question") : plain(q.text).slice(0, 90); }
+function cvFind(ref) { var hit = null; phases().filter(function (p) { return !p.sys; }).forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) {
+    if (hit) return; if (b.type === "question" && b.id === ref) hit = { q: b, p: p };
+    else if (b.type === "quiz") (b.items || []).forEach(function (it) { if (!hit && it.id === ref) hit = { it: it, p: p }; });
+    else if (b.type === "drill") (b.items || []).forEach(function (d) { if (!hit && drillKey(d[0]) === ref) hit = { d: d, p: p }; });
+    if (b.blocks) walk(b.blocks); }); })(p.blocks); }); return hit; }
+function cvAnswerHTML(ref) { var f = cvFind(ref); if (!f) return ""; var h = "";
+  if (f.q) { h = (f.q.answer ? clean(f.q.answer) : "") + (f.q.parts || []).map(function (pt) { return pt.answer ? '<p><b>' + esc(pt.label || pt.part || "") + '</b></p>' + clean(pt.answer) : ""; }).join("") +
+    (f.q.answerImg || []).map(function (i) { return '<figure class="fig"><img data-src="' + esc(i) + '" alt="Mark scheme" hidden><div class="ph">Loading image</div></figure>'; }).join(""); }
+  else if (f.it) h = clean(f.it.a || ""); else if (f.d) h = clean(f.d[1] || "");
+  return h || '<p class="hint">No answer in the script.</p>'; }
+
+/* ----- the tablet: the page ----- */
+function cvModeSeg() { var on = STU && STU.canvas; return '<div class="seg cv-mode" role="group" aria-label="Student view"><button type="button" data-cvmode="canvas" aria-pressed="' + !!on + '">Canvas</button><button type="button" data-cvmode="questions" aria-pressed="' + !on + '">Questions</button></div>'; }
+function drawCanvas() { cvReset(L.id);
+  if ($(".stu.cv") && $(".stu.cv").getAttribute("data-l") === L.id) { cvSync(); return; }   // a refresh from another device: keep the page and its pictures
+  app.innerHTML = '<div class="stu clean cv" data-l="' + esc(L.id) + '"><header class="stu-top">' + inkButton() + '<span class="push"></span><span class="cv-pages"></span>' + cvModeSeg() + '</header>' + inkTools() +
+    '<main class="cv-view"><div class="cv-page"></div></main></div>';
+  inkMount(); cvInkLoad().then(function () { inkDraw(); inkRefresh(); }); cvSync(); cvPoll(); prefetchLesson();
+  if (BC) BC.postMessage({ type: "alive", lesson: L.id }); }
+function cvPage(st) { st = st || cvState(); return st.pages[st.cur]; }
+function cvScale() { var pg = $(".cv-page"); return pg && pg.clientWidth ? pg.clientWidth / CVW : 1; }
+function cvEl(u) { return $('.cv-item[data-u="' + u + '"]'); }
+function cvH(u) { var el = cvEl(u); return el ? el.offsetHeight / cvScale() : 0; }
+/* bring the page in line with the log: add and drop pieces, move them, page tags, ink page */
+function cvSync() { var root = $(".stu.cv"), page = $(".cv-page"); if (!root || !page) return; var st = cvState(), pg = st.pages[st.cur], items = cvItems(), s = cvScale(), seen = {};
+  page.style.setProperty("--cvs", s);
+  if (!cvReady()) { page.innerHTML = '<div class="cv-setup card pad stack"><b class="t-card">Connect this tablet to Teach</b><span class="hint">Teach on the laptop sends questions here through the exam server. Type the exam password once on this device.</span><div class="row s2"><input class="input" type="password" id="cvpw" autocomplete="current-password" aria-label="Exam password" placeholder="Exam password"><button class="btn pri" type="button" id="cvpwgo">Save password</button></div></div>'; root.setAttribute("data-setup", "1"); return; }
+  if (root.hasAttribute("data-setup")) { root.removeAttribute("data-setup"); page.innerHTML = ""; }
+  pg.items.forEach(function (it) { seen[it.u] = 1; var el = cvEl(it.u), q = items[it.ref];
+    if (!el) { el = document.createElement("div"); el.className = "cv-item" + (q && q.kind === "quick" ? " quick" : ""); el.setAttribute("data-u", it.u);
+      el.innerHTML = (q ? cvPieceHTML(q) : '<div class="cv-card hint">Not in this lesson</div>') + '<button type="button" class="cv-ctl grip" data-cvgrip aria-label="Move"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M8 7l4-4 4 4M8 17l4 4 4-4M7 8l-4 4 4 4M17 8l4 4-4 4"></path></svg></button><button type="button" class="cv-ctl x" data-cvrm aria-label="Remove"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button><button type="button" class="cv-ctl size" data-cvsize aria-label="Resize"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12v8h-8M20 20L12 12"></path></svg></button>';
+      page.appendChild(el); $$("img", el).forEach(showImg); maths(el); }
+    if (CV.drag && CV.drag.u === it.u) return;   // the piece under his finger stays where the finger is
+    el.style.left = it.x * s + "px"; el.style.top = (it.y == null ? 0 : it.y) * s + "px"; el.style.width = it.w * s + "px";
+    el.classList.toggle("unplaced", it.y == null); el.classList.toggle("sel", CV.sel === it.u); });
+  $$(".cv-item", page).forEach(function (el) { if (!seen[el.getAttribute("data-u")]) el.remove(); });
+  if (CV.loaded && inkKey() === INK.key) { var ink = INK.pages[INK.key] || [], kept = ink.filter(function (k) { return !k.o || seen[k.o]; }); if (kept.length !== ink.length) { INK.pages[INK.key] = kept; cvInkSave(); } }   // removed in Teach: its working goes with it
+  if (CV.sel && !seen[CV.sel]) CV.sel = null;
+  var bot = cvBottom(pg); page.style.height = Math.max(bot + 600, ($(".cv-view").clientHeight - 80) / s) * s + "px";
+  var pt = $(".cv-pages"); if (pt) pt.innerHTML = '<button class="stu-menu" type="button" data-cvgo="-1" aria-label="Page before"' + (st.cur ? "" : " disabled") + '><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button>' + tag("Page " + (st.cur + 1) + " of " + st.pages.length, "num") +
+    '<button class="stu-menu" type="button" data-cvgo="1" aria-label="Page after"' + (st.cur < st.pages.length - 1 ? "" : " disabled") + '><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><button class="btn small" type="button" data-cvnew>New page</button>' + (CV.err ? tag("Offline", "live") : "");
+  if (inkKey() !== INK.key) { INK.key = inkKey(); INK.cur = null; inkRefresh(); }
+  inkDraw(); cvLay(); }
+function cvPieceHTML(q) { return q.kind === "exam" ? (q.twin ? '<div class="stu-twin">' + twinHTML(q.twin) + '</div>' : q.img.map(function (i) { return '<img data-src="' + esc(i) + '" alt="Question" hidden>'; }).join(""))
+  : '<div class="cv-card"><div class="stu-q">' + paperHTML(q.text, subjNow()) + '</div></div>'; }
+/* the lowest point in use on the page: placed pieces (a question keeps its writing space under it) and ink */
+function cvBottom(pg, skip) { var b = 0, qs = cvItems();
+  pg.items.forEach(function (it) { if (it.y == null || it.u === skip) return; b = Math.max(b, it.y + cvH(it.u) + (qs[it.ref] ? CVGAP : 24)); });
+  (INK.pages[inkKey()] || []).forEach(function (s) { s.p.forEach(function (p) { b = Math.max(b, p[1] + 40); }); });
+  return Math.max(b, CVX); }
+/* pictures first: a piece's height is known only once its pictures are in */
+function cvImgs() { var t0 = Date.now(); return new Promise(function (res) { (function wait() { var ims = $$(".cv-page img"); if (Date.now() - t0 > 6000 || ims.every(function (i) { return i.naturalWidth > 0; })) res(); else setTimeout(wait, 100); })(); }); }
+/* place new pieces under what is there, and carry out "move to the top"; then send where they went */
+function cvLay() { if (CV.laying || !$(".cv-page")) return; var pg = cvPage(); if (!pg.items.some(function (x) { return x.y == null || x.top; })) return; CV.laying = true;
+  cvImgs().then(function () { var st = cvState(), pg = st.pages[st.cur], acts = [], top = pg.items.filter(function (x) { return x.top && x.y != null; })[0];
+    if (top) acts = cvRestack(pg, top);
+    pg.items.filter(function (x) { return x.y == null; }).forEach(function (it) { it.y = Math.round(cvBottom(pg)); acts.push({ t: "pos", u: it.u, x: it.x, y: it.y, w: it.w }); });
+    pg.items.filter(function (x) { return x.top && x.y == null; }).forEach(function (it) { acts.push({ t: "top", u: it.u }); });   // a new piece moved to the top: once it is placed
+    CV.laying = false; if (acts.length) cvSend(acts); }); }
+/* move to the top: that piece first, the rest after it in their order, each keeping its writing space and its ink */
+function cvRestack(pg, top) { var old = pg.items.filter(function (x) { return x.y != null; }).sort(function (a, b) { return a.y - b.y; }), zone = {};
+  old.forEach(function (it, i) { var h = cvH(it.u) + 24; zone[it.u] = i < old.length - 1 ? Math.max(h, old[i + 1].y - it.y) : h + CVGAP; });
+  var y = CVX, acts = []; [top].concat(old.filter(function (x) { return x !== top; })).forEach(function (it) { if (it.y !== y) cvInkMove(it.u, 0, y - it.y, 1); it.y = y; y += zone[it.u]; acts.push({ t: "pos", u: it.u, x: it.x, y: it.y, w: it.w }); });
+  return acts; }
+/* ink that belongs to a piece: shifted by (dx, dy) and scaled by k about the piece's top left */
+function cvInkMove(u, dx, dy, k, from) { var it = cvPage().items.filter(function (x) { return x.u === u; })[0]; if (!it) return; var ox = from ? from.x : it.x, oy = from ? from.y : it.y;
+  (INK.pages[inkKey()] || []).forEach(function (s) { if (s.o !== u) return; var src = from && s.p0 ? s.p0 : s.p; s.p = src.map(function (p) { return [ox + dx + (p[0] - ox) * k, oy + dy + (p[1] - oy) * k]; }); }); }
+/* a finished stroke: which piece it belongs to, and push the next question down if the writing reached it */
+function cvStrokeDone(s) { var pg = cvPage(), a = s.p[0], best = null;
+  pg.items.forEach(function (it) { if (it.y == null || it.y > a[1]) return; var over = a[0] >= it.x - 20 && a[0] <= it.x + it.w + 20; if (!best || over && !best.over || over === best.over && it.y > best.it.y) best = { it: it, over: over }; });
+  s.o = best ? best.it.u : null; if (!best) return;
+  var low = Math.max.apply(null, s.p.map(function (p) { return p[1]; })), next = pg.items.filter(function (x) { return x.y != null && x.y > best.it.y; }).sort(function (p, q) { return p.y - q.y; })[0];
+  if (!next || low + 24 <= next.y || a[1] >= next.y) return;
+  var d = Math.round(low + 48 - next.y), acts = [];
+  pg.items.filter(function (x) { return x.y != null && x.y >= next.y; }).forEach(function (it) { cvInkMove(it.u, 0, d, 1); it.y += d; acts.push({ t: "pos", u: it.u, x: it.x, y: it.y, w: it.w }); });
+  cvSend(acts); }
+/* ink lives on the tablet only: kept on the device for the lesson, by canvas page (never in try-out) */
+var cvSaveT = 0;
+function cvInkSave() { if (TRY || !L) return; clearTimeout(cvSaveT); var id = L.id, pre = id + ":cv:" + cvState().ep + ":"; cvSaveT = setTimeout(function () { var out = {};
+  Object.keys(INK.pages).forEach(function (k) { if (k.indexOf(pre) === 0) out[k] = INK.pages[k]; }); cput("cvink:" + id, out); }, 600); }
+function cvInkLoad() { var id = L.id; return cget("cvink:" + id).then(function (o) { Object.keys(o || {}).forEach(function (k) { if (!INK.pages[k] || !INK.pages[k].length) INK.pages[k] = o[k]; }); }); }
+function cvChanged() { if (MODE === "student" && STU && STU.canvas) cvSync(); if (CV.open) cvPanel(); }
+setInterval(function () { if (document.hidden || !L || !CV.id || CV.id !== L.id) return; CV.tick = (CV.tick || 0) + 1;
+  if (MODE === "student" && STU && STU.canvas) cvPoll(); else if (MODE === "teach" && CV.open && CV.tick % 3 === 0) cvPoll(); }, 500);
+addEventListener("resize", function () { if (MODE === "student" && STU && STU.canvas) cvSync(); });
+document.addEventListener("scroll", function (e) { if (MODE === "student" && STU && STU.canvas && e.target.classList && e.target.classList.contains("cv-view")) inkDraw(); }, true);
+
+/* a finger scrolls the page (the page itself takes no touch scrolling, so the S Pen writes instead); a tap still picks a piece */
+document.addEventListener("pointerdown", function (e) { if (e.pointerType !== "touch" || INK.finger || MODE !== "student" || !STU || !STU.canvas || CV.drag) return;
+  var v = e.target.closest && e.target.closest(".cv-view"); if (!v || e.target.closest("button, input, [data-cvgrip], [data-cvsize]")) return;
+  CV.pan = { id: e.pointerId, y0: e.clientY, top: v.scrollTop, v: v, moved: false }; });
+document.addEventListener("pointermove", function (e) { var p = CV.pan; if (!p || e.pointerId !== p.id) return; var dy = e.clientY - p.y0; if (Math.abs(dy) > 8) p.moved = true; if (p.moved) p.v.scrollTop = p.top - dy; });
+["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { var p = CV.pan; if (p && e.pointerId === p.id) { CV.pan = null; CV.panned = p.moved ? Date.now() : 0; } }); });
+/* tap a piece with a finger (or the mouse) to pick it: then drag it by the cross, resize it by the corner, or remove it */
+document.addEventListener("pointerdown", function (e) { CV.ptr = e.pointerType; if (MODE !== "student" || !STU || !STU.canvas) return;
+  var h = e.target.closest && e.target.closest("[data-cvgrip],[data-cvsize]"); if (!h) return; var el = h.closest(".cv-item"), u = el.getAttribute("data-u"), it = cvPage().items.filter(function (x) { return x.u === u; })[0]; if (!it) return;
+  e.preventDefault(); inkMap(); CV.drag = { u: u, size: h.hasAttribute("data-cvsize"), id: e.pointerId, x0: e.clientX, y0: e.clientY, from: { x: it.x, y: it.y, w: it.w }, to: { x: it.x, y: it.y, w: it.w } };
+  (INK.pages[inkKey()] || []).forEach(function (s) { if (s.o === u) s.p0 = s.p; }); try { h.setPointerCapture(e.pointerId); } catch (x) {} }, true);
+document.addEventListener("pointermove", function (e) { var d = CV.drag; if (!d || e.pointerId !== d.id) return; e.preventDefault(); var s = cvScale(), dx = (e.clientX - d.x0) / s, dy = (e.clientY - d.y0) / s, f = d.from, el = cvEl(d.u); if (!el) return;
+  if (d.size) { var w = Math.max(160, Math.min(CVW - f.x, f.w + dx)); d.to = { x: f.x, y: f.y, w: Math.round(w) }; el.style.width = w * s + "px"; cvInkMove(d.u, 0, 0, w / f.w, f); }
+  else { d.to = { x: Math.round(Math.max(0, Math.min(CVW - 80, f.x + dx))), y: Math.round(Math.max(0, f.y + dy)), w: f.w }; el.style.left = d.to.x * s + "px"; el.style.top = d.to.y * s + "px"; cvInkMove(d.u, d.to.x - f.x, d.to.y - f.y, 1, f); }
+  inkDraw(); }, true);
+["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { var d = CV.drag; if (!d || e.pointerId !== d.id) return; CV.drag = null;
+  (INK.pages[inkKey()] || []).forEach(function (s) { delete s.p0; }); cvInkSave();
+  if (d.to.x !== d.from.x || d.to.y !== d.from.y || d.to.w !== d.from.w) cvSend([{ t: "pos", u: d.u, x: d.to.x, y: d.to.y, w: d.to.w }]); }, true); });
+document.addEventListener("click", function (e) { if (MODE !== "student" || !STU) return; var t = e.target.closest && e.target.closest("[data-cvmode],[data-cvgo],[data-cvnew],[data-cvrm],#cvpwgo,.cv-item,.cv-page"); if (!t) return;
+  if (t.hasAttribute("data-cvmode")) { ls("tutor.stumode", t.getAttribute("data-cvmode") === "questions" ? "questions" : null); INK.cur = null; app.innerHTML = ""; drawStudent(); return; }
+  if (!STU.canvas) return;
+  if (t.id === "cvpwgo") { var v = ($("#cvpw").value || "").trim(); if (!v) return; ls("tutor.examPw", v); cvSync(); cvPoll().then(function () { if (CV.err) toast("The exam server says: " + CV.err); }); return; }
+  var st = cvState();
+  if (t.hasAttribute("data-cvgo")) { var n = st.cur + +t.getAttribute("data-cvgo"); if (st.pages[n]) cvSend([{ t: "go", n: n }]); return; }
+  if (t.hasAttribute("data-cvnew")) { cvSend([{ t: "new" }]); return; }
+  if (t.hasAttribute("data-cvrm")) { var u = t.closest(".cv-item").getAttribute("data-u"); INK.pages[inkKey()] = (INK.pages[inkKey()] || []).filter(function (s) { return s.o !== u; }); CV.sel = null; cvInkSave(); cvSend([{ t: "rm", u: u }]); return; }
+  if (CV.ptr === "pen" || Date.now() - (CV.panned || 0) < 400) return;   // the S Pen writes, and a scroll is not a tap; picking a piece is for a finger
+  var it = t.closest(".cv-item"); CV.sel = it && CV.sel !== it.getAttribute("data-u") ? it.getAttribute("data-u") : null; cvSync(); });
+document.addEventListener("keydown", function (e) { if (e.key === "Enter" && e.target.id === "cvpw") { e.preventDefault(); var b = $("#cvpwgo"); if (b) b.click(); } });
+
+/* ----- the laptop: Canvas in Teach. What is on his page, its answers, and every question of the lesson to add ----- */
+function cvPanel() { var el = $("#cvp"); if (!CV.open || MODE !== "teach" || !L) { if (el) el.remove(); return; } cvReset(L.id);
+  if (!el) { el = document.createElement("aside"); el.id = "cvp"; el.className = "cvp card raised"; el.setAttribute("aria-label", "Canvas"); document.body.appendChild(el); }
+  var keep = el.querySelector(".cvp-body"), top = keep ? keep.scrollTop : 0, st = cvState(), pg = st.pages[st.cur], qs = cvItems(), n = 0;
+  var h = '<div class="sug-head"><h3 class="t-card">Canvas</h3><button class="btn small" type="button" data-cvpx aria-label="Close">×</button></div>' +
+    '<div class="row s2"><button class="btn sm" type="button" data-cvgo="-1" aria-label="Page before"' + (st.cur ? "" : " disabled") + '>‹</button>' + tag("Page " + (st.cur + 1) + " of " + st.pages.length, "num") + '<button class="btn sm" type="button" data-cvgo="1" aria-label="Page after"' + (st.cur < st.pages.length - 1 ? "" : " disabled") + '>›</button><button class="btn sm" type="button" data-cvnew>New page</button>' +
+    (!cvReady() ? tag("No exam password", "live") : CV.err ? tag("Offline", "live") : "") + '</div><div class="cvp-body stack s4">';
+  h += '<section class="stack s2"><span class="lab">On his canvas</span>' + (pg.items.length ? pg.items.map(function (it, i) { var q = qs[it.ref], open = CV.ans[it.u];
+    return '<div class="cvrow' + (open ? " open" : "") + '"><span class="n num">' + (i + 1) + '</span><button type="button" class="cvlab" data-cvans="' + esc(it.u) + '" aria-expanded="' + !!open + '">' + esc(cvLabel(q)) + (it.y == null ? ' ' + tag("Placing", "dash") : "") + '</button>' +
+      '<span class="row s2 push"><button class="btn sm" type="button" data-cvtop="' + esc(it.u) + '"' + (i === 0 ? " disabled" : "") + '>Move to top</button><button class="btn sm quiet" type="button" data-cvrm="' + esc(it.u) + '">Remove</button></span>' +
+      (open ? '<div class="cvans prose">' + cvAnswerHTML(it.ref) + '</div>' : "") + '</div>'; }).join("") : '<p class="hint">Empty. Questions you add show here and on his screen.</p>') + '</section>';
+  var parts = {}, order = []; Object.keys(qs).forEach(function (k) { var q = qs[k], pid = q.p.id; if (!parts[pid]) { parts[pid] = []; order.push(q.p); } parts[pid].push(q); });
+  h += '<section class="stack s3"><span class="lab">Add questions</span>' + order.map(function (p) { var list = parts[p.id], free = list.filter(function (q) { return !pg.items.some(function (x) { return x.ref === q.id; }); }).length, kd = kindOf(p.name);
+    return '<div class="stack s2"><div class="row s2">' + (kd ? tag(esc(kd), kd === "If time" ? "dash" : "line") : "") + '<b>' + esc(partTitle(p.name)) + '</b>' + (free > 1 ? '<button class="btn sm push" type="button" data-cvaddp="' + esc(p.id) + '">Add all ' + free + '</button>' : "") + '</div>' +
+      list.map(function (q) { var on = cvWhere(st, q.id); n++; return '<div class="cvrow"><span class="n num">' + n + '</span><span class="cvlab">' + esc(cvLabel(q)) + '</span><span class="row s2 push">' + (on >= 0 ? tag("Page " + (on + 1), on === st.cur ? "ok" : "") : "") + (on === st.cur ? "" : '<button class="btn sm" type="button" data-cvadd="' + esc(q.id) + '">Add</button>') + '</span></div>'; }).join("") + '</div>'; }).join("") + '</section><div class="row"><button class="btn sm quiet" type="button" data-cvreset>Clear canvas</button><span class="hint">Every page and his writing go.</span></div></div>';
+  el.innerHTML = h; var b = el.querySelector(".cvp-body"); if (b) b.scrollTop = top; loadImages(el); maths(el);
+  $$("[data-cvp]").forEach(function (cb) { cb.setAttribute("aria-expanded", "true"); }); }
+/* act on the canvas as it is now (this lesson's log, read to the end), not as last seen: Add from a Teach screen can come before Canvas was ever opened */
+function cvFresh(fn) { if (!L) return; cvReset(L.id); if (!cvReady()) { toast("Set the exam password on this device first (Exams tab)"); return; }
+  cvPoll().then(function () { if (!CV.loaded) { toast(CV.err ? "Couldn\u2019t reach the exam server: " + CV.err : "The canvas is still loading. Try again."); return; } fn(); }); }
+function cvAdd(refs) { cvFresh(function () { cvAddNow(refs); }); }
+function cvAddNow(refs) { var st = cvState(); refs = refs.filter(function (r) { return !cvPage(st).items.some(function (x) { return x.ref === r; }); });
+  if (!refs.length) { toast("Already on his canvas"); return; }
+  cvSend(refs.map(function (r) { return { t: "add", u: Math.random().toString(36).slice(2, 10), ref: r, pg: st.cur }; })).then(function (ok) { if (ok) toast(refs.length > 1 ? "Added " + refs.length + " to his canvas" : "Added to his canvas"); }); }
+document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) return; var t = e.target.closest && e.target.closest("[data-cvp],[data-cvpx],[data-cvadd],[data-cvaddp],[data-cvtop],[data-cvrm],[data-cvans],[data-cvgo],[data-cvnew],[data-cvreset]"); if (!t) return;
+  if (t.hasAttribute("data-cvp") || t.hasAttribute("data-cvpx")) { CV.open = t.hasAttribute("data-cvp") && !CV.open; var mn = $(".tmenu"); if (mn) mn.hidden = true; cvReset(L.id); cvPanel(); if (CV.open) cvPoll();
+    else $$("[data-cvp]").forEach(function (cb) { cb.setAttribute("aria-expanded", "false"); }); return; }
+  var st = cvState();
+  if (t.hasAttribute("data-cvadd")) { cvAdd([t.getAttribute("data-cvadd")]); return; }
+  if (t.hasAttribute("data-cvaddp")) { var pid = t.getAttribute("data-cvaddp"), qs = cvItems(); cvAdd(Object.keys(qs).filter(function (k) { return qs[k].p.id === pid; })); return; }
+  if (t.hasAttribute("data-cvtop")) { cvSend([{ t: "top", u: t.getAttribute("data-cvtop") }]); return; }
+  if (t.hasAttribute("data-cvrm")) { cvSend([{ t: "rm", u: t.getAttribute("data-cvrm") }]); return; }
+  if (t.hasAttribute("data-cvans")) { var u = t.getAttribute("data-cvans"); CV.ans[u] = !CV.ans[u]; cvPanel(); return; }
+  if (t.hasAttribute("data-cvgo")) { var n = st.cur + +t.getAttribute("data-cvgo"); if (st.pages[n]) cvSend([{ t: "go", n: n }]); return; }
+  if (t.hasAttribute("data-cvnew")) { cvSend([{ t: "new" }]); return; }
+  if (t.hasAttribute("data-cvreset") && confirm("Clear his canvas? Every page and the writing on it goes. You can\u2019t undo this.")) cvSend([{ t: "reset" }]); });
+addEventListener("hashchange", function () { setTimeout(function () { if (MODE !== "teach" && $("#cvp")) $("#cvp").remove(); }, 0); });
+
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v62", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v63", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];

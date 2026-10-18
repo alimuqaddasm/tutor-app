@@ -174,6 +174,8 @@ try:
     def _new_context(self, **kw):
         c = _orig_ctx(self, **kw)
         c.add_init_script("try{if(!localStorage.getItem('tutor.flow'))localStorage.setItem('tutor.flow','steps')}catch(e){}")
+        # since 17 Oct (v62) Student view opens as the canvas; the older tests were written for the question-by-question view
+        c.add_init_script("try{if(!localStorage.getItem('tutor.stumode'))localStorage.setItem('tutor.stumode','questions')}catch(e){}")
         return c
     Browser.new_context = _new_context
 except Exception as e:  # pragma: no cover
