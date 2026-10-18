@@ -923,6 +923,7 @@ body[data-tlayout="flip"] .tfoot > .btn{min-height:var(--tap)}
 .stu{display:flex;flex-direction:column;height:100vh;background:var(--ground)}
 .stu.clean{position:relative;display:block}
 .stu{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}   /* nothing on his screen is selectable, so the S Pen button never turns into Chrome's text selection */
+.stu :is(input,textarea){-webkit-user-select:text;user-select:text}   /* a box to type in (the exam password on the canvas) still takes a tap and text */
 .stu-menu{position:fixed;top:10px;left:10px;z-index:5;width:40px;height:40px;border:0;border-radius:var(--r-md);background:var(--sunk);color:var(--text);font-size:18px;opacity:.25;cursor:pointer}
 .stu-menu:hover,.stu-menu:focus-visible{opacity:1}
 .stu-view{overflow:auto;display:flex;flex-direction:column;align-items:center;gap:var(--s3)}
@@ -1374,3 +1375,15 @@ span.cvlab{cursor:default}
 .cvans{grid-column:1 / -1;padding:var(--s3);border-radius:var(--r-md);background:var(--sunk)}
 .cvans img{max-width:100%}
 @media (max-width:760px){.cvrow{grid-template-columns:28px minmax(0,1fr)}.cvrow > .row{grid-column:2}.stu.cv .cv-view{padding:calc(var(--s7) + var(--s4)) var(--s4) var(--s6)}.stu.cv .stu-top{padding:var(--s2) var(--s4);gap:var(--s2)}.cv-pages [data-cvnew],.cv-mode{display:none}}
+/* pieces (phase 2): headings, equations, structures and lines Claude prepares with the script, or Ali types in Teach. Sizes follow the page (--cvs) */
+.cv-pc{color:var(--text);line-height:1.3;overflow-wrap:anywhere}
+.cv-pc.h{padding-bottom:calc(var(--s2) * var(--cvs,1));border-bottom:2px solid var(--accent);font-size:calc(var(--fs-3xl) * var(--cvs,1));font-weight:600}
+.cv-pc.eq{text-align:center;font-size:calc(var(--fs-xl) * var(--cvs,1))}
+.cv-pc.tx{font-size:calc(var(--fs-xl) * var(--cvs,1))}
+.cv-pc.ln{font-size:calc(var(--fs-lg) * var(--cvs,1))}
+.cv-pc .katex-display{margin:0}
+.cvsub{grid-column:2 / -1;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--s2)}
+.cvans .cvsub{grid-column:auto}
+.cvtype{flex:1;min-width:0}
+.pcprev{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);padding:var(--s3) 0}
+.pcprev > .prose,.pcprev > .fig{flex-basis:100%}
