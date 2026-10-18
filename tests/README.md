@@ -26,6 +26,7 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/test_offline_list.py       # every ?v= file index.html and exam.html ask for is in the sw.js offline list (no browser needed)
     python tests/runtest.py tests/test_round33.py   # round 33 (17 Oct, app v60): the pen on Student view: S Pen writes, a finger still swipes, rub out, Keep or Clear ink when you move on, Pen and finger, never saved (26 checks)
     python tests/runtest.py tests/test_round34.py   # round 34 (17 Oct, app v61): the pen like Samsung Notes: 8 colours, highlighter, sizes, Undo and Redo, straight lines, the S Pen button however the tablet reports it (30 checks)
+    python tests/runtest.py tests/test_round35.py   # round 35 (17 Oct, app v62): the teaching canvas, phase 1: Student view is a page; Teach adds questions through the exam server; place, move to top, remove, answers in Teach; ink moves and goes with its question; drag, resize, pages, Clear canvas (40 checks; needs the local exam server)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
 On Windows run with PYTHONIOENCODING=utf-8, or printing ★ crashes the console.
@@ -35,7 +36,7 @@ Since v23 the default Teach layout is Flip; tests written for the Classic page s
 
 Exam section (needs a local exam server, nothing touches GitHub or the real server):
 
-    cd worker && npm install && npx vitest run                 # server: timer, extensions, time up, autosave, uploads, access (34 tests)
+    cd worker && npm install && npx vitest run                 # server: timer, extensions, time up, autosave, uploads, access (60 tests)
     cd worker && npx wrangler d1 migrations apply tutor-exams --local
     echo TEACHER_PASSWORD=local-test > worker/.dev.vars
     (cd worker && npx wrangler dev --port 8787 --local) &      # the exam server on this machine

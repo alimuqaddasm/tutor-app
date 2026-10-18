@@ -1,6 +1,6 @@
 /* Tutor Desk exam server (Cloudflare Worker + D1).
    It owns the clock: every time below comes from the server, never from a browser.
-   /api/t/*  teacher, needs the X-Exam-Password header (Worker secret TEACHER_PASSWORD)
+   /api/t/*  teacher, needs the X-Exam-Password header (Worker secret TEACHER_PASSWORD); /api/t/canvas/<lesson> relays the teaching canvas
    /api/s/*  student, needs the X-Exam-Token header (the long random token in the student link)
    /api/p/*  phone upload, needs the X-Phone-Token header (one question of one exam)
    Student and phone replies never contain marks or comments.
@@ -505,6 +505,26 @@ async function route(request, env, now) {
     await requireTeacher(request, env);
 
     if (p === "/api/t/check" && m === "GET") return json({ ok: true, serverNow: now });
+
+    /* the teaching canvas: a log of actions per lesson ("room"), written by Teach and by Student view, read by both */
+    if ((a = p.match(/^\/api\/t\/canvas\/([\w.-]{1,80})$/))) {
+      const room = a[1];
+      if (m === "POST") {
+        const b = await body(request);
+        const list = Array.isArray(b.actions) ? b.actions : [b.action];
+        if (!list.length || list.length > 50 || !list.every((x) => x && typeof x === "object" && typeof x.t === "string")) fail(400, "Not a canvas action.");
+        const texts = list.map((x) => JSON.stringify(x));
+        if (texts.some((t) => t.length > 4000)) fail(413, "The canvas action is too big.");
+        const ins = texts.map((t) => env.DB.prepare("INSERT INTO canvas_actions (room, action, at) VALUES (?, ?, ?)").bind(room, t, now));
+        const res = await env.DB.batch([env.DB.prepare("DELETE FROM canvas_actions WHERE at < ?").bind(now - 3 * 86400000), ...ins]);
+        return json({ seq: res[res.length - 1].meta.last_row_id, serverNow: now }, 201);
+      }
+      if (m === "GET") {
+        const after = Math.max(0, Number(url.searchParams.get("after")) || 0);
+        const r = await env.DB.prepare("SELECT seq, action, at FROM canvas_actions WHERE room = ? AND seq > ? ORDER BY seq LIMIT 500").bind(room, after).all();
+        return json({ actions: r.results.map((x) => ({ seq: x.seq, at: x.at, a: JSON.parse(x.action) })), more: r.results.length === 500, serverNow: now });
+      }
+    }
 
     if (p === "/api/t/papers" && m === "GET") return json((await env.DB.prepare("SELECT id, label, marks, minutes FROM past_papers ORDER BY id").all()).results);
     if (p === "/api/t/papers" && m === "POST") {

@@ -88,6 +88,8 @@ In Teach the verdicts are round buttons down the right edge (`.vrail`; in the ap
 | Step | one thing to say, ask or show | chunk (in the UI) |
 | Plan · Teach · Student view | the three ways to open a lesson | Student (alone) |
 | Show him | puts one question full screen for him | |
+| Canvas | Student view as a page he sees and you write on; Teach adds questions to it | board (that is a click-by-click board) |
+| Page | one canvas page; New page starts another | slide |
 | Mistakes warm-up (nav: Warm-up) | spaced revision, day 1, 3, 7, 14, 30 | Revise |
 | Due today · Still open | cards to ask now · mistakes not yet mastered | |
 | Exam | timed, on his tablet | test |
@@ -120,6 +122,7 @@ In Teach the verdicts are round buttons down the right edge (`.vrail`; in the ap
 - **List pages** (Lessons, Videos, Exams, Record, Settings): sidebar (`.side`) + `.main` + `.wrap`. Title `.t-page`, then a row of tags, then sections with `.t-sec` headings.
 - **Lesson and focus pages** (Plan, Teach, Warm-up, After the lesson, His work, Mark): the thin icon rail (`.iconrail`) instead of the sidebar, so the work gets the room.
 - **His screens** (Show him, Student view, his exam page, his phone, his assignment): no app chrome, white or ground, big exam-font text, round arrow buttons.
+- **Canvas** (Student view, 17 Oct): a white page on the ground, 1000 units wide, growing down. Only the page, the pen and faint page controls show; the list of questions lives in Teach (Canvas, a side sheet). A picked piece shows a dashed outline and three round 44 px handles: move, remove, resize.
 - **Assignment cards** (Exams): the plan's `facts`, `scope`, `leftOut` and `todo` show as tags; the long `why` note folds under "Notes". Never a paragraph on the card.
 - **Bars:** `.topbar` and `.botbar`. The main action sits at the right end of the bottom bar.
 - **Phone** (under 760 px): the sidebar becomes a bottom bar of five tabs (Lessons, Warm-up, Exams, Record, More).

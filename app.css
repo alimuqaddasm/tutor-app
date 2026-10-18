@@ -3,7 +3,7 @@
    (tags, buttons, verdicts, cards). This file only lays out the app's own screens, one section each:
      1 shell and sidebar   2 shared pieces   3 home   4 lesson plan   5 warm-up, show him, zoom
      6 teach   7 teach: Flip and the round marking buttons   8 board, concept, paper, slider
-     9 student view   10 try-out and suggestions   11 exams tab   12 question fonts
+     9 student view   10 try-out and suggestions   11 exams tab   12 question fonts   13 teaching canvas
    Rules: use tokens, never a new colour or size. One rule per selector. No dark theme (light only, Ali's choice). */
 
 /* ================= 1 shell and sidebar ================= */
@@ -1169,7 +1169,7 @@ body[data-subject="maths"] :is(.qtext,.stu-q) .katex{font-size:1.08em}
   .lrow{grid-template-areas:"d t m" "d s m"}
   .inkcard .tags#homerevm{display:none}
   /* Teach: menu, kind tag, step, clock; the verdicts as a row above the buttons */
-  .tcrumb > a,.tcrumb > b,.tcrumb > .hint,.tmini > a.btn,.tmini .preview{display:none}
+  .tcrumb > a,.tcrumb > b,.tcrumb > .hint,.tmini > a.btn,.tmini > [data-cvp],.tmini .preview{display:none}
   .tmenu{right:0;left:auto;max-width:calc(100vw - 32px)}
   .tcrumb > .tag{display:none}.teach3 .tcrumb{min-width:0}.tmore > .btn{min-width:40px;padding:0 var(--s2)}
   .teach3 .tcrumb{contain:none;flex:1 1 auto;overflow:visible}
@@ -1341,3 +1341,35 @@ tr.xt-lit td{background:var(--accent-wash)}
 .stu.inking .stu-view{touch-action:none;cursor:crosshair}
 .stu-inkmore{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--s3) var(--s5);padding-top:var(--s3);border-top:1px solid var(--line-soft)}
 .stu-inkmore #inkdiag{flex-basis:100%;margin:0}
+
+/* ================= 13 teaching canvas: Student view as a page he writes on, Canvas in Teach (Ali, 17 Oct) ================= */
+.stu.cv .cv-view{height:100vh;box-sizing:border-box;overflow-y:auto;overflow-x:hidden;touch-action:none;padding:64px var(--s4) var(--s7)}   /* the pen writes; a finger scrolls (done in app.js) */
+.cv-page{position:relative;margin:0 auto;width:min(100%,1600px);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg)}
+.cv-item{position:absolute;box-sizing:border-box}
+.cv-item.unplaced{visibility:hidden}
+.cv-item img{display:block;width:100%;height:auto;background:transparent}
+.cv-item .stu-twin{width:100%;margin:0;padding:calc(var(--s5) * var(--cvs,1));border:1px solid var(--line-soft)}
+.cv-card{padding:calc(var(--s3) * var(--cvs,1)) 0}
+.cv-card .stu-q{max-width:none;margin:0;text-align:left;font-size:calc(var(--fs-xl) * var(--cvs,1))}
+.cv-item.sel{outline:2px dashed var(--line-strong);outline-offset:var(--s2)}
+.cv-ctl{display:none;position:absolute;z-index:2;width:44px;height:44px;place-items:center;padding:0;border-radius:50%;border:1px solid var(--line-strong);background:var(--surface);color:var(--text-2);cursor:pointer;touch-action:none}
+.cv-item.sel .cv-ctl{display:grid}
+.cv-ctl.grip{top:-22px;left:-22px;cursor:move}
+.cv-ctl.x{top:-22px;right:-22px}
+.cv-ctl.size{bottom:-22px;right:-22px;cursor:nwse-resize}
+.cv-setup{position:absolute;top:var(--s7);left:50%;transform:translateX(-50%);width:min(520px,calc(100% - 32px));box-sizing:border-box}
+.cv-pages{display:flex;align-items:center;gap:var(--s2);opacity:.6}
+.cv-pages .stu-menu{position:static;display:grid;place-items:center;width:44px;height:44px;background:transparent;color:var(--text-3);opacity:1}
+.cv-pages .stu-menu:disabled{opacity:.3;cursor:default}
+.cv-pages:hover,.cv-pages:focus-within,.cv-mode:hover,.cv-mode:focus-within{opacity:1}
+.cv-mode{opacity:.6}
+.cvp{position:fixed;top:var(--s4);left:var(--s4);bottom:var(--s4);z-index:90;width:min(440px,calc(100vw - 32px));box-sizing:border-box;display:flex;flex-direction:column;gap:var(--s3);padding:var(--s5);border-radius:var(--r-lg)}
+.cvp-body{flex:1;min-height:0;overflow:auto}
+.cvrow{display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:center;gap:var(--s2);padding:var(--s2) 0;border-bottom:1px solid var(--line-soft)}
+.cvrow .n{font-size:var(--fs-sm);font-weight:600;color:var(--text-3)}
+.cvlab{all:unset;min-width:0;font-size:var(--fs-sm);color:var(--text);overflow-wrap:anywhere;cursor:pointer}
+span.cvlab{cursor:default}
+.cvlab:focus-visible{outline:3px solid var(--slate);border-radius:var(--r-sm)}
+.cvans{grid-column:1 / -1;padding:var(--s3);border-radius:var(--r-md);background:var(--sunk)}
+.cvans img{max-width:100%}
+@media (max-width:760px){.cvrow{grid-template-columns:28px minmax(0,1fr)}.cvrow > .row{grid-column:2}.stu.cv .cv-view{padding:64px var(--s4) var(--s6)}.stu.cv .stu-top{padding:var(--s2) var(--s4);gap:var(--s2)}.cv-pages [data-cvnew],.cv-mode{display:none}}
