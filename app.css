@@ -1343,6 +1343,7 @@ tr.xt-lit td{background:var(--accent-wash)}
 .stu.inking .stu-view{touch-action:none;cursor:crosshair}
 .stu-inkmore{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--s3) var(--s5);padding-top:var(--s3);border-top:1px solid var(--line-soft)}
 .stu-inkmore #inkdiag{flex-basis:100%;margin:0}
+.stu-inkmore .stu-reclog{flex-basis:100%;width:100%;font-size:var(--fs-xs)}   /* the pen record, to copy and paste */
 
 /* ================= 13 teaching canvas: Student view as a page he writes on, Canvas in Teach (Ali, 17 Oct) ================= */
 .stu.cv .cv-view{height:100vh;box-sizing:border-box;overflow-y:auto;overflow-x:hidden;touch-action:none;padding:calc(var(--s7) + var(--s4)) var(--s4) var(--s7)}   /* the pen writes; a finger scrolls (done in app.js) */
