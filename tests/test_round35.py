@@ -54,12 +54,16 @@ subprocess.run(["npx", "wrangler", "d1", "execute", "tutor-exams", "--local", "-
 post([{"t": "reset"}])
 for k in range(11): post([{"t": "noop"}] * 50)   # a long log: everything in this test comes after the first 500 actions (one read)
 errs = []
+# a real S Pen reports pressure above 0 while it touches (the app ignores a pen at 0: it hovers); a made-up event says 0 unless told
+PRESS = "(()=>{const P=window.PointerEvent;window.PointerEvent=class extends P{constructor(t,o){o=Object.assign({},o||{});if(o.pointerType==='pen'&&o.pressure===undefined&&(o.buttons&33))o.pressure=.5;super(t,o)}}})()"
+
 with sync_playwright() as p:
     launch = {"executable_path": os.environ["CHROMIUM_PATH"]} if os.environ.get("CHROMIUM_PATH") else {}
     b = p.chromium.launch(**launch)
     fake = FakeGH()
     def ctx(w, h, pw=True, touch=False):
         c = b.new_context(viewport={"width": w, "height": h}, service_workers="block", reduced_motion="reduce", has_touch=touch)
+        c.add_init_script(PRESS)
         c.add_init_script("localStorage.setItem('tutor.token','t');localStorage.setItem('tutor.device','test');localStorage.setItem('tutor.test','1');localStorage.setItem('tutor.layout','flip');localStorage.removeItem('tutor.stumode');localStorage.setItem('tutor.examApi',%s);%s" % (json.dumps(API), "localStorage.setItem('tutor.examPw',%s);" % json.dumps(PW) if pw else ""))
         c.route("https://api.github.com/**", fake.route); return c
     lap = ctx(1440, 900).new_page(); lap.on("pageerror", lambda e: errs.append("laptop: " + str(e)))

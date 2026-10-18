@@ -25,12 +25,15 @@ STROKE = """([kind, x0, y0, x1, y1, buttons, buttons2, mid, button]) => {
   for (let i = 1; i <= 8; i++) ev('pointermove', x0 + (x1 - x0) * i / 8, y0 + (y1 - y0) * i / 8, i >= (mid || 99) ? buttons2 : buttons, -1);
   ev('pointerup', x1, y1, 0, button || 0); }"""
 
+# a real S Pen reports pressure above 0 while it touches; a made-up test event says 0 unless told, so a pen event with its tip or eraser down gets 0.5
+PRESS = "(()=>{const P=window.PointerEvent;window.PointerEvent=class extends P{constructor(t,o){o=Object.assign({},o||{});if(o.pointerType==='pen'&&o.pressure===undefined&&(o.buttons&33))o.pressure=.5;super(t,o)}}})()"
 errs = []
 with sync_playwright() as p:
     launch = {"executable_path": os.environ["CHROMIUM_PATH"]} if os.environ.get("CHROMIUM_PATH") else {}
     b = p.chromium.launch(**launch)
     fake = FakeGH()
     c = b.new_context(viewport={"width": 1440, "height": 900}, service_workers="block", reduced_motion="reduce", has_touch=True)
+    c.add_init_script(PRESS)
     c.add_init_script("localStorage.setItem('tutor.token','t');localStorage.setItem('tutor.device','test');localStorage.setItem('tutor.test','1');localStorage.setItem('tutor.stun','1')")
     c.route("https://api.github.com/**", fake.route)
     pg = c.new_page(); pg.on("pageerror", lambda e: errs.append(str(e)))
@@ -115,28 +118,17 @@ with sync_playwright() as p:
       ev('pointerdown', 640, 470); const s = new Event('selectstart', { bubbles: true, cancelable: true }); el.dispatchEvent(s);
       ev('pointermove', 640, 530); ev('pointermove', 640, 560); ev('pointerup', 640, 560); return s.defaultPrevented; }"""); pg.wait_for_timeout(150)
     check("a text selection Chrome starts is stopped, and the stroke rubs out instead", blocked and n() == k - 1, (blocked, k, n(), pg.inner_text("#inkdiag")))
-    pg.evaluate("__t('INK.pages[INK.key].push({t:\"pen\",c:0,w:1,p:[[0.3,0.6],[0.6,0.6]]});inkDraw()')"); k = n()
-    pg.evaluate("""() => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 12, clientX: x, clientY: y, buttons: b, bubbles: true, cancelable: true }));
-      ev('pointermove', 640, 500, 2); ev('pointerdown', 640, 520, 1); ev('pointermove', 640, 560, 1); ev('pointerup', 640, 560, 0); }"""); pg.wait_for_timeout(150)
-    check("the button pressed while the pen hovers makes the next touch rub out (one quick flick across the stroke)", n() == k - 1, (k, n()))
-    # Pointer Events: a button pressed above the screen fires pointerdown with buttons 2; the touch that follows is only a pointermove (buttons 3)
-    pg.evaluate("__t('INK.pages[INK.key].push({t:\"pen\",c:0,w:1,p:[[0.3,0.6],[0.6,0.6]]});inkDraw()')"); k = n()
-    pg.evaluate("""() => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b, btn) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 14, clientX: x, clientY: y, buttons: b, button: btn, bubbles: true, cancelable: true }));
-      ev('pointerdown', 640, 500, 2, 2); ev('pointermove', 640, 545, 2, -1); window.__hov = __t('INK.pages[INK.key].length'); }"""); 
-    check("a button pressed above the screen rubs nothing out while the pen still hovers", pg.evaluate("window.__hov") == k, (k, pg.evaluate("window.__hov")))
-    pg.evaluate("""() => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 14, clientX: x, clientY: y, buttons: b, button: -1, bubbles: true, cancelable: true }));
-      __t('INK.pages[INK.key].push({t:"pen",c:0,w:1,p:[[0.3,0.7],[0.6,0.7]]})');   // a second line, only crossed after the pen lifts
-      ev('pointermove', 640, 520, 3); ev('pointermove', 640, 560, 3); ev('pointermove', 640, 600, 2); ev('pointermove', 640, 680, 2); ev('pointerup', 640, 680, 0); }"""); pg.wait_for_timeout(150)
+    # Ali, 18 Oct: no writing or erasing in the air. Some tablets report the button held above the screen as the tip being down
+    # (buttons 1 or 2, pressure 0); only a pen that presses (pressure above 0) writes or erases
+    k = n()
+    pg.evaluate("""() => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 14, clientX: x, clientY: y, buttons: b, pressure: 0, bubbles: true, cancelable: true }));
+      ev('pointerdown', 300, 640, 1); ev('pointermove', 400, 640, 1); ev('pointermove', 500, 650, 2); ev('pointerup', 500, 650, 0); }"""); pg.wait_for_timeout(150)
+    check("a hovering pen (pressure 0) never writes, even if the tablet says the tip is down", n() == k and pg.evaluate("__t('INK.cur')") is None, (k, n()))
+    pg.evaluate("__t('INK.pages[INK.key].push({t:\"pen\",c:0,w:1,p:[[0.3,0.6],[0.6,0.6]]});INK.pages[INK.key].push({t:\"pen\",c:0,w:1,p:[[0.3,0.7],[0.6,0.7]]});inkDraw()')"); k = n()
+    pg.evaluate("""() => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b, pr) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 15, clientX: x, clientY: y, buttons: b, pressure: pr, bubbles: true, cancelable: true }));
+      ev('pointerdown', 640, 500, 2, 0); ev('pointermove', 640, 520, 3, .5); ev('pointermove', 640, 560, 3, .5); ev('pointermove', 640, 600, 2, 0); ev('pointermove', 640, 680, 2, 0); ev('pointerup', 640, 680, 0, 0); }"""); pg.wait_for_timeout(150)
     ys = [round(st["p"][0][1], 2) for st in __import__("json").loads(page())]
-    check("  ...then touching down with it held rubs out, and lifting stops the rubbing", n() == k and 0.6 not in ys and 0.7 in ys and pg.evaluate("__t('INK.cur')") is None, (k, n(), ys))
-    pg.click('[data-ink="finger"]') if pg.locator('[data-ink="finger"]').count() else None
-    pg.evaluate("__t('INK.finger=true')"); k = n()
-    pg.evaluate("""() => { const el = document.querySelector('.stu-view');
-      el.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'pen', pointerId: 15, clientX: 300, clientY: 300, buttons: 2, bubbles: true }));
-      const ev = (t, x, y, b) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'touch', pointerId: 16, clientX: x, clientY: y, buttons: b, bubbles: true, cancelable: true }));
-      ev('pointerdown', 300, 640, 1); ev('pointermove', 400, 640, 1); ev('pointerup', 400, 640, 0); }"""); pg.wait_for_timeout(150)
-    check("Pen and finger: a finger writes even while the pen hovers with its button held", n() == k + 1, (k, n()))
-    pg.evaluate("__t('INK.finger=false;INK.arm=false')")
+    check("button held, then pressing down: erases; lifting (pressure 0) stops it, so the line crossed in the air stays", n() == k - 1 and 0.6 not in ys and 0.7 in ys and pg.evaluate("__t('INK.cur')") is None, (k, n(), ys))
     stroke("pen", 300, 760, 400, 760, 1)
     check("  ...and only that touch: the next one writes again", not last().get("rub") and last()["p"][0][1] > 0.8, last())
     pg.screenshot(path=os.path.join(SHOTS, "r34-tools-1440.png"))
@@ -146,6 +138,7 @@ with sync_playwright() as p:
     check("no script errors", not errs, errs)
     for w, h in [(390, 844), (800, 1280)]:
         c2 = b.new_context(viewport={"width": w, "height": h}, service_workers="block", has_touch=True)
+        c2.add_init_script(PRESS)
         c2.add_init_script("localStorage.setItem('tutor.token','t');localStorage.setItem('tutor.test','1')"); c2.route("https://api.github.com/**", fake.route)
         p2 = c2.new_page(); p2.on("pageerror", lambda e: errs.append(str(e)))
         p2.goto(APP + "#/lesson/" + LID + "/student"); p2.wait_for_selector(".stu-view", timeout=30000); p2.wait_for_timeout(1200)
