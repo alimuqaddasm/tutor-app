@@ -2396,8 +2396,8 @@ function inkPress(e) { return e.pointerType !== "pen" || e.pressure > 0; }   // 
    button counts only once it has been held above the screen for more than 80 ms. */
 function inkArm(e) { if (!(inkSide(e) || (e.buttons & 1))) { INK.arm = 0; return; } if (!INK.arm) INK.arm = e.timeStamp || 1; }
 function inkArmed(e) { return e.pointerType === "pen" && !!INK.arm && (e.timeStamp || 0) - INK.arm > 80; }
-function inkStart(e) { e.preventDefault(); inkMap();
-  var rub = INK.tool === "rub" || inkSide(e) || inkArmed(e), pt = inkPt(e), redo = inkStack(INK.redo); inkSnap();
+function inkStart(e, rub) { e.preventDefault(); inkMap();
+  rub = rub || INK.tool === "rub" || inkSide(e) || inkArmed(e); var pt = inkPt(e), redo = inkStack(INK.redo); inkSnap();
   INK.cur = { id: e.pointerId, rub: rub, s: rub ? null : { t: INK.tool, c: INK.tool === "hl" ? INK.hc : INK.pc, w: INK.tool === "hl" ? INK.hs : INK.ps, p: [pt] }, redo: redo, ax: e.clientX, ay: e.clientY, seen: inkSide(e) };
   if (rub) inkRubTo(INK.cur, [pt]); else { inkPage().push(INK.cur.s); inkDraw(); inkHold(INK.cur); }
   try { e.target.setPointerCapture(e.pointerId); INK.cur.el = e.target; } catch (x) {} }
@@ -2413,8 +2413,14 @@ document.addEventListener("pointerdown", function (e) {
   if (!inkPress(e)) { inkArm(e); return; }   // the button pressed above the screen also fires pointerdown: nothing touches yet
   inkStart(e);
 }, true);
+/* Ali's Tab S7 FE (pen record, 18 Oct): with the S Pen button held, touching the glass sends one right-click and then only
+   "tip down, no pressure" moves, the same as hovering with the button; nothing says when the pen lifts. So the right-click
+   starts erasing where the pen is, and it goes on until the button is let go (Ali chose this; a circle shows where it erases) */
+function inkHeld() { var p = INK.lp; inkStart({ preventDefault: function () {}, clientX: p.x, clientY: p.y, pointerId: p.id, pointerType: "pen", buttons: 1, button: -1, target: p.el }, true); INK.cur.held = true; INK.cur.seen = true; }
 document.addEventListener("pointermove", function (e) { var c = INK.cur;
-  if (e.pointerType === "pen" && !inkPress(e)) { if (c && e.pointerId === c.id) inkEnd(c); if (MODE === "student") inkArm(e); return; }   // above the screen (or lifted with its button still held: no pointerup comes yet)
+  if (e.pointerType === "pen") INK.lp = { x: e.clientX, y: e.clientY, id: e.pointerId, el: e.target };
+  if (c && c.held && e.pointerId === c.id) { if (!(e.buttons & 1) && !inkSide(e)) { inkEnd(c); INK.arm = 0; return; } }   // button let go: the held erase ends
+  else if (e.pointerType === "pen" && !inkPress(e)) { if (c && e.pointerId === c.id) inkEnd(c); if (MODE === "student") inkArm(e); return; }   // above the screen (or lifted with its button still held: no pointerup comes yet)
   if (!c && e.pointerType === "pen" && e.pressure > 0 && inkCan(e)) { inkSeen(e); inkStart(e); return; }   // pressed down after its button: some tablets send no new pointerdown
   if (!c || e.pointerId !== c.id) return; e.preventDefault(); inkSeen(e); inkMap();
   if (inkSide(e)) inkToRub(c);
@@ -2424,7 +2430,8 @@ document.addEventListener("pointermove", function (e) { var c = INK.cur;
   if (c.s.line) inkDraw();
   if (Math.hypot(e.clientX - c.ax, e.clientY - c.ay) > 3) { c.ax = e.clientX; c.ay = e.clientY; if (!c.s.line) inkHold(c); } }, true);
 /* some tablets send the side button as a right-click: no menu on his screen, and the stroke becomes rubbing out */
-document.addEventListener("contextmenu", function (e) { if (MODE !== "student" || !(INK.cur || INK.pen)) return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "right-click"); if (INK.cur) inkToRub(INK.cur); }, true);
+document.addEventListener("contextmenu", function (e) { if (MODE !== "student" || !(INK.cur || INK.pen || INK.arm)) return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "right-click");
+  if (INK.cur) inkToRub(INK.cur); else if (INK.arm && INK.lp && INK.lp.el && inkCan({ target: INK.lp.el })) inkHeld(); }, true);
 /* Chrome on Android turns "S Pen button held + drag" into its own text selection (Ali's Tab S7 FE, 17 Oct): nothing on his
    screen is ever selectable (app.css), and any selection Chrome still starts is stopped and noted in the pen button check */
 document.addEventListener("selectstart", function (e) { if (MODE !== "student" || e.target.closest && e.target.closest("input, textarea")) return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "Chrome tried to select text"); if (INK.cur) inkToRub(INK.cur); }, true);
@@ -2432,7 +2439,7 @@ document.addEventListener("selectionchange", function () { if (MODE !== "student
 ["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { if (e.pointerType === "pen") { INK.pen = false; INK.arm = 0; } var c = INK.cur;
   if (n === "pointercancel" && c && e.pointerId === c.id) { INK.diag = "Pen button check: the browser took over the stroke · " + (e.pointerType || "?"); var d = $("#inkdiag"); if (d) d.textContent = INK.diag; }
   if (c && e.pointerId === c.id) inkEnd(c); }, true); });
-document.addEventListener("pointerout", function (e) { if (e.pointerType === "pen" && !e.relatedTarget) INK.arm = 0; }, true);   // the pen taken out of range with its button held: the next touch writes
+document.addEventListener("pointerout", function (e) { if (e.pointerType !== "pen" || e.relatedTarget) return; INK.arm = 0; if (INK.cur && INK.cur.held && e.pointerId === INK.cur.id) inkEnd(INK.cur); }, true);   // the pen taken out of range with its button held: the erase ends, the next touch writes
 addEventListener("resize", function () { if (MODE === "student") inkDraw(); });
 
 /* ---------------- the teaching canvas (Ali, 17 Oct: "a blank canvas onto which ready-made pieces are dropped") ----------------
@@ -2703,7 +2710,7 @@ addEventListener("hashchange", function () { setTimeout(function () { if (MODE !
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v69", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v70", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
