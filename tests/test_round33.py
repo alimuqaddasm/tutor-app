@@ -29,6 +29,8 @@ SWIPE = """([dx, type]) => { const el = document.querySelector('.stu-view'); con
   el.dispatchEvent(new TouchEvent('touchstart', { touches: [mk(900)], changedTouches: [mk(900)], bubbles: true }));
   el.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [mk(900 + dx)], bubbles: true })); }"""
 
+# a real S Pen reports pressure above 0 while it touches; a made-up test event says 0 unless told, so a pen event with its tip or eraser down gets 0.5
+PRESS = "(()=>{const P=window.PointerEvent;window.PointerEvent=class extends P{constructor(t,o){o=Object.assign({},o||{});if(o.pointerType==='pen'&&o.pressure===undefined&&(o.buttons&33))o.pressure=.5;super(t,o)}}})()"
 errs = []
 with sync_playwright() as p:
     launch = {"executable_path": os.environ["CHROMIUM_PATH"]} if os.environ.get("CHROMIUM_PATH") else {}
@@ -36,6 +38,7 @@ with sync_playwright() as p:
     fake = FakeGH()
     def ctx(w, h):
         c = b.new_context(viewport={"width": w, "height": h}, service_workers="block", reduced_motion="reduce", has_touch=True)
+        c.add_init_script(PRESS)
         c.add_init_script("localStorage.setItem('tutor.token','t');localStorage.setItem('tutor.device','test');localStorage.setItem('tutor.test','1');localStorage.setItem('tutor.stun','1')")
         c.route("https://api.github.com/**", fake.route); return c
     c = ctx(1440, 900)
@@ -87,7 +90,7 @@ with sync_playwright() as p:
     pg.click('[data-ink="more"]'); pg.wait_for_timeout(100)   # the two settings sit under More
     tools = pg.inner_text(".stu-tools")
     check("  ...tools, 8 colours, Undo, Redo, Clear ink, Keep or Clear when you move on, S Pen or Pen and finger",
-          pg.locator(".stu-dot").count() == 8 and all(w in tools for w in ["Pen", "Highlighter", "Rub out", "Undo", "Redo", "Clear ink", "When you move on", "Keep ink", "Writes with", "S Pen", "Pen and finger"]), tools)
+          pg.locator(".stu-dot").count() == 8 and all(w in tools for w in ["Pen", "Highlighter", "Eraser", "Undo", "Redo", "Clear ink", "When you move on", "Keep ink", "Writes with", "S Pen", "Pen and finger"]), tools)
     pg.screenshot(path=os.path.join(SHOTS, "r33-tools-1440.png"))
     pg.click('[data-ink="c2"]'); pg.evaluate(STROKE, ["pen", 500, 600, 700, 640, 1]); pg.wait_for_timeout(150)
     red = pg.evaluate("__t('INK.pages[INK.key][INK.pages[INK.key].length-1].c')")
