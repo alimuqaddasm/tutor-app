@@ -665,6 +665,7 @@ function block(b) {
     case "video": return videoBlock(b);
     case "quiz": return quizBlock(b);
     case "question": return questionBlock(b);
+    case "piece": var pk = cvPcKind(b); return '<div class="pcprev">' + tag("Canvas") + tag(esc(cap(pk)), "line") + (b.img ? img(b.img, b.alt || b.caption) : '<div class="prose">' + (pk === "heading" ? '<b>' + esc(titleCase(b.text || plain(b.html))) + '</b>' : b.tex ? "\\[" + esc(b.tex) + "\\]" : clean(b.html || esc(b.text || ""))) + '</div>') + '</div>';
     default: return b.html ? '<div class="prose">' + clean(b.html) + '</div>' : "";
   }
 }
@@ -1329,7 +1330,7 @@ function teachSeq() {
           on.forEach(function (it, i) { seq.push({ t: "quiz", it: it, n: i + 1, of: on.length, b: b, p: p, mod: mod }); }); }
         else if (b.type === "drill") (b.items || []).forEach(function (d, i) { var dc = { t: "drill", d: d, key: drillKey(d[0]), n: i + 1, of: b.items.length, title: b.title, p: p, mod: mod }, pic = hintPic(b, d);
           if (pic) dc.bd = { id: dc.key, mode: "lines", ids: [dc.key], imgs: [pic], box: b.hintBox || null }; seq.push(dc); });
-        else seq.push({ t: b.type, b: b, p: p, mod: mod });
+        else if (b.type !== "piece") seq.push({ t: b.type, b: b, p: p, mod: mod });   // canvas pieces live in Teach's Canvas, not on its screens
       });
     })(p.blocks, null);
   });
@@ -2380,8 +2381,8 @@ function cvPoll() { if (!CV.id || CV.busy || !cvReady()) return Promise.resolve(
 function cvState() { var st = { pages: [{ items: [] }], cur: 0, ep: 0 }, n = 0;
   var find = function (u) { for (var i = 0; i < st.pages.length; i++) for (var j = 0; j < st.pages[i].items.length; j++) if (st.pages[i].items[j].u === u) return { it: st.pages[i].items[j], pg: st.pages[i] }; return null; };
   CV.log.map(function (x) { return x.a; }).concat(CV.local).forEach(function (a) { var f = a.u ? find(a.u) : null;
-    if (a.t === "add" && !f && a.ref) (st.pages[a.pg] || st.pages[st.cur]).items.push({ u: a.u, ref: String(a.ref), x: CVX, y: null, w: CVWD, n: n++ });
-    else if (a.t === "rm" && f) f.pg.items.splice(f.pg.items.indexOf(f.it), 1);
+    if (a.t === "add" && !f && (a.ref || a.pc)) (st.pages[a.pg] || st.pages[st.cur]).items.push({ u: a.u, ref: String(a.ref || "typed"), pc: a.pc || null, of: a.of || null, x: +a.x || CVX, y: null, w: +a.w || CVWD, n: n++ });
+    else if (a.t === "rm" && f) f.pg.items = f.pg.items.filter(function (x) { return x !== f.it && x.of !== a.u; });
     else if (a.t === "pos" && f) { f.it.x = +a.x || 0; f.it.y = +a.y || 0; f.it.w = +a.w || CVWD; f.it.top = false; }
     else if (a.t === "top" && f) f.it.top = true;
     else if (a.t === "new") { st.pages.push({ items: [] }); st.cur = st.pages.length - 1; }
@@ -2390,9 +2391,22 @@ function cvState() { var st = { pages: [{ items: [] }], cur: 0, ep: 0 }, n = 0;
   st.pages.forEach(function (pg) { pg.items.sort(function (a, b) { return (a.y == null ? 1e9 + a.n : a.y) - (b.y == null ? 1e9 + b.n : b.y); }); });
   return st; }
 function cvWhere(st, ref) { for (var i = 0; i < st.pages.length; i++) if (st.pages[i].items.some(function (x) { return x.ref === ref; })) return i; return -1; }
-/* what a piece shows, from the lesson: the same items as the questions view (exam pictures, typed parts, quick questions) */
-function cvItems() { var m = {}; (STU && STU.id === L.id ? STU.items : studentItems()).forEach(function (q) { if (q.kind !== "video") m[q.id] = q; }); return m; }
-function cvLabel(q) { if (!q) return "Not in this lesson"; var f = cvFind(q.id), b = f && f.q; return q.kind === "exam" ? (b && (b.label || b.source) || "Question") : plain(q.text).slice(0, 90); }
+/* what can go on the page, from the lesson: the questions (as in the questions view: exam pictures, typed parts, quick
+   questions), the script's pieces ({"type": "piece"}: a heading, equation, structure or text, phase 2) and each question's
+   solution lines ("solution": [...], dropped under that question). Pieces Ali types in Teach travel in the action itself (pc). */
+function cvItems() { var m = {}; (STU && STU.id === L.id ? STU.items : studentItems()).forEach(function (q) { if (q.kind !== "video") m[q.id] = q; });
+  phases().filter(function (p) { return !p.sys; }).forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) {
+    if (b.type === "piece" && b.id) m[b.id] = { kind: "piece", id: b.id, pc: b, p: p };
+    if (b.type === "question" && b.id) (b.solution || []).forEach(function (ln, k) { var id = b.id + "#" + (k + 1); m[id] = { kind: "line", id: id, pc: ln, q: b.id, n: k + 1, p: p }; });
+    if (b.blocks) walk(b.blocks); }); })(p.blocks); });
+  return m; }
+function cvOf(it, items) { return it.pc ? { kind: "piece", id: "typed", pc: it.pc } : items[it.ref]; }
+function cvIsQ(q) { return !!q && (q.kind === "exam" || q.kind === "quick"); }
+function cvPcKind(pc) { return pc.kind || (pc.tex ? "equation" : pc.img ? "structure" : "text"); }
+var CVPCW = { heading: 900, equation: 600, structure: 500, text: 900 };   // a new piece's width by kind (pieces can give their own "w")
+function cvPcLabel(pc) { var k = cvPcKind(pc); return k === "structure" ? (pc.alt || pc.caption || "Structure") : pc.tex ? "\\(" + pc.tex + "\\)" : k === "heading" ? titleCase(plain(pc.text || pc.html)) : plain(pc.text || pc.html).slice(0, 90); }
+function cvLabel(q) { if (!q) return "Not in this lesson"; if (q.kind === "piece") return cvPcLabel(q.pc); if (q.kind === "line") return "Line " + q.n + ": " + cvPcLabel(q.pc);
+  var f = cvFind(q.id), b = f && f.q; return q.kind === "exam" ? (b && (b.label || b.source) || "Question") : plain(q.text).slice(0, 90); }
 function cvFind(ref) { var hit = null; phases().filter(function (p) { return !p.sys; }).forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) {
     if (hit) return; if (b.type === "question" && b.id === ref) hit = { q: b, p: p };
     else if (b.type === "quiz") (b.items || []).forEach(function (it) { if (!hit && it.id === ref) hit = { it: it, p: p }; });
@@ -2421,11 +2435,11 @@ function cvSync() { var root = $(".stu.cv"), page = $(".cv-page"); if (!root || 
   page.style.setProperty("--cvs", s);
   if (!cvReady()) { page.innerHTML = '<div class="cv-setup card pad stack"><b class="t-card">Connect this tablet to Teach</b><span class="hint">Teach on the laptop sends questions here through the exam server. Type the exam password once on this device.</span><div class="row s2"><input class="input" type="password" id="cvpw" autocomplete="current-password" aria-label="Exam password" placeholder="Exam password"><button class="btn pri" type="button" id="cvpwgo">Save password</button></div></div>'; root.setAttribute("data-setup", "1"); return; }
   if (root.hasAttribute("data-setup")) { root.removeAttribute("data-setup"); page.innerHTML = ""; }
-  pg.items.forEach(function (it) { seen[it.u] = 1; var el = cvEl(it.u), q = items[it.ref];
-    if (!el) { el = document.createElement("div"); el.className = "cv-item" + (q && q.kind === "quick" ? " quick" : ""); el.setAttribute("data-u", it.u);
+  pg.items.forEach(function (it) { seen[it.u] = 1; var el = cvEl(it.u), q = cvOf(it, items);
+    if (!el) { el = document.createElement("div"); el.className = "cv-item k-" + (q ? q.kind : "none"); el.setAttribute("data-u", it.u);
       el.innerHTML = (q ? cvPieceHTML(q) : '<div class="cv-card hint">Not in this lesson</div>') + '<button type="button" class="cv-ctl grip" data-cvgrip aria-label="Move"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M8 7l4-4 4 4M8 17l4 4 4-4M7 8l-4 4 4 4M17 8l4 4-4 4"></path></svg></button><button type="button" class="cv-ctl x" data-cvrm aria-label="Remove"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button><button type="button" class="cv-ctl size" data-cvsize aria-label="Resize"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12v8h-8M20 20L12 12"></path></svg></button>';
       page.appendChild(el); $$("img", el).forEach(showImg); maths(el); }
-    if (CV.drag && CV.drag.u === it.u) return;   // the piece under his finger stays where the finger is
+    if (CV.drag && (CV.drag.u === it.u || CV.drag.att.some(function (a) { return a.u === it.u; }))) return;   // the piece under his finger (and its lines) stays where the finger is
     el.style.left = it.x * s + "px"; el.style.top = (it.y == null ? 0 : it.y) * s + "px"; el.style.width = it.w * s + "px";
     el.classList.toggle("unplaced", it.y == null); el.classList.toggle("sel", CV.sel === it.u); });
   $$(".cv-item", page).forEach(function (el) { if (!seen[el.getAttribute("data-u")]) el.remove(); });
@@ -2436,11 +2450,17 @@ function cvSync() { var root = $(".stu.cv"), page = $(".cv-page"); if (!root || 
     '<button class="stu-menu" type="button" data-cvgo="1" aria-label="Page after"' + (st.cur < st.pages.length - 1 ? "" : " disabled") + '><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button><button class="btn small" type="button" data-cvnew>New page</button>' + (CV.err ? tag("Offline", "live") : "");
   if (inkKey() !== INK.key) { INK.key = inkKey(); INK.cur = null; inkRefresh(); }
   inkDraw(); cvLay(); }
-function cvPieceHTML(q) { return q.kind === "exam" ? (q.twin ? '<div class="stu-twin">' + twinHTML(q.twin) + '</div>' : q.img.map(function (i) { return '<img data-src="' + esc(i) + '" alt="Question" hidden>'; }).join(""))
+function cvPieceHTML(q) { if (q.kind === "piece" || q.kind === "line") return cvPcHTML(q.pc, q.kind === "line");
+  return q.kind === "exam" ? (q.twin ? '<div class="stu-twin">' + twinHTML(q.twin) + '</div>' : q.img.map(function (i) { return '<img data-src="' + esc(i) + '" alt="Question" hidden>'; }).join(""))
   : '<div class="cv-card"><div class="stu-q">' + paperHTML(q.text, subjNow()) + '</div></div>'; }
+/* a heading (Title Case), an equation (KaTeX, display), a structure (a picture), a line of text; a solution line is a little smaller */
+function cvPcHTML(pc, line) { var k = cvPcKind(pc);
+  if (pc.img) return '<img data-src="' + esc(pc.img) + '" alt="' + esc(pc.alt || "Structure") + '" hidden>';
+  if (k === "heading") return '<div class="cv-pc h">' + esc(titleCase(pc.text || plain(pc.html))) + '</div>';
+  return '<div class="cv-pc ' + (line ? "ln" : k === "equation" ? "eq" : "tx") + '">' + (pc.tex ? (line ? "\\(" : "\\[") + esc(pc.tex) + (line ? "\\)" : "\\]") : pc.html ? clean(pc.html) : esc(pc.text || "")) + '</div>'; }
 /* the lowest point in use on the page: placed pieces (a question keeps its writing space under it) and ink */
 function cvBottom(pg, skip) { var b = 0, qs = cvItems();
-  pg.items.forEach(function (it) { if (it.y == null || it.u === skip) return; b = Math.max(b, it.y + cvH(it.u) + (qs[it.ref] ? CVGAP : 24)); });
+  pg.items.forEach(function (it) { if (it.y == null || it.u === skip) return; b = Math.max(b, it.y + cvH(it.u) + (cvIsQ(cvOf(it, qs)) && !it.of ? CVGAP : 24)); });
   (INK.pages[inkKey()] || []).forEach(function (s) { s.p.forEach(function (p) { b = Math.max(b, p[1] + 40); }); });
   return Math.max(b, CVX); }
 /* pictures first: a piece's height is known only once its pictures are in */
@@ -2449,26 +2469,37 @@ function cvImgs() { var t0 = Date.now(); return new Promise(function (res) { (fu
 function cvLay() { if (CV.laying || !$(".cv-page")) return; var pg = cvPage(); if (!pg.items.some(function (x) { return x.y == null || x.top; })) return; CV.laying = true;
   cvImgs().then(function () { var st = cvState(), pg = st.pages[st.cur], acts = [], top = pg.items.filter(function (x) { return x.top && x.y != null; })[0];
     if (top) acts = cvRestack(pg, top);
-    pg.items.filter(function (x) { return x.y == null; }).forEach(function (it) { it.y = Math.round(cvBottom(pg)); acts.push({ t: "pos", u: it.u, x: it.x, y: it.y, w: it.w }); });
+    pg.items.filter(function (x) { return x.y == null && !x.of; }).forEach(function (it) { it.y = Math.round(cvBottom(pg)); acts.push({ t: "pos", u: it.u, x: it.x, y: it.y, w: it.w }); });
+    pg.items.filter(function (x) { return x.y == null && x.of; }).forEach(function (it) { var o = pg.items.filter(function (x) { return x.u === it.of; })[0]; if (!o || o.y == null) return;
+      it.x = Math.min(o.x + 40, CVW - it.w); it.y = Math.round(cvUnder(pg, o)); acts.push({ t: "pos", u: it.u, x: it.x, y: it.y, w: it.w }); acts = acts.concat(cvMakeRoom(pg, o, it.y + cvH(it.u))); });
     pg.items.filter(function (x) { return x.top && x.y == null; }).forEach(function (it) { acts.push({ t: "top", u: it.u }); });   // a new piece moved to the top: once it is placed
     CV.laying = false; if (acts.length) cvSend(acts); }); }
-/* move to the top: that piece first, the rest after it in their order, each keeping its writing space and its ink */
-function cvRestack(pg, top) { var old = pg.items.filter(function (x) { return x.y != null; }).sort(function (a, b) { return a.y - b.y; }), zone = {};
-  old.forEach(function (it, i) { var h = cvH(it.u) + 24; zone[it.u] = i < old.length - 1 ? Math.max(h, old[i + 1].y - it.y) : h + CVGAP; });
-  var y = CVX, acts = []; [top].concat(old.filter(function (x) { return x !== top; })).forEach(function (it) { if (it.y !== y) cvInkMove(it.u, 0, y - it.y, 1); it.y = y; y += zone[it.u]; acts.push({ t: "pos", u: it.u, x: it.x, y: it.y, w: it.w }); });
+/* just under a question: below the question, the lines already dropped under it, and the writing that belongs to it */
+function cvUnder(pg, o) { var b = o.y + cvH(o.u) + 16;
+  pg.items.forEach(function (x) { if (x.of === o.u && x.y != null) b = Math.max(b, x.y + cvH(x.u) + 12); });
+  (INK.pages[inkKey()] || []).forEach(function (s) { if (s.o === o.u) s.p.forEach(function (p) { b = Math.max(b, p[1] + 24); }); });
+  return b; }
+/* move a piece with everything that belongs to it (its ink, its dropped lines and their ink); the new places go into acts */
+function cvShift(pg, it, dx, dy, acts) { [it].concat(pg.items.filter(function (x) { return x.of === it.u && x.y != null; })).forEach(function (x) {
+  cvInkMove(x.u, dx, dy, 1); x.x += dx; x.y += dy; acts.push({ t: "pos", u: x.u, x: x.x, y: x.y, w: x.w }); }); return acts; }
+/* the pieces after o move down when something under o now reaches down to "low" */
+function cvMakeRoom(pg, o, low) { var acts = [], next = pg.items.filter(function (x) { return !x.of && x.y != null && x.y > o.y; }).sort(function (p, q) { return p.y - q.y; })[0];
+  if (!next || low + 24 <= next.y) return acts; var d = Math.round(low + 48 - next.y);
+  pg.items.filter(function (x) { return !x.of && x.y != null && x.y >= next.y; }).forEach(function (x) { cvShift(pg, x, 0, d, acts); }); return acts; }
+/* move to the top: that piece first, the rest after it in their order, each keeping its writing space, its lines and its ink */
+function cvRestack(pg, top) { var old = pg.items.filter(function (x) { return x.y != null && !x.of; }).sort(function (a, b) { return a.y - b.y; }), zone = {};
+  old.forEach(function (it, i) { var h = cvUnder(pg, it) - it.y + 8; zone[it.u] = i < old.length - 1 ? Math.max(h, old[i + 1].y - it.y) : h + CVGAP; });
+  var y = CVX, acts = []; [top].concat(old.filter(function (x) { return x !== top; })).forEach(function (it) { cvShift(pg, it, 0, y - it.y, acts); y += zone[it.u]; });
   return acts; }
 /* ink that belongs to a piece: shifted by (dx, dy) and scaled by k about the piece's top left */
 function cvInkMove(u, dx, dy, k, from) { var it = cvPage().items.filter(function (x) { return x.u === u; })[0]; if (!it) return; var ox = from ? from.x : it.x, oy = from ? from.y : it.y;
   (INK.pages[inkKey()] || []).forEach(function (s) { if (s.o !== u) return; var src = from && s.p0 ? s.p0 : s.p; s.p = src.map(function (p) { return [ox + dx + (p[0] - ox) * k, oy + dy + (p[1] - oy) * k]; }); }); }
 /* a finished stroke: which piece it belongs to, and push the next question down if the writing reached it */
 function cvStrokeDone(s) { var pg = cvPage(), a = s.p[0], best = null;
-  pg.items.forEach(function (it) { if (it.y == null || it.y > a[1]) return; var over = a[0] >= it.x - 20 && a[0] <= it.x + it.w + 20; if (!best || over && !best.over || over === best.over && it.y > best.it.y) best = { it: it, over: over }; });
+  pg.items.forEach(function (it) { if (it.y == null || it.of || it.y > a[1]) return; var over = a[0] >= it.x - 20 && a[0] <= it.x + it.w + 20; if (!best || over && !best.over || over === best.over && it.y > best.it.y) best = { it: it, over: over }; });
   s.o = best ? best.it.u : null; if (!best) return;
-  var low = Math.max.apply(null, s.p.map(function (p) { return p[1]; })), next = pg.items.filter(function (x) { return x.y != null && x.y > best.it.y; }).sort(function (p, q) { return p.y - q.y; })[0];
-  if (!next || low + 24 <= next.y || a[1] >= next.y) return;
-  var d = Math.round(low + 48 - next.y), acts = [];
-  pg.items.filter(function (x) { return x.y != null && x.y >= next.y; }).forEach(function (it) { cvInkMove(it.u, 0, d, 1); it.y += d; acts.push({ t: "pos", u: it.u, x: it.x, y: it.y, w: it.w }); });
-  cvSend(acts); }
+  var next = pg.items.filter(function (x) { return !x.of && x.y != null && x.y > best.it.y; }).sort(function (p, q) { return p.y - q.y; })[0]; if (next && a[1] >= next.y) return;
+  var acts = cvMakeRoom(pg, best.it, Math.max.apply(null, s.p.map(function (p) { return p[1]; }))); if (acts.length) cvSend(acts); }
 /* ink lives on the tablet only: kept on the device for the lesson, by canvas page (never in try-out) */
 var cvSaveT = 0;
 function cvInkSave() { if (TRY || !L) return; clearTimeout(cvSaveT); var id = L.id, pre = id + ":cv:" + cvState().ep + ":"; cvSaveT = setTimeout(function () { var out = {};
@@ -2489,15 +2520,18 @@ document.addEventListener("pointermove", function (e) { var p = CV.pan; if (!p |
 /* tap a piece with a finger (or the mouse) to pick it: then drag it by the cross, resize it by the corner, or remove it */
 document.addEventListener("pointerdown", function (e) { CV.ptr = e.pointerType; if (MODE !== "student" || !STU || !STU.canvas) return;
   var h = e.target.closest && e.target.closest("[data-cvgrip],[data-cvsize]"); if (!h) return; var el = h.closest(".cv-item"), u = el.getAttribute("data-u"), it = cvPage().items.filter(function (x) { return x.u === u; })[0]; if (!it) return;
-  e.preventDefault(); inkMap(); CV.drag = { u: u, size: h.hasAttribute("data-cvsize"), id: e.pointerId, x0: e.clientX, y0: e.clientY, from: { x: it.x, y: it.y, w: it.w }, to: { x: it.x, y: it.y, w: it.w } };
-  (INK.pages[inkKey()] || []).forEach(function (s) { if (s.o === u) s.p0 = s.p; }); try { h.setPointerCapture(e.pointerId); } catch (x) {} }, true);
+  var att = h.hasAttribute("data-cvsize") ? [] : cvPage().items.filter(function (x) { return x.of === u && x.y != null; }).map(function (x) { return { u: x.u, x: x.x, y: x.y, w: x.w }; });
+  e.preventDefault(); inkMap(); CV.drag = { u: u, size: h.hasAttribute("data-cvsize"), id: e.pointerId, x0: e.clientX, y0: e.clientY, from: { x: it.x, y: it.y, w: it.w }, to: { x: it.x, y: it.y, w: it.w }, att: att };
+  var mine = [u].concat(att.map(function (a) { return a.u; })); (INK.pages[inkKey()] || []).forEach(function (s) { if (mine.indexOf(s.o) >= 0) s.p0 = s.p; }); try { h.setPointerCapture(e.pointerId); } catch (x) {} }, true);
 document.addEventListener("pointermove", function (e) { var d = CV.drag; if (!d || e.pointerId !== d.id) return; e.preventDefault(); var s = cvScale(), dx = (e.clientX - d.x0) / s, dy = (e.clientY - d.y0) / s, f = d.from, el = cvEl(d.u); if (!el) return;
   if (d.size) { var w = Math.max(160, Math.min(CVW - f.x, f.w + dx)); d.to = { x: f.x, y: f.y, w: Math.round(w) }; el.style.width = w * s + "px"; cvInkMove(d.u, 0, 0, w / f.w, f); }
-  else { d.to = { x: Math.round(Math.max(0, Math.min(CVW - 80, f.x + dx))), y: Math.round(Math.max(0, f.y + dy)), w: f.w }; el.style.left = d.to.x * s + "px"; el.style.top = d.to.y * s + "px"; cvInkMove(d.u, d.to.x - f.x, d.to.y - f.y, 1, f); }
+  else { d.to = { x: Math.round(Math.max(0, Math.min(CVW - 80, f.x + dx))), y: Math.round(Math.max(0, f.y + dy)), w: f.w }; el.style.left = d.to.x * s + "px"; el.style.top = d.to.y * s + "px"; cvInkMove(d.u, d.to.x - f.x, d.to.y - f.y, 1, f);
+    d.att.forEach(function (a) { var ae = cvEl(a.u); if (ae) { ae.style.left = (a.x + d.to.x - f.x) * s + "px"; ae.style.top = (a.y + d.to.y - f.y) * s + "px"; } cvInkMove(a.u, d.to.x - f.x, d.to.y - f.y, 1, a); }); }
   inkDraw(); }, true);
 ["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { var d = CV.drag; if (!d || e.pointerId !== d.id) return; CV.drag = null;
   (INK.pages[inkKey()] || []).forEach(function (s) { delete s.p0; }); cvInkSave();
-  if (d.to.x !== d.from.x || d.to.y !== d.from.y || d.to.w !== d.from.w) cvSend([{ t: "pos", u: d.u, x: d.to.x, y: d.to.y, w: d.to.w }]); }, true); });
+  var ddx = d.to.x - d.from.x, ddy = d.to.y - d.from.y;
+  if (ddx || ddy || d.to.w !== d.from.w) cvSend([{ t: "pos", u: d.u, x: d.to.x, y: d.to.y, w: d.to.w }].concat(d.att.map(function (a) { return { t: "pos", u: a.u, x: a.x + ddx, y: a.y + ddy, w: a.w }; }))); }, true); });
 document.addEventListener("click", function (e) { if (MODE !== "student" || !STU) return; var t = e.target.closest && e.target.closest("[data-cvmode],[data-cvgo],[data-cvnew],[data-cvrm],#cvpwgo,.cv-item,.cv-page"); if (!t) return;
   if (t.hasAttribute("data-cvmode")) { ls("tutor.stumode", t.getAttribute("data-cvmode") === "questions" ? "questions" : null); INK.cur = null; app.innerHTML = ""; drawStudent(); return; }
   if (!STU.canvas) return;
@@ -2513,42 +2547,73 @@ document.addEventListener("keydown", function (e) { if (e.key === "Enter" && e.t
 /* ----- the laptop: Canvas in Teach. What is on his page, its answers, and every question of the lesson to add ----- */
 function cvPanel() { var el = $("#cvp"); if (!CV.open || MODE !== "teach" || !L) { if (el) el.remove(); return; } cvReset(L.id);
   if (!el) { el = document.createElement("aside"); el.id = "cvp"; el.className = "cvp card raised"; el.setAttribute("aria-label", "Canvas"); document.body.appendChild(el); }
-  var keep = el.querySelector(".cvp-body"), top = keep ? keep.scrollTop : 0, st = cvState(), pg = st.pages[st.cur], qs = cvItems(), n = 0;
+  var keep = el.querySelector(".cvp-body"), top = keep ? keep.scrollTop : 0, ty = $("#cvtype"), typed = ty ? ty.value : "", typing = ty && document.activeElement === ty;   // a redraw keeps what he is typing
+  var st = cvState(), pg = st.pages[st.cur], qs = cvItems(), n = 0, rows = pg.items.filter(function (x) { return !x.of; }), tk = CV.tk || "heading";
   var h = '<div class="sug-head"><h3 class="t-card">Canvas</h3><button class="btn small" type="button" data-cvpx aria-label="Close">×</button></div>' +
     '<div class="row s2"><button class="btn sm" type="button" data-cvgo="-1" aria-label="Page before"' + (st.cur ? "" : " disabled") + '>‹</button>' + tag("Page " + (st.cur + 1) + " of " + st.pages.length, "num") + '<button class="btn sm" type="button" data-cvgo="1" aria-label="Page after"' + (st.cur < st.pages.length - 1 ? "" : " disabled") + '>›</button><button class="btn sm" type="button" data-cvnew>New page</button>' +
     (!cvReady() ? tag("No exam password", "live") : CV.err ? tag("Offline", "live") : "") + '</div><div class="cvp-body stack s4">';
-  h += '<section class="stack s2"><span class="lab">On his canvas</span>' + (pg.items.length ? pg.items.map(function (it, i) { var q = qs[it.ref], open = CV.ans[it.u];
-    return '<div class="cvrow' + (open ? " open" : "") + '"><span class="n num">' + (i + 1) + '</span><button type="button" class="cvlab" data-cvans="' + esc(it.u) + '" aria-expanded="' + !!open + '">' + esc(cvLabel(q)) + (it.y == null ? ' ' + tag("Placing", "dash") : "") + '</button>' +
+  /* what is on his page, in order; a question opens to its answer and its solution lines to drop under it */
+  h += '<section class="stack s2"><span class="lab">On his canvas</span>' + (rows.length ? rows.map(function (it, i) { var q = cvOf(it, qs), open = CV.ans[it.u], isq = cvIsQ(q);
+    var lines = isq ? Object.keys(qs).filter(function (k) { return qs[k].kind === "line" && qs[k].q === q.id; }).map(function (k) { return qs[k]; }) : [];
+    var under = pg.items.filter(function (x) { return x.of === it.u; });
+    return '<div class="cvrow' + (open ? " open" : "") + '"><span class="n num">' + (i + 1) + '</span>' + (isq ? '<button type="button" class="cvlab" data-cvans="' + esc(it.u) + '" aria-expanded="' + !!open + '">' : '<span class="cvlab">') + (q && q.kind === "piece" ? tag(esc(cap(cvPcKind(q.pc))), "line") + ' ' : "") + esc(cvLabel(q)) + (it.y == null ? ' ' + tag("Placing", "dash") : "") + (isq ? '</button>' : '</span>') +
       '<span class="row s2 push"><button class="btn sm" type="button" data-cvtop="' + esc(it.u) + '"' + (i === 0 ? " disabled" : "") + '>Move to top</button><button class="btn sm quiet" type="button" data-cvrm="' + esc(it.u) + '">Remove</button></span>' +
-      (open ? '<div class="cvans prose">' + cvAnswerHTML(it.ref) + '</div>' : "") + '</div>'; }).join("") : '<p class="hint">Empty. Questions you add show here and on his screen.</p>') + '</section>';
-  var parts = {}, order = []; Object.keys(qs).forEach(function (k) { var q = qs[k], pid = q.p.id; if (!parts[pid]) { parts[pid] = []; order.push(q.p); } parts[pid].push(q); });
-  h += '<section class="stack s3"><span class="lab">Add questions</span>' + order.map(function (p) { var list = parts[p.id], free = list.filter(function (q) { return !pg.items.some(function (x) { return x.ref === q.id; }); }).length, kd = kindOf(p.name);
-    return '<div class="stack s2"><div class="row s2">' + (kd ? tag(esc(kd), kd === "If time" ? "dash" : "line") : "") + '<b>' + esc(partTitle(p.name)) + '</b>' + (free > 1 ? '<button class="btn sm push" type="button" data-cvaddp="' + esc(p.id) + '">Add all ' + free + '</button>' : "") + '</div>' +
-      list.map(function (q) { var on = cvWhere(st, q.id); n++; return '<div class="cvrow"><span class="n num">' + n + '</span><span class="cvlab">' + esc(cvLabel(q)) + '</span><span class="row s2 push">' + (on >= 0 ? tag("Page " + (on + 1), on === st.cur ? "ok" : "") : "") + (on === st.cur ? "" : '<button class="btn sm" type="button" data-cvadd="' + esc(q.id) + '">Add</button>') + '</span></div>'; }).join("") + '</div>'; }).join("") + '</section><div class="row"><button class="btn sm quiet" type="button" data-cvreset>Clear canvas</button><span class="hint">Every page and his writing go.</span></div></div>';
+      under.map(function (x) { var lq = cvOf(x, qs); return '<div class="cvsub"><span class="cvlab">' + esc(cvLabel(lq)) + '</span><button class="btn sm quiet" type="button" data-cvrm="' + esc(x.u) + '">Remove</button></div>'; }).join("") +
+      (open ? '<div class="cvans stack s3"><div class="prose">' + cvAnswerHTML(it.ref) + '</div>' + (lines.length ? '<div class="stack s2"><span class="lab">Solution lines to drop under it</span>' + lines.map(function (lq) { var on = under.some(function (x) { return x.ref === lq.id; });
+          return '<div class="cvsub"><span class="cvlab">' + esc(cvLabel(lq)) + '</span>' + (on ? tag("On his canvas", "ok") : '<button class="btn sm" type="button" data-cvline="' + esc(lq.id) + '" data-of="' + esc(it.u) + '">Drop</button>') + '</div>'; }).join("") + '</div>' : "") + '</div>' : "") + '</div>'; }).join("")
+    : '<p class="hint">Empty. What you add shows here and on his screen.</p>') + '</section>';
+  /* a heading, equation or line typed now */
+  h += '<section class="stack s2"><span class="lab">Type a piece</span><div class="seg" role="group" aria-label="Kind of piece">' + [["heading", "Heading"], ["equation", "Equation"], ["text", "Text"]].map(function (k) { return '<button type="button" data-cvtk="' + k[0] + '" aria-pressed="' + (tk === k[0]) + '">' + k[1] + '</button>'; }).join("") + '</div>' +
+    '<div class="row s2"><input class="input cvtype" id="cvtype" type="text" autocomplete="off" aria-label="Text of the piece" placeholder="' + (tk === "equation" ? "LaTeX, e.g. \\sin 2A = 2\\sin A\\cos A" : tk === "heading" ? "e.g. Double Angle Formulae" : "One line") + '"><button class="btn sm pri" type="button" data-cvtype>Add to canvas</button></div></section>';
+  /* the script's pieces and questions, by part */
+  var group = function (want) { var parts = {}, order = []; Object.keys(qs).forEach(function (k) { var q = qs[k]; if (!want(q)) return; var pid = q.p.id; if (!parts[pid]) { parts[pid] = []; order.push(q.p); } parts[pid].push(q); }); return { parts: parts, order: order }; };
+  var list = function (g, attr) { return g.order.map(function (p) { var items = g.parts[p.id], free = items.filter(function (q) { return !pg.items.some(function (x) { return x.ref === q.id; }); }).length, kd = kindOf(p.name);
+    return '<div class="stack s2"><div class="row s2">' + (kd ? tag(esc(kd), kd === "If time" ? "dash" : "line") : "") + '<b>' + esc(partTitle(p.name)) + '</b>' + (free > 1 ? '<button class="btn sm push" type="button" data-' + attr + '="' + esc(p.id) + '">Add all ' + free + '</button>' : "") + '</div>' +
+      items.map(function (q) { var on = cvWhere(st, q.id); n++; return '<div class="cvrow"><span class="n num">' + n + '</span><span class="cvlab">' + (q.kind === "piece" ? tag(esc(cap(cvPcKind(q.pc))), "line") + ' ' : "") + esc(cvLabel(q)) + '</span><span class="row s2 push">' + (on >= 0 ? tag("Page " + (on + 1), on === st.cur ? "ok" : "") : "") + (on === st.cur ? "" : '<button class="btn sm" type="button" data-cvadd="' + esc(q.id) + '">Add</button>') + '</span></div>'; }).join("") + '</div>'; }).join(""); };
+  var gp = group(function (q) { return q.kind === "piece"; }), gq = group(cvIsQ);
+  if (gp.order.length) h += '<section class="stack s3"><span class="lab">Add pieces</span>' + list(gp, "cvaddpc") + '</section>';
+  h += '<section class="stack s3"><span class="lab">Add questions</span>' + list(gq, "cvaddp") + '</section><div class="row"><button class="btn sm quiet" type="button" data-cvreset>Clear canvas</button><span class="hint">Every page and his writing go.</span></div></div>';
   el.innerHTML = h; var b = el.querySelector(".cvp-body"); if (b) b.scrollTop = top; loadImages(el); maths(el);
+  var ty2 = $("#cvtype"); if (ty2) { ty2.value = typed; if (typing) ty2.focus(); }
   $$("[data-cvp]").forEach(function (cb) { cb.setAttribute("aria-expanded", "true"); }); }
+function cvRnd() { return Math.random().toString(36).slice(2, 10); }
+/* one "add": a piece comes with its width (and is centred if it is an equation or a structure); a solution line with its question */
+function cvAddAct(q, st) { var a = { t: "add", u: cvRnd(), pg: st.cur };
+  if (q.kind === "piece") { var k = cvPcKind(q.pc), w = Math.min(CVW - CVX, +q.pc.w || CVPCW[k] || CVWD); a.w = w; a.x = k === "equation" || k === "structure" ? Math.round((CVW - w) / 2) : CVX; }
+  if (q.id === "typed") a.pc = q.pc; else a.ref = q.id; return a; }
 function cvAdd(refs) { cvPoll().then(function () { cvAddNow(refs); }); }   // the page he is on now, not the one last seen
-function cvAddNow(refs) { var st = cvState(); refs = refs.filter(function (r) { return !cvPage(st).items.some(function (x) { return x.ref === r; }); });
+function cvAddNow(refs) { var st = cvState(), qs = cvItems(); refs = refs.filter(function (r) { return qs[r] && !cvPage(st).items.some(function (x) { return x.ref === r; }); });
   if (!refs.length) { toast("Already on his canvas"); return; }
-  cvSend(refs.map(function (r) { return { t: "add", u: Math.random().toString(36).slice(2, 10), ref: r, pg: st.cur }; })).then(function (ok) { if (ok) toast(refs.length > 1 ? "Added " + refs.length + " to his canvas" : "Added to his canvas"); }); }
-document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) return; var t = e.target.closest && e.target.closest("[data-cvp],[data-cvpx],[data-cvadd],[data-cvaddp],[data-cvtop],[data-cvrm],[data-cvans],[data-cvgo],[data-cvnew],[data-cvreset]"); if (!t) return;
+  cvSend(refs.map(function (r) { return cvAddAct(qs[r], st); })).then(function (ok) { if (ok) toast(refs.length > 1 ? "Added " + refs.length + " to his canvas" : "Added to his canvas"); }); }
+function cvTyped() { var ty = $("#cvtype"), v = ty && ty.value.trim(), k = CV.tk || "heading"; if (!v) { if (ty) ty.focus(); return; }
+  var pc = k === "equation" ? { kind: k, tex: v.replace(/^\\[(\[]|\\[)\]]$/g, "") } : { kind: k, text: v };
+  cvPoll().then(function () { cvSend([cvAddAct({ kind: "piece", id: "typed", pc: pc }, cvState())]).then(function (ok) { if (ok) { var t2 = $("#cvtype"); if (t2) t2.value = ""; toast("Added to his canvas"); } }); }); }
+document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) return; var t = e.target.closest && e.target.closest("[data-cvp],[data-cvpx],[data-cvadd],[data-cvaddp],[data-cvaddpc],[data-cvline],[data-cvtk],[data-cvtype],[data-cvtop],[data-cvrm],[data-cvans],[data-cvgo],[data-cvnew],[data-cvreset]"); if (!t) return;
   if (t.hasAttribute("data-cvp") || t.hasAttribute("data-cvpx")) { CV.open = t.hasAttribute("data-cvp") && !CV.open; var mn = $(".tmenu"); if (mn) mn.hidden = true; cvReset(L.id); cvPanel(); if (CV.open) cvPoll();
     else $$("[data-cvp]").forEach(function (cb) { cb.setAttribute("aria-expanded", "false"); }); return; }
   var st = cvState();
   if (t.hasAttribute("data-cvadd")) { cvAdd([t.getAttribute("data-cvadd")]); return; }
-  if (t.hasAttribute("data-cvaddp")) { var pid = t.getAttribute("data-cvaddp"), qs = cvItems(); cvAdd(Object.keys(qs).filter(function (k) { return qs[k].p.id === pid; })); return; }
+  if (t.hasAttribute("data-cvaddp") || t.hasAttribute("data-cvaddpc")) { var pid = t.getAttribute("data-cvaddp") || t.getAttribute("data-cvaddpc"), pcs = t.hasAttribute("data-cvaddpc"), qs = cvItems();
+    cvAdd(Object.keys(qs).filter(function (k) { return qs[k].p.id === pid && (pcs ? qs[k].kind === "piece" : cvIsQ(qs[k])); })); return; }
+  if (t.hasAttribute("data-cvline")) { var ref = t.getAttribute("data-cvline"), of = t.getAttribute("data-of"); cvPoll().then(function () { var s2 = cvState(), p2 = cvPage(s2);
+      if (!p2.items.some(function (x) { return x.u === of; })) { toast("That question is not on this page"); return; }
+      if (p2.items.some(function (x) { return x.of === of && x.ref === ref; })) { toast("Already on his canvas"); return; }
+      var o = p2.items.filter(function (x) { return x.u === of; })[0]; cvSend([{ t: "add", u: cvRnd(), ref: ref, of: of, pg: s2.cur, w: Math.max(200, Math.min(760, o.w - 40)) }]); }); return; }
+  if (t.hasAttribute("data-cvtk")) { CV.tk = t.getAttribute("data-cvtk"); cvPanel(); var ty = $("#cvtype"); if (ty) ty.focus(); return; }
+  if (t.hasAttribute("data-cvtype")) { cvTyped(); return; }
   if (t.hasAttribute("data-cvtop")) { cvSend([{ t: "top", u: t.getAttribute("data-cvtop") }]); return; }
   if (t.hasAttribute("data-cvrm")) { cvSend([{ t: "rm", u: t.getAttribute("data-cvrm") }]); return; }
   if (t.hasAttribute("data-cvans")) { var u = t.getAttribute("data-cvans"); CV.ans[u] = !CV.ans[u]; cvPanel(); return; }
   if (t.hasAttribute("data-cvgo")) { var n = st.cur + +t.getAttribute("data-cvgo"); if (st.pages[n]) cvSend([{ t: "go", n: n }]); return; }
   if (t.hasAttribute("data-cvnew")) { cvSend([{ t: "new" }]); return; }
-  if (t.hasAttribute("data-cvreset") && confirm("Clear his canvas? Every page and the writing on it goes. You can\u2019t undo this.")) cvSend([{ t: "reset" }]); });
+  if (t.hasAttribute("data-cvreset") && confirm("Clear his canvas? Every page and the writing on it goes. You can’t undo this.")) cvSend([{ t: "reset" }]); });
+document.addEventListener("keydown", function (e) { if (e.key === "Enter" && e.target.id === "cvtype") { e.preventDefault(); cvTyped(); } }, true);
 addEventListener("hashchange", function () { setTimeout(function () { if (MODE !== "teach" && $("#cvp")) $("#cvp").remove(); }, 0); });
 
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v62", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v63", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
