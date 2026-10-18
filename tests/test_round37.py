@@ -1,4 +1,4 @@
-"""Round 37 (18 Oct, app v65): the eraser and the pen, closer to Samsung Notes (Ali: "erasing is very robotic and laggy";
+"""Round 37 (18 Oct, app v66): the eraser and the pen, closer to Samsung Notes (Ali: "erasing is very robotic and laggy";
 "I use stroke eraser mostly"; no writing in the air).
  - Eraser: Whole line (the default: one touch takes a whole line) or Area (only what is under it goes; a line it cuts becomes two,
    keeping its colour, size and the piece it belongs to). Thin, Medium, Thick. The choice is kept on the device.
@@ -109,6 +109,8 @@ with sync_playwright() as p:
     check("the S Pen button with Area chosen cuts the line, it doesn't take it all", n() == 2 and alpha(720, 540) == 0 and alpha(400, 540) > 0, (n(), alpha(720, 540)))
     pg.evaluate("localStorage.setItem('tutor.inkem','line')"); pg.reload(); pg.wait_for_selector(".stu-view"); pg.wait_for_timeout(1200)
     check("after a reload the eraser is still the one chosen last (Whole line)", pg.evaluate("__t('INK.em')") == "line")
+    pg.click("#stupen"); pg.click('[data-ink="t-rub"]'); pg.click('[data-ink="w2"]'); pg.reload(); pg.wait_for_selector(".stu-view"); pg.wait_for_timeout(1200)
+    check("  ...and so is its size (Thick)", pg.evaluate("__t('INK.rs')") == 2)
     check("ink is never sent to GitHub", not fake.puts, list(fake.puts))
     check("no script errors", not errs, errs)
 

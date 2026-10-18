@@ -2249,7 +2249,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
    write). The S Pen's side button erases. Only a pen that presses (pressure above 0) writes: a hovering pen never does, whatever its
    buttons say (some tablets report the button held in the air as the tip being down). Ink belongs to the screen (the questions showing)
    and lives only in this tab: it is never saved. When you move on, the ink stays for when you come back (Keep) or goes (Clear). */
-var INK = { pages: {}, undo: {}, redo: {}, key: "", tool: "pen", pc: 0, hc: 0, ps: 1, hs: 1, finger: false, open: false, more: false, cur: null, cv: null, raf: 0, pen: false, diag: "", rs: 1, ec: null, em: ls("tutor.inkem") === "area" ? "area" : "line" };
+var INK = { pages: {}, undo: {}, redo: {}, key: "", tool: "pen", pc: 0, hc: 0, ps: 1, hs: 1, finger: false, open: false, more: false, cur: null, cv: null, raf: 0, pen: false, diag: "", rs: /^[012]$/.test(ls("tutor.inkrs")) ? +ls("tutor.inkrs") : 1, ec: null, em: ls("tutor.inkem") === "area" ? "area" : "line" };
 var INKCOL = { pen: [["--ink-1", "Black"], ["--ink-2", "Grey"], ["--ink-3", "Red"], ["--ink-4", "Orange"], ["--ink-5", "Green"], ["--ink-6", "Blue"], ["--ink-7", "Purple"], ["--ink-8", "Pink"]],
   hl: [["--hl-1", "Yellow"], ["--hl-2", "Green"], ["--hl-3", "Pink"], ["--hl-4", "Blue"]] };
 var INKW = { pen: [2, 3.5, 6], hl: [12, 20, 32] }, INKER = [8, 14, 24];   // eraser radius in px: Thin, Medium, Thick
@@ -2279,7 +2279,7 @@ function inkTool(t) { var a = t.getAttribute("data-ink"), pg;
   else if (/^t-/.test(a)) INK.tool = a.slice(2);
   else if (a === "e-line" || a === "e-area") { INK.em = a.slice(2); ls("tutor.inkem", INK.em); }
   else if (/^c\d$/.test(a)) INK[INK.tool === "hl" ? "hc" : "pc"] = +a.slice(1);
-  else if (/^w\d$/.test(a)) INK[INK.tool === "hl" ? "hs" : INK.tool === "rub" ? "rs" : "ps"] = +a.slice(1);
+  else if (/^w\d$/.test(a)) { INK[INK.tool === "hl" ? "hs" : INK.tool === "rub" ? "rs" : "ps"] = +a.slice(1); if (INK.tool === "rub") ls("tutor.inkrs", INK.rs); }
   else if (a === "undo" && inkStack(INK.undo).length) { inkStack(INK.redo).push(inkPage()); INK.pages[INK.key] = INK.undo[INK.key].pop(); inkDraw(); }
   else if (a === "redo" && inkStack(INK.redo).length) { inkStack(INK.undo).push(inkPage()); INK.pages[INK.key] = INK.redo[INK.key].pop(); inkDraw(); }
   else if (a === "clear" && inkPage().length) { inkSnap(); INK.pages[INK.key] = []; inkDraw(); }
@@ -2666,7 +2666,7 @@ addEventListener("hashchange", function () { setTimeout(function () { if (MODE !
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v65", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v66", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
