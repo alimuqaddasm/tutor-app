@@ -2249,7 +2249,7 @@ document.addEventListener("keydown", function (e) { if (MODE !== "student" || !S
    write). The S Pen's side button erases. Only a pen that presses (pressure above 0) writes: a hovering pen never does, whatever its
    buttons say (some tablets report the button held in the air as the tip being down). Ink belongs to the screen (the questions showing)
    and lives only in this tab: it is never saved. When you move on, the ink stays for when you come back (Keep) or goes (Clear). */
-var INK = { pages: {}, undo: {}, redo: {}, key: "", tool: "pen", pc: 0, hc: 0, ps: 1, hs: 1, finger: false, open: false, more: false, cur: null, cv: null, raf: 0, pen: false, diag: "", arm: 0, rs: /^[012]$/.test(ls("tutor.inkrs")) ? +ls("tutor.inkrs") : 1, ec: null, em: ls("tutor.inkem") === "area" ? "area" : "line" };
+var INK = { pages: {}, undo: {}, redo: {}, key: "", tool: "pen", pc: 0, hc: 0, ps: 1, hs: 1, finger: false, open: false, more: false, cur: null, cv: null, raf: 0, pen: false, diag: "", arm: 0, hov: false, rs: /^[012]$/.test(ls("tutor.inkrs")) ? +ls("tutor.inkrs") : 1, ec: null, em: ls("tutor.inkem") === "area" ? "area" : "line" };
 var INKCOL = { pen: [["--ink-1", "Black"], ["--ink-2", "Grey"], ["--ink-3", "Red"], ["--ink-4", "Orange"], ["--ink-5", "Green"], ["--ink-6", "Blue"], ["--ink-7", "Purple"], ["--ink-8", "Pink"]],
   hl: [["--hl-1", "Yellow"], ["--hl-2", "Green"], ["--hl-3", "Pink"], ["--hl-4", "Blue"]] };
 var INKW = { pen: [2, 3.5, 6], hl: [12, 20, 32] }, INKER = [8, 14, 24];   // eraser radius in px: Thin, Medium, Thick
@@ -2390,11 +2390,15 @@ function inkHold(c) { clearTimeout(c.tm); c.tm = setTimeout(function () { var s 
 function inkCan(e) { if (MODE !== "student" || !STU || STU.drawer || !INK.cv) return false;
   var t = e.target; return !!(t.closest && t.closest(".stu-view, .cv-view") && !t.closest("button, a, input, select, textarea, video")); }   // a tap on a button still works
 function inkPress(e) { return e.pointerType !== "pen" || e.pressure > 0; }   // a pen writes only while it presses: hovering, its pressure is 0
-/* the S Pen button pressed while the pen hovers (as in Samsung Notes): nothing is drawn in the air, the next touch erases.
-   Some tablets send the button as buttons 2 or 32; Ali's Tab S7 FE sends it as the tip being down (buttons 1) with no pressure,
-   and the touch that follows says only "tip". A pen that is simply landing passes through that state for a moment too, so the
-   button counts only once it has been held above the screen for more than 80 ms. */
-function inkArm(e) { if (!(inkSide(e) || (e.buttons & 1))) { INK.arm = 0; return; } if (!INK.arm) INK.arm = e.timeStamp || 1; }
+/* the S Pen button, as in Samsung Notes (Ali, 18 Oct): "the moment I click the button it becomes an eraser, I rub out, I release
+   it and it becomes a pen again". Some tablets send the button as buttons 2 or 32; Ali's Tab S7 FE sends it as the tip being
+   down (buttons 1) with no pressure, and keeps saying so, with no pressure, even while the pen rubs on the glass. So the button
+   pressed above the screen starts the eraser at once, and it follows the pen until the button is let go. Only a press that
+   follows plain hovering counts: the end of a stroke (tip still down, pressure gone) never starts it. */
+function inkArm(e) { if (!(inkSide(e) || (e.buttons & 1))) { INK.arm = 0; INK.hov = true; return; }   // hovering, no button
+  if (!INK.arm) INK.arm = e.timeStamp || 1;
+  if (INK.hov && !INK.cur && MODE === "student" && inkCan(e)) { INK.lp = { x: e.clientX, y: e.clientY, id: e.pointerId, el: e.target }; inkHeld(!inkSide(e)); }
+  INK.hov = false; }
 function inkArmed(e) { return e.pointerType === "pen" && !!INK.arm && (e.timeStamp || 0) - INK.arm > 80; }
 function inkStart(e, rub) { e.preventDefault(); inkMap();
   rub = rub || INK.tool === "rub" || inkSide(e) || inkArmed(e); var pt = inkPt(e), redo = inkStack(INK.redo); inkSnap();
@@ -2411,16 +2415,23 @@ document.addEventListener("pointerdown", function (e) {
   if (e.pointerType !== "touch" || INK.finger) inkSeen(e);
   if (e.pointerType !== "pen" && !INK.finger && !(e.pointerType === "mouse" && inkSide(e))) return;   // a right-button press erases: some tablets send the S Pen with its button held that way
   if (!inkPress(e)) { inkArm(e); return; }   // the button pressed above the screen also fires pointerdown: nothing touches yet
+  if (e.pointerType === "pen") INK.hov = false;
+  if (INK.cur && INK.cur.held) { if (INK.cur.tip && !inkSide(e)) inkUnheld(INK.cur); else return; }   // pressure: it was the pen landing, not the button
   inkStart(e);
 }, true);
-/* Ali's Tab S7 FE (pen record, 18 Oct): with the S Pen button held, touching the glass sends one right-click and then only
-   "tip down, no pressure" moves, the same as hovering with the button; nothing says when the pen lifts. So the right-click
-   starts erasing where the pen is, and it goes on until the button is let go (Ali chose this; a circle shows where it erases) */
-function inkHeld() { var p = INK.lp; inkStart({ preventDefault: function () {}, clientX: p.x, clientY: p.y, pointerId: p.id, pointerType: "pen", buttons: 1, button: -1, target: p.el }, true); INK.cur.held = true; INK.cur.seen = true; }
+/* the held-button eraser: it starts where the pen is and erases until the button is let go (a circle shows where). Chrome also
+   sends a right-click about half a second after the pen touches with the button held (Ali's pen record); that starts it too if
+   the button press itself went unseen. A tablet whose "tip down, no pressure" was only a pen landing sends pressure next: then
+   whatever the eraser took comes back and the stroke writes. */
+function inkHeld(tip) { var p = INK.lp; inkStart({ preventDefault: function () {}, clientX: p.x, clientY: p.y, pointerId: p.id, pointerType: "pen", buttons: 1, button: -1, target: p.el }, true); INK.cur.held = true; INK.cur.tip = !!tip; INK.cur.seen = true; }
+function inkUnheld(c) { INK.cur = null; INK.ec = null; var u = inkStack(INK.undo).pop(); if (c.hit && u) INK.pages[INK.key] = u; INK.redo[INK.key] = c.redo; inkDraw(); }
 document.addEventListener("pointermove", function (e) { var c = INK.cur;
   if (e.pointerType === "pen") INK.lp = { x: e.clientX, y: e.clientY, id: e.pointerId, el: e.target };
-  if (c && c.held && e.pointerId === c.id) { if (!(e.buttons & 1) && !inkSide(e)) { inkEnd(c); INK.arm = 0; return; } }   // button let go: the held erase ends
+  if (c && c.held && e.pointerId === c.id) {
+    if (e.pressure > 0 && c.tip && !inkSide(e)) { inkUnheld(c); c = null; }   // pressure: it was the pen landing, not the button
+    else if (!(e.buttons & 1) && !inkSide(e)) { inkEnd(c); INK.arm = 0; INK.hov = true; return; } }   // button let go: a pen again
   else if (e.pointerType === "pen" && !inkPress(e)) { if (c && e.pointerId === c.id) inkEnd(c); if (MODE === "student") inkArm(e); return; }   // above the screen (or lifted with its button still held: no pointerup comes yet)
+  if (e.pointerType === "pen" && e.pressure > 0) INK.hov = false;
   if (!c && e.pointerType === "pen" && e.pressure > 0 && inkCan(e)) { inkSeen(e); inkStart(e); return; }   // pressed down after its button: some tablets send no new pointerdown
   if (!c || e.pointerId !== c.id) return; e.preventDefault(); inkSeen(e); inkMap();
   if (inkSide(e)) inkToRub(c);
@@ -2431,7 +2442,7 @@ document.addEventListener("pointermove", function (e) { var c = INK.cur;
   if (Math.hypot(e.clientX - c.ax, e.clientY - c.ay) > 3) { c.ax = e.clientX; c.ay = e.clientY; if (!c.s.line) inkHold(c); } }, true);
 /* some tablets send the side button as a right-click: no menu on his screen, and the stroke becomes rubbing out */
 document.addEventListener("contextmenu", function (e) { if (MODE !== "student" || !(INK.cur || INK.pen || INK.arm)) return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "right-click");
-  if (INK.cur) inkToRub(INK.cur); else if (inkArmed({ pointerType: "pen", timeStamp: e.timeStamp }) && INK.lp && INK.lp.el && INK.lp.el.isConnected && inkCan(e)) inkHeld(); }, true);   // only on his page itself, and not from a pen last seen on a page since replaced
+  if (INK.cur) inkToRub(INK.cur); else if (inkArmed({ pointerType: "pen", timeStamp: e.timeStamp }) && INK.lp && INK.lp.el && INK.lp.el.isConnected && inkCan(e)) inkHeld(false); }, true);   // only on his page itself, and not from a pen last seen on a page since replaced
 /* Chrome on Android turns "S Pen button held + drag" into its own text selection (Ali's Tab S7 FE, 17 Oct): nothing on his
    screen is ever selectable (app.css), and any selection Chrome still starts is stopped and noted in the pen button check */
 document.addEventListener("selectstart", function (e) { if (MODE !== "student" || e.target.closest && e.target.closest("input, textarea")) return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "Chrome tried to select text"); if (INK.cur) inkToRub(INK.cur); }, true);
@@ -2710,7 +2721,7 @@ addEventListener("hashchange", function () { setTimeout(function () { if (MODE !
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v70", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v71", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];
