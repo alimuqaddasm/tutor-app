@@ -33,8 +33,9 @@ with sync_playwright() as p:
     n0 = pg.evaluate("__t('(INK.pages[INK.key]||[]).length')")
     pg.evaluate("""() => { const el = document.querySelector('.stu-view'), ev = (t, x, y, b, pr) => el.dispatchEvent(new PointerEvent(t, { pointerType: 'pen', pointerId: 7, clientX: x, clientY: y, buttons: b, pressure: pr, tiltX: 10, tiltY: -5, bubbles: true, cancelable: true }));
       ev('pointermove', 300, 600, 0, 0); ev('pointermove', 310, 600, 0, 0); ev('pointerdown', 320, 600, 1, .3);
-      for (let i = 1; i <= 10; i++) ev('pointermove', 320 + 20 * i, 600, 1, .2 + i / 50);
-      ev('pointerup', 520, 600, 0, 0); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'F13', code: 'F13', bubbles: true })); }""")
+      for (let i = 1; i <= 10; i++) el.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'pen', pointerId: 7, clientX: 320 + 20 * i, clientY: 600, buttons: 1, pressure: .2 + i / 50, tiltX: 10 + i, tiltY: -5, bubbles: true, cancelable: true }));
+      ev('pointerup', 520, 600, 0, 0); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'F13', code: 'F13', bubbles: true }));
+      const pw = document.createElement('input'); pw.type = 'password'; document.body.appendChild(pw); pw.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', code: 'KeyQ', bubbles: true })); pw.remove(); }""")
     check("  ...and the pen still writes while it records", pg.evaluate("__t('(INK.pages[INK.key]||[]).length')") == n0 + 1)
     pg.wait_for_timeout(2300)
     out = pg.evaluate("__t('REC.out')")
@@ -42,6 +43,8 @@ with sync_playwright() as p:
     check("  ...each kind of event with its buttons and pressure", "pointerdown pen buttons 1 button 0 p+" in out and "pressure 0.3" in out and "keydown F13 F13" in out, out)
     check("  ...repeated moves are folded into one line with a count and the pressure range", "pointermove pen buttons 1 button 0 p+" in out and " x10" in out and "pressure 0.22-0.4" in out, out)
     check("  ...hovering shows as pressure 0, with the tilt", "pointermove pen buttons 0 button 0 p0" in out and "tilt 10,-5" in out, out)
+    check("  ...folded moves keep the tilt range", "tilt 11-20,-5" in out, out)
+    check("  ...typing in a box (a password) is never written down", "KeyQ" not in out, out)
     check("  ...the record box and Copy are shown", pg.locator(".stu-reclog").count() == 1 and pg.locator('[data-ink="copy"]').count() == 1)
     check("  ...events stop being recorded when it ends", (pg.evaluate("() => { document.querySelector('.stu-view').dispatchEvent(new PointerEvent('pointermove', { pointerType: 'pen', bubbles: true })); return __t('REC.rows.length'); }") == pg.evaluate("__t('REC.rows.length')")) and not pg.evaluate("__t('REC.on')"))
     pg.click('[data-ink="copy"]'); pg.wait_for_timeout(200)

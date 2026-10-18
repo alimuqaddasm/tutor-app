@@ -2282,19 +2282,21 @@ function recTools() { var left = Math.max(0, Math.ceil((REC.end - Date.now()) / 
     (REC.out && !REC.on ? '<button class="btn small" type="button" data-ink="copy">Copy</button>' : "") +
     '<span class="hint">' + (REC.on ? "Hover, press the button, touch, write" : REC.out ? "Copy it and paste it in the chat" : "8 seconds of what the pen sends") + '</span></div>' +
     (REC.out && !REC.on ? '<textarea class="input stu-reclog" readonly rows="6" aria-label="Pen record">' + esc(REC.out) + '</textarea>' : ""); }
-function recEv(e) { if (!REC.on) return; var p = e.pressure, r, k = e.type;
+function recEv(e) { if (!REC.on) return; var p = e.pressure, r, k = e.type, tg = e.target;
+  if (k.indexOf("key") === 0 && tg && tg.closest && tg.closest("input, textarea, select, [contenteditable]")) return;   // typing (a password too) is never written down
   if (k.indexOf("touch") === 0) { var t = (e.changedTouches || [])[0] || {}; r = k + " " + (t.touchType || "?") + " n" + (e.touches ? e.touches.length : "?") + " force " + (t.force == null ? "?" : Math.round(t.force * 100) / 100); }
   else if (k.indexOf("key") === 0) r = k + " " + e.key + " " + e.code;
   else if (k === "selectstart") r = k;
   else r = k + " " + (e.pointerType || "mouse") + " buttons " + e.buttons + " button " + e.button + (p == null ? "" : " p" + (p > 0 ? "+" : "0")) + (e.pointerId == null ? "" : " id " + e.pointerId);
-  var last = REC.rows[REC.rows.length - 1], pr = p == null ? null : Math.round(p * 100) / 100;
-  if (last && last.r === r) { last.n++; if (pr != null) { last.lo = Math.min(last.lo, pr); last.hi = Math.max(last.hi, pr); } return; }
-  if (REC.rows.length < 400) REC.rows.push({ t: Math.round(performance.now() - REC.t0), r: r, n: 1, lo: pr, hi: pr, tilt: e.tiltX == null ? "" : " tilt " + e.tiltX + "," + e.tiltY }); }
+  var last = REC.rows[REC.rows.length - 1], pr = p == null ? null : Math.round(p * 100) / 100, tx = e.tiltX, ty = e.tiltY, rg = function (o, k, v) { o[k] = [Math.min(o[k][0], v), Math.max(o[k][1], v)]; };
+  if (last && last.r === r) { last.n++; if (pr != null) { last.lo = Math.min(last.lo, pr); last.hi = Math.max(last.hi, pr); } if (tx != null && last.tx) { rg(last, "tx", tx); rg(last, "ty", ty); } return; }
+  if (REC.rows.length < 400) REC.rows.push({ t: Math.round(performance.now() - REC.t0), r: r, n: 1, lo: pr, hi: pr, tx: tx == null ? null : [tx, tx], ty: ty == null ? null : [ty, ty] }); }
+function recRange(a) { return a[0] === a[1] ? "" + a[0] : a[0] + "-" + a[1]; }
 function recStart() { REC.on = true; REC.rows = []; REC.out = ""; REC.t0 = performance.now(); REC.end = Date.now() + RECMS;
   RECEV.forEach(function (n) { addEventListener(n, recEv, { capture: true, passive: true }); });
   clearInterval(REC.tm); REC.tm = setInterval(function () { if (Date.now() >= REC.end) recStop(); else inkRefresh(); }, 1000); inkRefresh(); }
 function recStop() { clearInterval(REC.tm); REC.on = false; RECEV.forEach(function (n) { removeEventListener(n, recEv, { capture: true, passive: true }); });
-  REC.out = "Tutor Desk " + APP_VERSION + " · " + navigator.userAgent + "\n" + (REC.rows.length ? REC.rows.map(function (x) { return "+" + x.t + "ms " + x.r + (x.lo == null ? "" : " pressure " + (x.lo === x.hi ? x.lo : x.lo + "-" + x.hi)) + x.tilt + (x.n > 1 ? " x" + x.n : ""); }).join("\n") : "nothing came through");
+  REC.out = "Tutor Desk " + APP_VERSION + " · " + navigator.userAgent + "\n" + (REC.rows.length ? REC.rows.map(function (x) { return "+" + x.t + "ms " + x.r + (x.lo == null ? "" : " pressure " + (x.lo === x.hi ? x.lo : x.lo + "-" + x.hi)) + (x.tx ? " tilt " + recRange(x.tx) + "," + recRange(x.ty) : "") + (x.n > 1 ? " x" + x.n : ""); }).join("\n") : "nothing came through");
   inkRefresh(); }
 function recCopy() { var ta = $(".stu-reclog"), done = function (ok) { var b = $('[data-ink="copy"]'); if (b) b.textContent = ok ? "Copied" : "Select it and copy"; };
   if (ta) { ta.focus(); ta.select(); }
