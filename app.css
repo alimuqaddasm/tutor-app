@@ -1344,7 +1344,7 @@ tr.xt-lit td{background:var(--accent-wash)}
 .stu-inkmore #inkdiag{flex-basis:100%;margin:0}
 
 /* ================= 13 teaching canvas: Student view as a page he writes on, Canvas in Teach (Ali, 17 Oct) ================= */
-.stu.cv .cv-view{height:100vh;box-sizing:border-box;overflow-y:auto;overflow-x:hidden;touch-action:none;padding:64px var(--s4) var(--s7)}   /* the pen writes; a finger scrolls (done in app.js) */
+.stu.cv .cv-view{height:100vh;box-sizing:border-box;overflow-y:auto;overflow-x:hidden;touch-action:none;padding:calc(var(--s7) + var(--s4)) var(--s4) var(--s7)}   /* the pen writes; a finger scrolls (done in app.js) */
 .cv-page{position:relative;margin:0 auto;width:min(100%,1600px);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg)}
 .cv-item{position:absolute;box-sizing:border-box}
 .cv-item.unplaced{visibility:hidden}
@@ -1373,7 +1373,7 @@ span.cvlab{cursor:default}
 .cvlab:focus-visible{outline:3px solid var(--slate);border-radius:var(--r-sm)}
 .cvans{grid-column:1 / -1;padding:var(--s3);border-radius:var(--r-md);background:var(--sunk)}
 .cvans img{max-width:100%}
-@media (max-width:760px){.cvrow{grid-template-columns:28px minmax(0,1fr)}.cvrow > .row{grid-column:2}.stu.cv .cv-view{padding:64px var(--s4) var(--s6)}.stu.cv .stu-top{padding:var(--s2) var(--s4);gap:var(--s2)}.cv-pages [data-cvnew],.cv-mode{display:none}}
+@media (max-width:760px){.cvrow{grid-template-columns:28px minmax(0,1fr)}.cvrow > .row{grid-column:2}.stu.cv .cv-view{padding:calc(var(--s7) + var(--s4)) var(--s4) var(--s6)}.stu.cv .stu-top{padding:var(--s2) var(--s4);gap:var(--s2)}.cv-pages [data-cvnew],.cv-mode{display:none}}
 /* pieces (phase 2): headings, equations, structures and lines Claude prepares with the script, or Ali types in Teach. Sizes follow the page (--cvs) */
 .cv-pc{color:var(--text);line-height:1.3;overflow-wrap:anywhere}
 .cv-pc.h{padding-bottom:calc(var(--s2) * var(--cvs,1));border-bottom:2px solid var(--accent);font-size:calc(var(--fs-3xl) * var(--cvs,1));font-weight:600}

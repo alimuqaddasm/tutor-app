@@ -2389,7 +2389,7 @@ function cvSend(acts) { if (!L) return Promise.resolve(false); cvReset(L.id);
   return cvFetch("POST", { actions: acts }).then(function () { cvPoll(); return true; }, function (e) { var ks = acts.map(function (a) { return a.k; });
     CV.local = CV.local.filter(function (a) { return ks.indexOf(a.k) < 0; }); cvChanged(); toast("Couldn’t reach the exam server: " + e.message); return false; }); }
 function cvPoll() { if (!CV.id || CV.busy || !cvReady()) return Promise.resolve(); CV.busy = true; var id = CV.id;
-  return cvFetch("GET").then(function (d) { CV.busy = false; if (CV.id !== id) return; var n = (d.actions || []).length, was = CV.err || !CV.loaded; CV.err = ""; CV.loaded = true;
+  return cvFetch("GET").then(function (d) { CV.busy = false; if (CV.id !== id) return; var n = (d.actions || []).length, was = CV.err || !CV.loaded; CV.err = ""; if (!d.more) CV.loaded = true;   // loaded only once the whole log is in, or ink of later pieces would look orphaned
     if (n) { CV.log = CV.log.concat(d.actions); CV.seq = d.actions[n - 1].seq; var seen = {}; CV.log.forEach(function (x) { if (x.a.k) seen[x.a.k] = 1; });
       CV.local = CV.local.filter(function (a) { return !seen[a.k]; }); cvChanged(); if (d.more) return cvPoll(); }
     else if (was) cvChanged(); },
@@ -2598,13 +2598,16 @@ function cvRnd() { return Math.random().toString(36).slice(2, 10); }
 function cvAddAct(q, st) { var a = { t: "add", u: cvRnd(), pg: st.cur };
   if (q.kind === "piece") { var k = cvPcKind(q.pc), w = Math.min(CVW - CVX, +q.pc.w || CVPCW[k] || CVWD); a.w = w; a.x = k === "equation" || k === "structure" ? Math.round((CVW - w) / 2) : CVX; }
   if (q.id === "typed") a.pc = q.pc; else a.ref = q.id; return a; }
-function cvAdd(refs) { cvPoll().then(function () { cvAddNow(refs); }); }   // the page he is on now, not the one last seen
+/* act on the canvas as it is now (this lesson's log, read to the end), not as last seen: Add from a Teach screen can come before Canvas was ever opened */
+function cvFresh(fn) { if (!L) return; cvReset(L.id); if (!cvReady()) { toast("Set the exam password on this device first (Exams tab)"); return; }
+  cvPoll().then(function () { if (!CV.loaded) { toast(CV.err ? "Couldn\u2019t reach the exam server: " + CV.err : "The canvas is still loading. Try again."); return; } fn(); }); }
+function cvAdd(refs) { cvFresh(function () { cvAddNow(refs); }); }
 function cvAddNow(refs) { var st = cvState(), qs = cvItems(); refs = refs.filter(function (r) { return qs[r] && !cvPage(st).items.some(function (x) { return x.ref === r; }); });
   if (!refs.length) { toast("Already on his canvas"); return; }
   cvSend(refs.map(function (r) { return cvAddAct(qs[r], st); })).then(function (ok) { if (ok) toast(refs.length > 1 ? "Added " + refs.length + " to his canvas" : "Added to his canvas"); }); }
 function cvTyped() { var ty = $("#cvtype"), v = ty && ty.value.trim(), k = CV.tk || "heading"; if (!v) { if (ty) ty.focus(); return; }
   var pc = k === "equation" ? { kind: k, tex: v.replace(/^\\[(\[]|\\[)\]]$/g, "") } : { kind: k, text: v };
-  cvPoll().then(function () { cvSend([cvAddAct({ kind: "piece", id: "typed", pc: pc }, cvState())]).then(function (ok) { if (ok) { var t2 = $("#cvtype"); if (t2) t2.value = ""; toast("Added to his canvas"); } }); }); }
+  cvFresh(function () { cvSend([cvAddAct({ kind: "piece", id: "typed", pc: pc }, cvState())]).then(function (ok) { if (ok) { var t2 = $("#cvtype"); if (t2) t2.value = ""; toast("Added to his canvas"); } }); }); }
 document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) return; var t = e.target.closest && e.target.closest("[data-cvp],[data-cvpx],[data-cvadd],[data-cvaddp],[data-cvaddpc],[data-cvline],[data-cvtk],[data-cvtype],[data-cvtop],[data-cvrm],[data-cvans],[data-cvgo],[data-cvnew],[data-cvreset]"); if (!t) return;
   if (t.hasAttribute("data-cvp") || t.hasAttribute("data-cvpx")) { CV.open = t.hasAttribute("data-cvp") && !CV.open; var mn = $(".tmenu"); if (mn) mn.hidden = true; cvReset(L.id); cvPanel(); if (CV.open) cvPoll();
     else $$("[data-cvp]").forEach(function (cb) { cb.setAttribute("aria-expanded", "false"); }); return; }
@@ -2612,7 +2615,7 @@ document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) re
   if (t.hasAttribute("data-cvadd")) { cvAdd([t.getAttribute("data-cvadd")]); return; }
   if (t.hasAttribute("data-cvaddp") || t.hasAttribute("data-cvaddpc")) { var pid = t.getAttribute("data-cvaddp") || t.getAttribute("data-cvaddpc"), pcs = t.hasAttribute("data-cvaddpc"), qs = cvItems();
     cvAdd(Object.keys(qs).filter(function (k) { return qs[k].p.id === pid && (pcs ? qs[k].kind === "piece" : cvIsQ(qs[k])); })); return; }
-  if (t.hasAttribute("data-cvline")) { var ref = t.getAttribute("data-cvline"), of = t.getAttribute("data-of"); cvPoll().then(function () { var s2 = cvState(), p2 = cvPage(s2);
+  if (t.hasAttribute("data-cvline")) { var ref = t.getAttribute("data-cvline"), of = t.getAttribute("data-of"); cvFresh(function () { var s2 = cvState(), p2 = cvPage(s2);
       if (!p2.items.some(function (x) { return x.u === of; })) { toast("That question is not on this page"); return; }
       if (p2.items.some(function (x) { return x.of === of && x.ref === ref; })) { toast("Already on his canvas"); return; }
       var o = p2.items.filter(function (x) { return x.u === of; })[0]; cvSend([{ t: "add", u: cvRnd(), ref: ref, of: of, pg: s2.cur, w: Math.max(200, Math.min(760, o.w - 40)) }]); }); return; }
