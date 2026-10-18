@@ -2398,6 +2398,7 @@ document.addEventListener("selectionchange", function () { if (MODE !== "student
 ["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { if (e.pointerType === "pen") { INK.pen = false; INK.arm = false; } var c = INK.cur;
   if (n === "pointercancel" && c && e.pointerId === c.id) { INK.diag = "Pen button check: the browser took over the stroke · " + (e.pointerType || "?"); var d = $("#inkdiag"); if (d) d.textContent = INK.diag; }
   if (c && e.pointerId === c.id) inkEnd(c); }, true); });
+document.addEventListener("pointerout", function (e) { if (e.pointerType === "pen" && !e.relatedTarget) INK.arm = false; }, true);   // the pen taken out of range with its button held: the next touch writes
 addEventListener("resize", function () { if (MODE === "student") inkDraw(); });
 
 /* ---------------- the teaching canvas (Ali, 17 Oct: "a blank canvas onto which ready-made pieces are dropped") ----------------

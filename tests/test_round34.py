@@ -145,6 +145,10 @@ with sync_playwright() as p:
       ev('pointermove', 300, 700, 2, 0); ev('pointermove', 300, 710, 0, 0); }""")
     stroke("pen", 300, 790, 400, 790, 1)
     check("  ...and a button pressed then let go in the air (no pointerup) does not turn the next touch into erasing", n() == k + 1 and not last().get("rub"), (k, n()))
+    pg.evaluate("""() => { const el = document.querySelector('.stu-view'); el.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'pen', pointerId: 18, clientX: 300, clientY: 700, buttons: 2, pressure: 0, bubbles: true }));
+      el.dispatchEvent(new PointerEvent('pointerout', { pointerType: 'pen', pointerId: 18, clientX: 300, clientY: 700, buttons: 2, relatedTarget: null, bubbles: true })); }""")
+    stroke("pen", 300, 820, 400, 820, 1)
+    check("  ...nor does the pen taken out of range with the button held", n() == k + 2 and not last().get("rub"), (k, n()))
     pg.screenshot(path=os.path.join(SHOTS, "r34-tools-1440.png"))
     pg.click('[data-ink="t-hl"]'); pg.wait_for_timeout(100); pg.screenshot(path=os.path.join(SHOTS, "r34-highlighter-1440.png"))
 
