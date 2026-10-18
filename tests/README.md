@@ -26,8 +26,8 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/test_offline_list.py       # every ?v= file index.html and exam.html ask for is in the sw.js offline list (no browser needed)
     python tests/runtest.py tests/test_round33.py   # round 33 (17 Oct, app v60): the pen on Student view: S Pen writes, a finger still swipes, rub out, Keep or Clear ink when you move on, Pen and finger, never saved (26 checks)
     python tests/runtest.py tests/test_round34.py   # round 34 (17 Oct, app v61): the pen like Samsung Notes: 8 colours, highlighter, sizes, Undo and Redo, straight lines, the S Pen button however the tablet reports it (30 checks)
-    python tests/runtest.py tests/test_round35.py   # round 35 (17 Oct, app v62): the teaching canvas, phase 1: Student view is a page; Teach adds questions through the exam server; place, move to top, remove, answers in Teach; ink moves and goes with its question; drag, resize, pages, Clear canvas (40 checks; needs the local exam server)
-    python tests/runtest.py tests/test_round36.py   # round 36 (18 Oct, app v63): canvas phase 2: pieces in the script (heading, equation, structure, text), solution lines dropped under their question, Type a piece in Teach (26 checks; needs the local exam server)
+    python tests/runtest.py tests/test_round35.py   # round 35 (18 Oct, app v63): the teaching canvas, phase 1: Student view is a page; Teach adds questions through the exam server; place, move to top, remove, answers in Teach; ink moves and goes with its question; drag, resize, pages, Clear canvas (40 checks; needs the local exam server)
+    python tests/runtest.py tests/test_round36.py   # round 36 (18 Oct, app v64): canvas phase 2: pieces in the script (heading, equation, structure, text), solution lines dropped under their question, Type a piece in Teach (26 checks; needs the local exam server)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
 On Windows run with PYTHONIOENCODING=utf-8, or printing ★ crashes the console.

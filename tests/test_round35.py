@@ -100,6 +100,12 @@ with sync_playwright() as p:
     ink = json.loads(tab.evaluate("__t('JSON.stringify(INK.pages[INK.key])')"))
     check("the S Pen writes on the canvas", len(ink) == 1, len(ink))
     check("  ...the stroke belongs to the question above it", ink and ink[0].get("o") == first["u"], ink and ink[0].get("o"))
+    # the S Pen button rubs out on the page too (page units, not screen fractions)
+    xr, yr = px(400, y_under + 120)
+    tab.evaluate(STROKE, ["pen", xr, yr, xr + 200, yr, 1]); tab.wait_for_timeout(200)
+    tab.evaluate(STROKE, ["pen", xr + 100, yr - 20, xr + 100, yr + 20, 32]); tab.wait_for_timeout(300)
+    n_after = len(json.loads(tab.evaluate("__t('JSON.stringify(INK.pages[INK.key])')")))
+    check("the S Pen button rubs a stroke out on the canvas, and only that one", n_after == 1, n_after)
     sy = second["y"]
     xa, ya = px(700, y_under + 20); xb, yb = px(700, sy + 40)
     if yb > 760:   # keep the stroke on the screen

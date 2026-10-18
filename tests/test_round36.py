@@ -1,4 +1,4 @@
-"""Round 36 (18 Oct, app v63): the teaching canvas, phase 2. Pieces prepared with the script, and solution lines.
+"""Round 36 (18 Oct, app v64): the teaching canvas, phase 2. Pieces prepared with the script, and solution lines.
  - a script can hold pieces ({"type": "piece"}: heading, equation, structure, text) and a question can hold "solution" lines
  - Teach: Canvas lists the pieces by part; Add puts them on his page (equations and structures centred, headings in Title Case)
  - pieces leave no writing space under them; a question does
