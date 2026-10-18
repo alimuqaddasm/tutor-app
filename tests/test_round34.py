@@ -197,6 +197,10 @@ with sync_playwright() as p:
       await new Promise(r => setTimeout(r, 150)); document.querySelector('[data-ink="undo"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
       const s = !!__t('INK.cur'); el.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'pen', pointerId: 19, clientX: 640, clientY: 460, buttons: 0, pressure: 0, bubbles: true })); return s; }""")
     check("  ...nor does a right-click on a toolbar button, even with the button held", not started)
+    quick = pg.evaluate("""() => { const el = document.querySelector('.stu-view'); el.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'pen', pointerId: 20, clientX: 640, clientY: 460, buttons: 1, pressure: 0, bubbles: true }));
+      el.dispatchEvent(new MouseEvent('contextmenu', { clientX: 640, clientY: 460, bubbles: true, cancelable: true }));
+      const s = !!__t('INK.cur'); el.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'pen', pointerId: 20, clientX: 640, clientY: 460, buttons: 0, pressure: 0, bubbles: true })); return s; }""")
+    check("  ...nor a right-click in the same moment the pen first says tip down (under 80 ms, like a pen just landing)", not quick)
     pg.screenshot(path=os.path.join(SHOTS, "r34-tools-1440.png"))
     pg.click('[data-ink="t-hl"]'); pg.wait_for_timeout(100); pg.screenshot(path=os.path.join(SHOTS, "r34-highlighter-1440.png"))
 
