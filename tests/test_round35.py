@@ -219,7 +219,11 @@ with sync_playwright() as p:
     t2 = ctx(1280, 800, pw=False, touch=True).new_page(); t2.on("pageerror", lambda e: errs.append("tablet 2: " + str(e)))
     t2.goto(APP + "#/lesson/" + LID + "/student"); t2.wait_for_selector(".cv-page", timeout=30000); t2.wait_for_timeout(800)
     check("a tablet without the exam password asks for it", t2.locator("#cvpw").count() == 1)
-    t2.fill("#cvpw", PW); t2.click("#cvpwgo"); t2.wait_for_timeout(1500)
+    t2.locator("#cvpw").tap(); t2.wait_for_timeout(400)   # a real tap, then typing (Ali, 18 Oct: the box would not take a tap)
+    check("  ...tapping the password box puts the cursor in it", t2.evaluate("document.activeElement && document.activeElement.id === 'cvpw'"))
+    t2.keyboard.type(PW); t2.wait_for_timeout(200)
+    check("  ...and what he types stays in it", t2.input_value("#cvpw") == PW)
+    t2.locator("#cvpwgo").tap(); t2.wait_for_timeout(1500)
     check("  ...and then shows the canvas", t2.locator("#cvpw").count() == 0 and "Page 1 of 1" in t2.locator(".cv-pages").inner_text())
 
     # screenshots at 1440 and 390

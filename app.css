@@ -923,6 +923,7 @@ body[data-tlayout="flip"] .tfoot > .btn{min-height:var(--tap)}
 .stu{display:flex;flex-direction:column;height:100vh;background:var(--ground)}
 .stu.clean{position:relative;display:block}
 .stu{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}   /* nothing on his screen is selectable, so the S Pen button never turns into Chrome's text selection */
+.stu :is(input,textarea){-webkit-user-select:text;user-select:text}   /* a box to type in (the exam password on the canvas) still takes a tap and text */
 .stu-menu{position:fixed;top:10px;left:10px;z-index:5;width:40px;height:40px;border:0;border-radius:var(--r-md);background:var(--sunk);color:var(--text);font-size:18px;opacity:.25;cursor:pointer}
 .stu-menu:hover,.stu-menu:focus-visible{opacity:1}
 .stu-view{overflow:auto;display:flex;flex-direction:column;align-items:center;gap:var(--s3)}

@@ -2358,8 +2358,8 @@ document.addEventListener("pointermove", function (e) { var c = INK.cur;
 document.addEventListener("contextmenu", function (e) { if (MODE !== "student" || !(INK.cur || INK.pen)) return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "right-click"); if (INK.cur) inkToRub(INK.cur); }, true);
 /* Chrome on Android turns "S Pen button held + drag" into its own text selection (Ali's Tab S7 FE, 17 Oct): nothing on his
    screen is ever selectable (app.css), and any selection Chrome still starts is stopped and noted in the pen button check */
-document.addEventListener("selectstart", function (e) { if (MODE !== "student") return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "Chrome tried to select text"); if (INK.cur) inkToRub(INK.cur); }, true);
-document.addEventListener("selectionchange", function () { if (MODE !== "student") return; var sel = getSelection(); if (sel && !sel.isCollapsed) sel.removeAllRanges(); });
+document.addEventListener("selectstart", function (e) { if (MODE !== "student" || e.target.closest && e.target.closest("input, textarea")) return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "Chrome tried to select text"); if (INK.cur) inkToRub(INK.cur); }, true);
+document.addEventListener("selectionchange", function () { if (MODE !== "student" || document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return; var sel = getSelection(); if (sel && !sel.isCollapsed) sel.removeAllRanges(); });
 ["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { if (e.pointerType === "pen") { INK.pen = false; INK.arm = false; } var c = INK.cur;
   if (n === "pointercancel" && c && e.pointerId === c.id) { INK.diag = "Pen button check: the browser took over the stroke · " + (e.pointerType || "?"); var d = $("#inkdiag"); if (d) d.textContent = INK.diag; }
   if (c && e.pointerId === c.id) inkEnd(c); }, true); });
@@ -2450,7 +2450,7 @@ function cvH(u) { var el = cvEl(u); return el ? el.offsetHeight / cvScale() : 0;
 /* bring the page in line with the log: add and drop pieces, move them, page tags, ink page */
 function cvSync() { var root = $(".stu.cv"), page = $(".cv-page"); if (!root || !page) return; var st = cvState(), pg = st.pages[st.cur], items = cvItems(), s = cvScale(), seen = {};
   page.style.setProperty("--cvs", s);
-  if (!cvReady()) { page.innerHTML = '<div class="cv-setup card pad stack"><b class="t-card">Connect this tablet to Teach</b><span class="hint">Teach on the laptop sends questions here through the exam server. Type the exam password once on this device.</span><div class="row s2"><input class="input" type="password" id="cvpw" autocomplete="current-password" aria-label="Exam password" placeholder="Exam password"><button class="btn pri" type="button" id="cvpwgo">Save password</button></div></div>'; root.setAttribute("data-setup", "1"); return; }
+  if (!cvReady()) { if (root.hasAttribute("data-setup")) return; page.innerHTML = '<div class="cv-setup card pad stack"><b class="t-card">Connect this tablet to Teach</b><span class="hint">Teach on the laptop sends questions here through the exam server. Type the exam password once on this device.</span><div class="row s2"><input class="input" type="password" id="cvpw" autocomplete="current-password" aria-label="Exam password" placeholder="Exam password"><button class="btn pri" type="button" id="cvpwgo">Save password</button></div></div>'; root.setAttribute("data-setup", "1"); return; }
   if (root.hasAttribute("data-setup")) { root.removeAttribute("data-setup"); page.innerHTML = ""; }
   pg.items.forEach(function (it) { seen[it.u] = 1; var el = cvEl(it.u), q = cvOf(it, items);
     if (!el) { el = document.createElement("div"); el.className = "cv-item k-" + (q ? q.kind : "none"); el.setAttribute("data-u", it.u);
@@ -2557,7 +2557,7 @@ document.addEventListener("click", function (e) { if (MODE !== "student" || !STU
   if (t.hasAttribute("data-cvgo")) { var n = st.cur + +t.getAttribute("data-cvgo"); if (st.pages[n]) cvSend([{ t: "go", n: n }]); return; }
   if (t.hasAttribute("data-cvnew")) { cvSend([{ t: "new" }]); return; }
   if (t.hasAttribute("data-cvrm")) { var u = t.closest(".cv-item").getAttribute("data-u"); INK.pages[inkKey()] = (INK.pages[inkKey()] || []).filter(function (s) { return s.o !== u; }); CV.sel = null; cvInkSave(); cvSend([{ t: "rm", u: u }]); return; }
-  if (CV.ptr === "pen" || Date.now() - (CV.panned || 0) < 400) return;   // the S Pen writes, and a scroll is not a tap; picking a piece is for a finger
+  if (CV.ptr === "pen" || Date.now() - (CV.panned || 0) < 400 || t.closest(".cv-setup")) return;   // the S Pen writes, and a scroll is not a tap; picking a piece is for a finger
   var it = t.closest(".cv-item"); CV.sel = it && CV.sel !== it.getAttribute("data-u") ? it.getAttribute("data-u") : null; cvSync(); });
 document.addEventListener("keydown", function (e) { if (e.key === "Enter" && e.target.id === "cvpw") { e.preventDefault(); var b = $("#cvpwgo"); if (b) b.click(); } });
 
