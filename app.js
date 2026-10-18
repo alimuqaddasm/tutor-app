@@ -2431,7 +2431,7 @@ document.addEventListener("pointermove", function (e) { var c = INK.cur;
   if (Math.hypot(e.clientX - c.ax, e.clientY - c.ay) > 3) { c.ax = e.clientX; c.ay = e.clientY; if (!c.s.line) inkHold(c); } }, true);
 /* some tablets send the side button as a right-click: no menu on his screen, and the stroke becomes rubbing out */
 document.addEventListener("contextmenu", function (e) { if (MODE !== "student" || !(INK.cur || INK.pen || INK.arm)) return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "right-click");
-  if (INK.cur) inkToRub(INK.cur); else if (INK.arm && INK.lp && INK.lp.el && inkCan({ target: INK.lp.el })) inkHeld(); }, true);
+  if (INK.cur) inkToRub(INK.cur); else if (INK.arm && INK.lp && INK.lp.el && INK.lp.el.isConnected && inkCan(e)) inkHeld(); }, true);   // only on his page itself, and not from a pen last seen on a page since replaced
 /* Chrome on Android turns "S Pen button held + drag" into its own text selection (Ali's Tab S7 FE, 17 Oct): nothing on his
    screen is ever selectable (app.css), and any selection Chrome still starts is stopped and noted in the pen button check */
 document.addEventListener("selectstart", function (e) { if (MODE !== "student" || e.target.closest && e.target.closest("input, textarea")) return; e.preventDefault(); inkSeen({ pointerType: "pen", buttons: "?", button: "?" }, "Chrome tried to select text"); if (INK.cur) inkToRub(INK.cur); }, true);
