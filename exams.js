@@ -108,6 +108,7 @@ window.examsView = function (r) {
     return;
   }
   if (parts.length === 1) return listView();
+  if (parts[1] === "warmup") return warmView();
   if (parts[2] === "mark") return markView(decodeURIComponent(parts[1]));
   return examView(decodeURIComponent(parts[1]));
 };
@@ -132,7 +133,7 @@ function listView() {
     .catch(function (e) { app.innerHTML = '<div class="wrap exams">' + listHead() + '<div class="empty"><b class="t-card">Couldn’t load exams</b><span class="hint">' + esc(e.message) + '. Check the exam server and password in <a href="#/settings">Settings</a>.</span></div></div>'; });
 }
 function listHead() { return '<header class="head"><div class="stack s2"><h1 class="t-page">Exams and Assignments</h1><div class="tags">' + T.tag("Exam: timed, on his tablet") + T.tag("Assignment: no clock") + '</div></div>' +
-  (T.isTry ? '<button class="btn pri" type="button" data-practice>Make a practice exam</button>' : "") + '</header>'; }
+  '<div class="row s2"><a class="btn" href="#/exams/warmup">Warm-up cards</a>' + (T.isTry ? '<button class="btn pri" type="button" data-practice>Make a practice exam</button>' : "") + '</div></header>'; }
 /* "Chapters 1 to 6 (revised, 45 min)" is "Chapters 1 to 6"; "Holiday practice, 23 to 30 Oct" is "Holiday practice": dates and notes are tags */
 function rq0(res) { var q = res.questions || []; return q.length && q.every(function (x) { return x.score != null; }); }
 function shortTitle(s) { return titleCase(String(s || "").replace(/\s*\((?=[^)]*[\d,])[^)]*\)\s*$/, "").replace(/,\s*\d{1,2}(\s+\w+)?\s+to\s+\d{1,2}\s+\w+$/, "").trim()); }
@@ -875,4 +876,86 @@ document.addEventListener("input", function (e) {
 
 /* The tab may have been opened before this file arrived. */
 if ((location.hash || "").indexOf("#/exams") === 0) T.render();
+/* ===================== warm-up cards (Ali, 21 Oct) =====================
+   students/<s>/warmup/cards.json in the tutoring repo is the list; Ali approves, edits or rejects each card here, saves the
+   file to the repo, then sends the approved cards to his deck on the exam server (one assignment). His tries come back
+   from the server and show on each card. Drafts whose answer is the mark scheme's own words and that carry liveAt go
+   to the server as pending: they go live by themselves at that time unless Ali rejects them first. */
+var WC = null;   // { path, sha, data, dirty, f: {st, kind, topic}, exams, exam, tries }
+function warmPath() { return T.studentBase() + "warmup/cards.json"; }
+function warmView() {
+  app.innerHTML = '<div class="wrap exams"><header class="head"><div class="stack s2"><div class="crumb"><a href="#/exams">Exams</a><span aria-hidden="true">/</span><span>Warm-up cards</span></div><h1 class="t-page">Warm-up cards</h1></div></header><div class="empty"><b class="t-card">Loading</b></div></div>';
+  Promise.all([T.loadTree().then(function () { return T.fileJSON(warmPath()); }), call("GET", "/api/t/exams").catch(function () { return []; })]).then(function (v) {
+    var keep = WC && WC.dirty ? WC : null;
+    WC = keep || { path: warmPath(), sha: v[0] && v[0].sha, data: (v[0] && v[0].data) || { cards: [] }, dirty: false, f: { st: "draft", kind: "", topic: "" }, tries: {} };
+    WC.exams = (v[1] || []).filter(function (e) { return e.kind === "assignment"; });
+    if (!WC.exam || !WC.exams.some(function (e) { return e.id === WC.exam; })) { var real = WC.exams.filter(function (e) { return !e.practice && e.status !== "locked"; })[0] || WC.exams[0]; WC.exam = real ? real.id : null; }
+    warmTries().then(warmDraw); warmDraw();
+  }, function (e) { app.querySelector(".empty").innerHTML = '<b class="t-card">' + esc(e.message) + '</b>'; });
+}
+function warmTries() { if (!WC.exam) return Promise.resolve();
+  return call("GET", "/api/t/exams/" + encodeURIComponent(WC.exam) + "/cards").then(function (r) { var t = {}; (r.tries || []).forEach(function (x) { (t[x.card_id] = t[x.card_id] || []).push(x); });
+    WC.tries = t; WC.live = (r.cards || []).filter(function (c) { return c.live; }).length; WC.onServer = (r.cards || []).length; }, function () {}); }
+var WSTAT = [["draft", "Waiting"], ["approved", "Approved"], ["rejected", "Rejected"], ["", "All"]];
+function warmDraw() {
+  if ((location.hash || "") !== "#/exams/warmup" || !WC) return;
+  var cards = WC.data.cards || [], f = WC.f, cnt = function (st) { return cards.filter(function (c) { return !st || c.status === st; }).length; };
+  var topics = {}; cards.forEach(function (c) { if (c.topic) topics[c.topic] = (topics[c.topic] || 0) + 1; });
+  var shown = cards.filter(function (c) { return (!f.st || c.status === f.st) && (!f.kind || c.kind === f.kind) && (!f.topic || c.topic === f.topic); });
+  var ex = (WC.exams || []).filter(function (e) { return e.id === WC.exam; })[0];
+  var h = '<div class="wrap exams wc"><header class="head"><div class="stack s2"><div class="crumb"><a href="#/exams">Exams</a><span aria-hidden="true">/</span><span>Warm-up cards</span></div><h1 class="t-page">Warm-up cards</h1>' +
+    '<div class="tags">' + T.tag(cards.length + " cards") + T.tag(cnt("draft") + " waiting", cnt("draft") ? "live" : "") + T.tag(cnt("approved") + " approved", "ok") + (WC.onServer != null ? T.tag(WC.live + " live on his deck") : "") + '</div></div>' +
+    '<div class="row s2"><button class="btn" type="button" data-wcsave' + (WC.dirty && !T.isTry ? "" : " disabled") + '>' + (WC.dirty ? "Save to tutoring repo" : "Saved") + '</button>' +
+    '<button class="btn pri" type="button" data-wcsend' + (WC.exam ? "" : " disabled") + '>Send to his deck</button></div></header>' +
+    '<div class="card pad stack s3"><div class="row s2"><span class="lab">His deck</span>' + (WC.exams && WC.exams.length ? '<select class="input wc-ex" data-wcex>' + WC.exams.map(function (e) { return '<option value="' + esc(e.id) + '"' + (e.id === WC.exam ? " selected" : "") + '>' + esc(e.title) + (e.practice ? " (practice)" : "") + '</option>'; }).join("") + '</select>' : '<span class="hint">Load the holiday pack on the exam server first.</span>') + '</div>' +
+    '<span class="hint">Approved cards go to his deck. A waiting card that carries a mark-scheme answer and a time goes live by itself at that time. Waiting and rejected cards never reach him.</span></div>' +
+    '<div class="qbar" role="group" aria-label="Show">' + WSTAT.map(function (x) { return '<button class="chip" type="button" data-wcf="st:' + x[0] + '" aria-pressed="' + (f.st === x[0]) + '">' + x[1] + ' <b>' + cnt(x[0]) + '</b></button>'; }).join("") +
+      [["", "Both kinds"], ["mistake", "His mistakes"], ["general", "General"]].map(function (x) { return '<button class="chip" type="button" data-wcf="kind:' + x[0] + '" aria-pressed="' + (f.kind === x[0]) + '">' + x[1] + '</button>'; }).join("") +
+      '<select class="input wc-topic" data-wctopic aria-label="Topic"><option value="">All topics</option>' + Object.keys(topics).sort(function (a, b) { return a.localeCompare(b, undefined, { numeric: true }); }).map(function (t) { return '<option value="' + esc(t) + '"' + (f.topic === t ? " selected" : "") + '>' + esc(t) + ' (' + topics[t] + ')</option>'; }).join("") + '</select></div>' +
+    (shown.length ? '<div class="wc-list">' + shown.map(warmCard).join("") + '</div>' : '<div class="empty"><b class="t-card">No cards here</b></div>') + '</div>';
+  app.innerHTML = h;
+}
+function warmCard(c) {
+  var tr = WC.tries[c.id] || [], right = tr.filter(function (x) { return x.right; }).length, i = (WC.data.cards || []).indexOf(c);
+  var st = c.status === "approved" ? T.tag("Approved", "ok") : c.status === "rejected" ? T.tag("Rejected", "bad") : T.tag("Waiting", "live");
+  return '<article class="card wc-card" data-wci="' + i + '" data-st="' + esc(c.status) + '"><div class="row s2">' + st + T.tag(c.kind === "mistake" ? "His mistake" : "General", "line") +
+    (c.page ? T.tag(esc(c.page)) : "") + (c.topic ? T.tag(esc(c.topic)) : "") + (c.msWorded ? T.tag("Mark scheme words") : "") + (tr.length ? T.tag(right + "/" + tr.length + " right on his deck", right === tr.length ? "ok" : "") : "") + '</div>' +
+    '<label class="wc-l">Question<input class="input wc-q" data-wcq value="' + esc(c.q) + '"></label>' +
+    '<div class="wc-opts">' + (c.options || []).map(function (o, n) { return '<label class="wc-opt' + (n ? "" : " right") + '"><span class="tag ' + (n ? "" : "ok") + '">' + (n ? "Wrong" : "Right") + '</span><input class="input" data-wco="' + n + '" value="' + esc(o) + '"></label>'; }).join("") + '</div>' +
+    '<label class="wc-l">Book or mark scheme words (he sees this after the deck)<textarea class="input wc-why" data-wcw rows="2">' + esc(c.why || "") + '</textarea></label>' +
+    '<div class="row s2 wc-acts"><button class="btn sm' + (c.status === "approved" ? "" : " pri") + '" type="button" data-wcst="approved">' + (c.status === "approved" ? "Approved" : "Approve") + '</button><button class="btn sm' + (c.status === "rejected" ? "" : " quiet") + '" type="button" data-wcst="rejected">' + (c.status === "rejected" ? "Rejected" : "Reject") + '</button>' + (c.status !== "draft" ? '<button class="btn sm quiet" type="button" data-wcst="draft">Back to waiting</button>' : "") +
+    '<span class="hint push">' + esc(c.from || "") + '</span></div></article>';
+}
+function warmSet(el, fn) { var art = el.closest("[data-wci]"); if (!art || !WC) return; var c = WC.data.cards[+art.getAttribute("data-wci")]; if (!c) return; fn(c, art); WC.dirty = true; WC.data.updated = new Date().toISOString().slice(0, 10);
+  var b = $("[data-wcsave]"); if (b) { b.disabled = T.isTry; b.textContent = "Save to tutoring repo"; } }
+document.addEventListener("input", function (e) { var t = e.target; if (!WC || !t.closest || !t.closest(".wc-card")) return;
+  if (t.hasAttribute("data-wcq")) warmSet(t, function (c) { c.q = t.value; });
+  else if (t.hasAttribute("data-wco")) warmSet(t, function (c) { c.options[+t.getAttribute("data-wco")] = t.value; });
+  else if (t.hasAttribute("data-wcw")) warmSet(t, function (c) { c.why = t.value; }); });
+document.addEventListener("change", function (e) { var t = e.target; if (!WC) return;
+  if (t.hasAttribute("data-wcex")) { WC.exam = t.value; WC.tries = {}; warmTries().then(warmDraw); }
+  else if (t.hasAttribute("data-wctopic")) { WC.f.topic = t.value; warmDraw(); } });
+function warmSave() { if (T.isTry) { T.toast("Try-out mode: nothing is saved"); return Promise.resolve(false); }
+  var b = $("[data-wcsave]"); if (b) { b.disabled = true; b.textContent = "Saving…"; }
+  return T.commitFiles([{ path: WC.path, b64: T.b64enc(JSON.stringify(WC.data, null, 1) + "\n") }], "Warm-up cards: Ali's review (" + T.CFG.device + ")")
+    .then(function () { WC.dirty = false; T.toast("Cards saved to the repo"); warmDraw(); return true; }, function (e) { T.toast(e.message); warmDraw(); return false; }); }
+function warmSend() { if (!WC.exam) return;
+  var out = (WC.data.cards || []).filter(function (c) { return c.status === "approved" || (c.status === "draft" && c.msWorded && c.liveAt); }).map(function (c) {
+    return { id: c.id, kind: c.kind, subject: c.subject, q: c.q, options: c.options, why: c.why, page: c.page, topic: c.topic, status: c.status === "approved" ? "live" : "pending", msWorded: !!c.msWorded, liveAt: c.liveAt || null }; });
+  var bad = out.filter(function (c) { return !c.q.trim() || c.options.length < 2 || c.options.some(function (o) { return !String(o).trim(); }) || new Set(c.options).size !== c.options.length; });
+  if (bad.length) { T.toast("Fix first: " + bad.map(function (c) { return c.id; }).slice(0, 3).join(", ") + " (empty or repeated answers)"); return; }
+  var b = $("[data-wcsend]"); if (b) { b.disabled = true; b.textContent = "Sending…"; }
+  (WC.dirty ? warmSave() : Promise.resolve(true)).then(function () {
+    return call("PUT", "/api/t/exams/" + encodeURIComponent(WC.exam) + "/cards", { cards: out }); })
+    .then(function (r) { T.toast(r.live + " cards live on his deck"); return warmTries(); }, function (e) { T.toast(e.message); })
+    .then(warmDraw); }
+document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-wcf],[data-wcst],[data-wcsave],[data-wcsend]"); if (!t || !WC || (location.hash || "") !== "#/exams/warmup") return;
+  if (t.hasAttribute("data-wcf")) { var kv = t.getAttribute("data-wcf").split(":"); WC.f[kv[0]] = kv[1]; warmDraw(); }
+  else if (t.hasAttribute("data-wcst")) { var st = t.getAttribute("data-wcst"); warmSet(t, function (c, art) { c.status = st; art.setAttribute("data-st", st); });
+    var art = t.closest("[data-wci]"), c = WC.data.cards[+art.getAttribute("data-wci")]; art.outerHTML = warmCard(c);
+    var cn = $(".wc .head .tags"); if (cn) { var cards = WC.data.cards; cn.innerHTML = T.tag(cards.length + " cards") + T.tag(cards.filter(function (x) { return x.status === "draft"; }).length + " waiting", "live") + T.tag(cards.filter(function (x) { return x.status === "approved"; }).length + " approved", "ok") + (WC.onServer != null ? T.tag(WC.live + " live on his deck") : ""); } }
+  else if (t.hasAttribute("data-wcsave")) warmSave();
+  else if (t.hasAttribute("data-wcsend")) warmSend(); });
+window.addEventListener("beforeunload", function (e) { if (WC && WC.dirty) { e.preventDefault(); e.returnValue = ""; } });
+
 })();
