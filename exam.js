@@ -592,7 +592,7 @@ function asgHome(m) {
   var dayBtn = function (k) {
     var x0 = by[k][0], isOpen = x0.open, done = by[k].filter(function (x) { return x.doneAt != null; }).length;
     var sub = isOpen ? '<span class="row s2">' + by[k].map(function (x) { return '<span class="dot ' + subjOf(x) + (x.doneAt != null ? " faded" : "") + '"></span>'; }).join("") + '<span class="hint">' + (done === by[k].length ? "All done" : done + " of " + by[k].length + " done") + '</span></span>'
-      : '<span class="hint">' + (x0.opensAt ? "Opens " + esc(whenText(x0.opensAt)) : "Opens later") + '</span>';
+      : '<span class="hint">' + (x0.opensAt ? "Opens when you finish the day before, or at " + esc(whenText(x0.opensAt)) : "Opens when you finish the day before") + '</span>';
     return '<button type="button" class="a-dayb" data-a-day="' + k + '"' + (k === ADAY ? ' aria-current="true"' : "") + (isOpen ? "" : " disabled") + '><span class="tag' + (k === ADAY ? " day" : "") + '">' + esc(dname(k)) + '</span><span class="stack" style="gap:0">' + sub + '</span></button>';
   };
   var qRow = function (x, q, i) {

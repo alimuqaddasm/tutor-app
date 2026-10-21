@@ -26,6 +26,21 @@ async function makeDays(now = T0 - 10 * MIN) {
 }
 
 describe("days, practice, notes, phone (8 Oct)", () => {
+  it("finishing every section of a day opens the next day at once (21 Oct)", async () => {
+    const r = await teacher(T0, "POST", "/api/t/exams", { json: { title: "Days", kind: "assignment", gap_hours: 12,
+      sections: [{ id: "d1m", title: "Day 1 Maths", day: 1 }, { id: "d1c", title: "Day 1 Chem", day: 1 }, { id: "d2m", title: "Day 2 Maths", day: 2 }, { id: "d3m", title: "Day 3 Maths", day: 3 }],
+      questions: ["d1m", "d1c", "d2m", "d3m"].map((x) => ({ id: "q" + x, marks: 2, type: "short", section_id: x })) } });
+    const token = (await teacher(T0, "POST", `/api/t/exams/${r.data.id}/link`)).data.token;
+    await call(T0, "POST", "/api/s/sections/d1m/open", { token });
+    await call(T0 + MIN, "POST", "/api/s/sections/d1m/done", { token, json: {} });
+    let s = await call(T0 + 2 * MIN, "GET", "/api/s/state", { token });
+    expect(s.data.sections.map((x) => x.open)).toEqual([true, true, false, false]);   // one of two finished: day 2 waits
+    await call(T0 + 3 * MIN, "POST", "/api/s/sections/d1c/done", { token, json: {} });
+    s = await call(T0 + 4 * MIN, "GET", "/api/s/state", { token });
+    expect(s.data.sections.map((x) => x.open)).toEqual([true, true, true, false]);    // both finished: day 2 open now
+    expect((await call(T0 + 4 * MIN, "PUT", "/api/s/answers/qd2m", { token, json: { text: "x", seq: 1 } })).status).toBe(200);
+  });
+
   it("day 1 is open; day 2 opens 12 hours after he first opens day 1; day 3 12 hours after day 2", async () => {
     const { token } = await makeDays();
     let s = await call(T0, "GET", "/api/s/state", { token });
