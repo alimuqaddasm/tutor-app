@@ -61,6 +61,8 @@ with sync_playwright() as p:
     pg.click(".tbar #clkend"); pg.wait_for_timeout(500)
     last = pg.evaluate("__t('L.session.time.log[L.session.time.log.length-1].e')")
     check("End lesson logs 'end'", last == "end", last)
+    check("End lesson opens the After the lesson card (round 40)", pg.locator("#afterpop").count() == 1)
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
     pg.click('[data-tgo="+1"]'); pg.wait_for_timeout(300); pg.click('[data-tgo="+1"]'); pg.wait_for_timeout(300)
     check("after End, no 'clock is paused' reminder", pg.locator(".clocknag:not(.brk)").count() == 0)
     check("after End, the End button is gone", pg.locator(".tbar #clkend").count() == 0)

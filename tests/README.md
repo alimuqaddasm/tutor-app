@@ -31,6 +31,7 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/runtest.py tests/test_round37.py   # round 37 (18 Oct, app v66): the eraser like Samsung Notes (Whole line or Area, sizes, both kept on the device, a circle while erasing), no writing in the air, the pen draws only the new piece of a line (23 checks)
     python tests/runtest.py tests/test_round38.py   # round 38 (18 Oct, app v69): Record pen under More: 8 seconds of every pen, touch, mouse and key event, folded and ready to copy, to find how his S Pen button reports (18 checks)
     python tests/runtest.py tests/test_round39.py   # round 39 (21 Oct, app v72): the camera on a question opens a card on the button: paste (Ctrl+V), drop or Choose photo, a picture of the question, the saved photos at once, Teach keys paused; His work page takes a pasted photo (28 checks)
+    python tests/runtest.py tests/test_round40.py   # round 40 (21 Oct, app v72): no 'Hard:' on his screens, zoom on Student view (Questions and canvas), End lesson opens After the lesson as a card in Teach, every question (video ones too) in the His work list (20 checks)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
 On Windows run with PYTHONIOENCODING=utf-8, or printing ★ crashes the console.

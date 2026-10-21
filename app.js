@@ -788,7 +788,7 @@ function workView() {
   var h = pageHead("His work", "", '<div class="tags">' + tag("Goes to GitHub") + tag("Auto-checker marks it") + '</div>');
   h += '<div class="split"><form class="card pad-l stack s5" id="wkform" style="flex:1 1 360px;max-width:420px"><label for="wk-files" class="drop"><span class="cam">' + CAMIC + '</span><b>Take a photo, choose files or paste</b><span class="tags" style="justify-content:center">' + tag("Photos") + tag("PDFs") + tag("Ctrl+V") + tag("Many pages at once") + '</span><span class="hint" id="wk-pick"></span>' +
     '<input id="wk-files" class="sr" type="file" accept="image/*,application/pdf" multiple required></label>' +
-    '<div class="field"><label for="wk-item">Which question?</label><select class="input" id="wk-item"><option value="">Whole lesson or several questions</option>' + items.map(function (i) { return '<option value="' + esc(i.id) + '">' + esc(i.label) + '</option>'; }).join("") + '</select></div>' +
+    '<div class="field"><label for="wk-item">Which question?</label><select class="input" id="wk-item"><option value="">Whole lesson or several questions</option>' + workItems(items).map(function (i) { return '<option value="' + esc(i.id) + '">' + esc(i.label) + '</option>'; }).join("") + '</select></div>' +
     '<div class="field"><label for="wk-kind">What is it?</label><select class="input" id="wk-kind"><option value="class">Working in the lesson</option><option value="homework">Homework</option><option value="test">Test</option><option value="other">Other</option></select></div>' +
     '<div class="field"><label for="wk-note">Note for the auto-checker <span class="hint" style="font-weight:400">(optional)</span></label><input class="input" type="text" id="wk-note" placeholder="e.g. Page 2 is blurry"></div><div class="row"><button class="btn pri" type="submit" id="wk-go">Upload</button><span class="hint" id="wk-st"></span></div></form>';
   h += '<section class="grow stack"><div class="head" style="align-items:baseline"><h2 class="t-sec">Uploaded</h2><span class="hint">' + (live.length ? "Tap a photo to zoom" : "") + '</span></div>' +
@@ -800,10 +800,18 @@ function workView() {
     : '<div class="empty" style="padding:var(--s6) var(--s5)"><b>Auto-checker’s marking</b><span class="hint">Shows here after the auto-checker reads the photos: each question, the mark and what to fix.</span></div>';
   return h + '</section></div>';
 }
+/* His work page: every question he can answer, with its part, video questions (drills) too (Ali, 21 Oct: a photo for any question) */
+function workItems(items) { var by = {}; items.forEach(function (i) { by[i.id] = i; }); var out = [];
+  phases().filter(function (p) { return !p.sys; }).forEach(function (p) { var pn = partTitle(p.name) || p.name; (function walk(bs) { (bs || []).forEach(function (b) {
+    if (b.type === "question" && by[b.id]) out.push({ id: b.id, label: pn + " \u00b7 " + (b.label || b.id) });
+    else if (b.type === "quiz") (b.items || []).forEach(function (q) { if (by[q.id]) out.push({ id: q.id, label: pn + " \u00b7 " + by[q.id].label }); });
+    else if (b.type === "drill") (b.items || []).forEach(function (d) { out.push({ id: drillKey(d[0]), label: pn + " \u00b7 " + texPlain(plain(d[0])).slice(0, 70) }); });
+    if (b.blocks) walk(b.blocks); }); })(p.blocks); });
+  items.filter(function (i) { return /^x:/.test(i.id); }).forEach(function (i) { out.push(i); }); return out; }
 function itemsList() { var out = [];
   phases().forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) { if (b.type === "question") out.push({ id: b.id, label: b.label || b.id }); if (b.type === "quiz") (b.items || []).forEach(function (q, i) { out.push({ id: q.id, label: "Quiz " + (i + 1) + ": " + String(q.q).replace(/<[^>]+>/g, "").slice(0, 60) }); }); if (b.blocks) walk(b.blocks); }); })(p.blocks); });
   L.session.extra.forEach(function (e, i) { out.push({ id: "x:" + e.id, label: "Extra " + (i + 1) + ": " + e.q.slice(0, 60) }); }); return out; }
-function labelOf(id) { if (!id) return ""; var a = L.session.answers[id]; if (a && a.q && (/^[dr]:/.test(id) || id.indexOf("~") > 0)) return a.q; var f = itemsList().filter(function (i) { return i.id === id; })[0]; return f ? f.label : id; }
+function labelOf(id) { if (!id) return ""; var a = L.session.answers[id]; if (a && a.q && (/^[dr]:/.test(id) || id.indexOf("~") > 0)) return a.q; var f = itemsList().filter(function (i) { return i.id === id; })[0]; if (!f && /^d:/.test(id)) f = workItems(itemsList()).filter(function (i) { return i.id === id; })[0]; return f ? f.label : id; }
 
 /* times: everything editable, including undoing "End lesson" */
 function tval(iso) { return iso ? hhmm(iso) : ""; }
@@ -838,6 +846,20 @@ document.addEventListener("click", function (e) { var b = e.target.closest && e.
 document.addEventListener("click", function (e) { if (!(e.target.closest && e.target.closest("[data-shortredo]")) || !L) return; L.session.short = null; touch(); drawLesson(); });
 /* after the lesson */
 function noteBox(v) { return '<textarea class="note fixnote" data-note rows="1" aria-label="Your note">' + esc(v) + '</textarea>'; }
+/* Teach (Ali, 21 Oct): End lesson opens After the lesson as a card under the top bar, so notes go in at once without leaving Teach.
+   The same form as the page; it closes on Finish and save, the \u00d7 or Escape, and the After the lesson button in the bar opens it again */
+function afterOpen() { afterClose(); var btn = $("#afterbtn"); if (!L) return;
+  var el = document.createElement("div"); el.id = "afterpop"; el.className = "afterpop raised"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "After the lesson");
+  el.innerHTML = '<button class="btn sm quiet afterx" type="button" data-afterx aria-label="Close">\u00d7</button>' + afterView();
+  document.body.appendChild(el); afterPlace(); if (btn) btn.setAttribute("aria-expanded", "true"); loadImages(el);
+  var first = $("#fb-cov", el); if (first) first.focus({ preventScroll: true }); }
+function afterPlace() { var el = $("#afterpop"), btn = $("#afterbtn"); if (!el) return; var r = btn ? btn.getBoundingClientRect() : { bottom: 64, right: innerWidth - 16 }, w = Math.min(1040, innerWidth - 32), top = Math.max(8, r.bottom + 8);
+  el.style.width = w + "px"; el.style.left = Math.max(16, Math.min(r.right - w, innerWidth - w - 16)) + "px"; el.style.top = top + "px"; el.style.maxHeight = (innerHeight - top - 16) + "px"; }
+function afterClose() { var el = $("#afterpop"); if (el) el.remove(); var b = $("#afterbtn"); if (b) b.setAttribute("aria-expanded", "false"); }
+document.addEventListener("click", function (e) { if (e.target.closest && e.target.closest("[data-afterx]")) afterClose(); });
+document.addEventListener("keydown", function (e) { if (e.key === "Escape" && $("#afterpop") && !$("#campop")) afterClose(); });
+window.addEventListener("resize", afterPlace);
+window.addEventListener("hashchange", afterClose);
 function afterView() {
   var x = L.session, fb = x.feedback || {}, s = L.script || {}, sc = score(x);
   var cov = [], covTxt = [];
@@ -913,7 +935,9 @@ document.addEventListener("click", function (ev) {
   if (t.id === "clkgo" || t.hasAttribute("data-clkgo")) { var r2 = replay(x.time.log); var cur = phases().filter(function (p) { return p.id === L.phase && !p.sys; })[0];
     if (r2.running) logEvent("pause"); else { if (x.status === "finished") { x.status = "in-progress"; x.statusAt = now(); } logEvent(r2.secs ? "resume" : "start", cur ? cur.id : (r2.phase || phases()[0].id)); wake(); }
     drawLesson(); return; }
+  if (t.id === "afterbtn") { if ($("#afterpop")) afterClose(); else afterOpen(); return; }
   if (t.id === "clkend") { logEvent("end"); drawLesson(); flush(); var nx = ckJSON("tutor.next");
+    if (MODE === "teach" && !PREP) { afterOpen(); toast("Lesson ended." + (nx && nx.from === L.id ? " " + subjWord(nx.id) + " at " + hhmm(new Date(nx.at).toISOString()) + "." : "")); return; }
     toast("Lesson ended." + (nx && nx.from === L.id ? " " + subjWord(nx.id) + " at " + hhmm(new Date(nx.at).toISOString()) + "." : "") + " Notes and times: After the lesson. Undo under Times."); return; }
   if (t.id === "tm-undo") { var lg = x.time.log; for (var i = lg.length - 1; i >= 0; i--) { if (lg[i].e === "end") { lg.splice(i, 1); break; } } timeEdited(); drawLesson(); toast("“End lesson” undone"); return; }
   if (t.id === "tm-clear") { x.time.edit = {}; timeEdited(); drawLesson(); return; }
@@ -984,7 +1008,7 @@ document.addEventListener("submit", function (ev) {
     x.status = "finished"; x.statusAt = now(); touch(); var mine = L;
     var lg0 = x.time.log, rr = ckJSON("tutor.running"); if (rr && rr.id === L.id) ckJSON("tutor.running", null); ckJSON("tutor.break", null);
     if (lg0.length && !ckJSON("tutor.next")) nextAfter(L.id, lg0[lg0.length - 1].t);   // finished while paused: maths still counts from when the clock stopped
-    flush().then(function () { toast(TRY ? "Try-out: nothing was saved" : !mine.dirty ? "Lesson saved to GitHub" : navigator.onLine ? "Not saved yet: kept on this device, it retries by itself" : "Offline: kept on this device, it saves when you are back online"); if (L === mine) drawLesson(); }); return; }
+    flush().then(function () { toast(TRY ? "Try-out: nothing was saved" : !mine.dirty ? "Lesson saved to GitHub" : navigator.onLine ? "Not saved yet: kept on this device, it retries by itself" : "Offline: kept on this device, it saves when you are back online"); if (L === mine) { afterClose(); drawLesson(); } }); return; }
   if (f.id === "wkform") uploadWork();
 });
 function closeZoom() { $("#zoom").hidden = true; $("#zimg").removeAttribute("src"); ZM = null; }
@@ -1772,7 +1796,7 @@ function drawTeach() {
       '<span class="tag num"><span class="olab">Step </span>' + (TCH.pos + 1) + ' of ' + TCH.seq.length + '</span>' +
       (PREP ? tag("Prepare", "line") + '<a class="btn sm pri" href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach</a></div></div>' : (lv ? "" : previewing() ? '<button type="button" class="preview" data-pvhelp title="Nothing is recorded until you press Start lesson, verdicts included. You can still tick a step by hand.">Preview</button>'
         : '<button type="button" class="preview stopped" data-pvhelp title="The clock is stopped. Taught, Skip and verdicts still count.">Clock stopped</button>') +
-      '<span class="clockpill' + (lv ? " live" : "") + '"><span class="dot"></span><span class="t" id="clk">0:00</span></span><button class="btn sm' + (lv ? "" : " pri") + (clockNag(lv) ? " nag" : "") + '" id="clkgo" type="button"></button>' + ((L.session.time.log || []).length && !endedLog(L.session.time.log) ? '<button class="btn sm danger" id="clkend" type="button" title="Stops the clock for good. Notes and times go under After the lesson.">End<span class="olab"> lesson</span></button>' : "") + '</div></div>') +
+      '<span class="clockpill' + (lv ? " live" : "") + '"><span class="dot"></span><span class="t" id="clk">0:00</span></span><button class="btn sm' + (lv ? "" : " pri") + (clockNag(lv) ? " nag" : "") + '" id="clkgo" type="button"></button>' + ((L.session.time.log || []).length && !endedLog(L.session.time.log) ? '<button class="btn sm danger" id="clkend" type="button" title="Stops the clock for good. Notes and times go under After the lesson.">End<span class="olab"> lesson</span></button>' : endedLog(L.session.time.log || []) ? '<button class="btn sm' + (L.session.feedback && L.session.feedback.at ? "" : " pri") + '" id="afterbtn" type="button" aria-expanded="' + !!$("#afterpop") + '">After<span class="olab"> the lesson</span></button>' : "") + '</div></div>') +
     (reals.length > 1 ? '<div class="flow ' + esc(subj) + ' tflow" aria-hidden="true">' + reals.map(function (p) { var on = p === c.p, past = c.p && reals.indexOf(p) < reals.indexOf(c.p);
       return '<span style="flex:' + pw(p) + '"' + (on ? ' class="on"' : "") + '><i' + (on ? ' style="background:linear-gradient(90deg,var(--accent) ' + pf + '%,var(--line) ' + pf + '%)"' : past ? ' style="background:var(--accent);opacity:.45"' : "") + '></i></span>'; }).join("") + '</div>' : '<div class="tprog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>') +
     (PREP ? "" : clockNag(lv)) + '</div><div class="tstage">';
@@ -1997,7 +2021,7 @@ document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) re
 });
 document.addEventListener("toggle", function (e) { var d = e.target; if (MODE === "teach" && d.classList && d.classList.contains("opart")) TCH.open[d.getAttribute("data-pid")] = d.open; }, true);
 document.addEventListener("keydown", function (e) { if (MODE !== "teach" || SH || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || "")) return;
-  if ($("#wuov") || $("#sug") || $("#campop") || !$("#zoom").hidden || e.ctrlKey || e.altKey || e.metaKey) return;
+  if ($("#wuov") || $("#sug") || $("#campop") || $("#afterpop") || !$("#zoom").hidden || e.ctrlKey || e.altKey || e.metaKey) return;
   if (PREP && /^[0-6]$/.test(e.key)) return;
   if (e.key === "0") { iskipIt(); return; }
   if ((e.key === "a" || e.key === "A") && ($(".chunk.cur.flip") || $(".chunk.cur .slider"))) { flipIt(); return; }
@@ -2210,12 +2234,15 @@ function pingStudent() { if (BC && MODE === "teach" && L) BC.postMessage({ type:
 window.addEventListener("focus", pingStudent); document.addEventListener("visibilitychange", pingStudent);
 /* Show him: to the student tab if one is open for this lesson, otherwise full screen here */
 function showHim(id) { if (/^v:/.test(id) && !(BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 180000)) { toast("Open the Student view first, then press Show him"); return; } if (BC && L && studentSeen[L.id] && Date.now() - studentSeen[L.id] < 180000 && id !== "*") { BC.postMessage({ type: "show", lesson: L.id, id: id }); toast("Sent to the student view"); return; } openShow(id); }
+/* his screens never show a difficulty label (Ali, 17 Oct: "why does it say hard on student view? it would bias his response"). Teach keeps it for Ali */
+var HISLAB = /^\s*(?:<[^>]+>\s*)*(?:hard(?:er|est)?|easy|challenge|stretch|extension|(?:cgp |book )?warm-up)\s*[:\u2013\u2014-]\s*/i;
+function hisText(t) { t = String(t || ""); var m = HISLAB.exec(t); if (!m) return t; var tags = (m[0].match(/<[^>]+>/g) || []).join(""), rest = t.slice(m[0].length); return tags + rest.charAt(0).toUpperCase() + rest.slice(1); }
 function studentItems() { var out = [];
   phases().filter(function (p) { return !p.sys; }).forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) {
     if (b.type === "question" && (b.parts || []).length) out.push({ kind: "exam", id: b.id, img: [], twin: b, p: p });
     else if (b.type === "question" && (b.img || []).length) out.push({ kind: "exam", id: b.id, img: b.img, p: p });
-    else if (b.type === "quiz") (b.items || []).forEach(function (it) { out.push({ kind: "quick", id: it.id, text: it.q, p: p }); });
-    else if (b.type === "drill") (b.items || []).forEach(function (d) { out.push({ kind: "quick", id: drillKey(d[0]), text: d[0], p: p }); });
+    else if (b.type === "quiz") (b.items || []).forEach(function (it) { out.push({ kind: "quick", id: it.id, text: hisText(it.q), p: p }); });
+    else if (b.type === "drill") (b.items || []).forEach(function (d) { out.push({ kind: "quick", id: drillKey(d[0]), text: hisText(d[0]), p: p }); });
     else if (b.type === "video" && b.src) out.push({ kind: "video", id: vidKey(b), v: b, text: b.title || "Video", p: p });
     if (b.blocks) walk(b.blocks); }); })(p.blocks); });
   return out; }
@@ -2243,11 +2270,11 @@ function drawStudent() {
   STU.items.forEach(function (q) { if (q.kind === "exam" && !q.lab) { var b0 = null; (function find(bs) { (bs || []).forEach(function (b) { if (b.id === q.id) b0 = b; if (b.blocks) find(b.blocks); }); })(q.p.blocks); q.lab = b0 && (b0.label || b0.source) || ""; } });
   var from = Math.max(0, Math.min(at - 2, STU.items.length - 6)), chips = STU.items.slice(from, from + 6);
   var CHEV = function (d) { return '<svg class="icon lg" viewBox="0 0 24 24" aria-hidden="true"><path d="' + (d < 0 ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6") + '"></path></svg>'; };
-  app.innerHTML = '<div class="stu clean"><header class="stu-top"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>' + inkButton() + '<span class="push"></span>' + cvModeSeg() + '<div class="seg stu-n" role="group" aria-label="Questions on screen">' + [1, 2, 3, 4].map(function (n) { return '<button type="button" data-stun="' + n + '" aria-pressed="' + (stuN() === n) + '" title="' + (n === 1 ? "One question at a time" : n + " questions together") + '">' + n + '</button>'; }).join("") + '</div>' + (cur ? tag((grp.length > 1 ? (at + 1) + " to " + (STU.items.indexOf(grp[grp.length - 1]) + 1) : (at + 1)) + " of " + STU.items.length, "num") : "") + '</header>' + inkTools() + '<main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
+  app.innerHTML = '<div class="stu clean"><header class="stu-top"><button class="stu-menu" type="button" id="stumenu" aria-label="Choose a question"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>' + inkButton() + '<span class="push"></span>' + zoomSeg() + cvModeSeg() + '<div class="seg stu-n" role="group" aria-label="Questions on screen">' + [1, 2, 3, 4].map(function (n) { return '<button type="button" data-stun="' + n + '" aria-pressed="' + (stuN() === n) + '" title="' + (n === 1 ? "One question at a time" : n + " questions together") + '">' + n + '</button>'; }).join("") + '</div>' + (cur ? tag((grp.length > 1 ? (at + 1) + " to " + (STU.items.indexOf(grp[grp.length - 1]) + 1) : (at + 1)) + " of " + STU.items.length, "num") : "") + '</header>' + inkTools() + '<main class="stu-view" data-pos="' + (pos + 1) + '/' + list.length + '">' + view + '</main>' +
     '<button class="stu-edge prev" type="button" data-sgo="-1" aria-label="Previous question"' + (at <= 0 ? " disabled" : "") + '>' + CHEV(-1) + '</button><button class="stu-edge next" type="button" data-sgo="1" aria-label="Next question"' + (at < 0 || STU.items.indexOf(grp[grp.length - 1]) >= STU.items.length - 1 ? " disabled" : "") + '>' + CHEV(1) + '</button>' +
     (STU.items.length > 1 ? '<nav class="stu-chips" aria-label="Questions">' + chips.map(function (q) { return '<button type="button" class="it" data-si="' + q.i + '"' + (q === cur ? ' aria-current="true"' : "") + '>' + (q.kind === "video" ? '<svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"></path></svg>' : "") + (STU.items.indexOf(q) + 1) + ' \u00b7 ' + esc(short(q)) + '</button>'; }).join("") + (STU.items.length > 6 ? '<button type="button" class="it" id="stumore">More</button>' : "") + '</nav>' : "") + drawer + '</div>';
   var chh = $(".stu-chips"); if (chh) $(".stu").style.setProperty("--chipsh", chh.offsetHeight + "px");
-  $$(".stu-view img").forEach(showImg); loadImages(app); stuArrange(); boardMount(app, !!STU.banim); STU.banim = false; maths(app); prefetchLesson(); inkMount();
+  $(".stu").style.setProperty("--stuz", stuZoom()); $$(".stu-view img").forEach(showImg); loadImages(app); stuArrange(); boardMount(app, !!STU.banim); STU.banim = false; maths(app); prefetchLesson(); inkMount();
   var ci = $(".stu-item.cur"); if (ci && STU.drawer) ci.scrollIntoView({ block: "nearest" });
   if (BC) BC.postMessage({ type: "alive", lesson: L.id });
 }
@@ -2281,6 +2308,7 @@ document.addEventListener("click", function (e) { if (MODE !== "student" || !STU
   else if (t.hasAttribute("data-si")) { STU.i = +t.getAttribute("data-si"); STU.drawer = false; drawStudent(); }
   else if (t.hasAttribute("data-sgo")) stuGo(+t.getAttribute("data-sgo"));
   else if (t.hasAttribute("data-stun")) { ls("tutor.stun", t.getAttribute("data-stun")); drawStudent(); }
+  else if (t.hasAttribute("data-stuz")) { var zd = +t.getAttribute("data-stuz"), zi = STUZ.indexOf(stuZoom()); ls("tutor.stuzoom", String(zd ? STUZ[Math.max(0, Math.min(STUZ.length - 1, zi + zd))] : 1)); stuZoomApply(); }
   else if (t.id === "stumenu" || t.id === "stumore") { STU.drawer = !STU.drawer; drawStudent(); }
   else if (t.id === "stux") { STU.drawer = false; drawStudent(); }
   else if (t.id === "stupen" || t.hasAttribute("data-ink")) inkTool(t);
@@ -2569,11 +2597,17 @@ function cvAnswerHTML(ref) { var f = cvFind(ref); if (!f) return ""; var h = "";
   return h || '<p class="hint">No answer in the script.</p>'; }
 
 /* ----- the tablet: the page ----- */
+/* zoom on his screen (Ali, 17 Oct): smaller or bigger, kept on this device. Canvas: the page grows and scrolls sideways, pieces and ink stay in place */
+var STUZ = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 2.5];
+function stuZoom() { var z = +ls("tutor.stuzoom"); return STUZ.indexOf(z) >= 0 ? z : 1; }
+function zoomSeg() { var z = stuZoom(); return '<div class="seg stu-zoom" role="group" aria-label="Zoom"><button type="button" data-stuz="-1" aria-label="Zoom out"' + (z <= STUZ[0] ? " disabled" : "") + '>\u2212</button><button type="button" data-stuz="0" title="Back to 100%" class="num">' + Math.round(z * 100) + '%</button><button type="button" data-stuz="1" aria-label="Zoom in"' + (z >= STUZ[STUZ.length - 1] ? " disabled" : "") + '>+</button></div>'; }
+function stuZoomApply() { var z = stuZoom(), st = $(".stu"); if (st) st.style.setProperty("--stuz", z); $$(".stu-zoom").forEach(function (el) { el.outerHTML = zoomSeg(); });
+  if (STU && STU.canvas && $(".cv-page")) { cvSync(); inkDraw(); } }
 function cvModeSeg() { var on = STU && STU.canvas; return '<div class="seg cv-mode" role="group" aria-label="Student view"><button type="button" data-cvmode="canvas" aria-pressed="' + !!on + '">Canvas</button><button type="button" data-cvmode="questions" aria-pressed="' + !on + '">Questions</button></div>'; }
 function drawCanvas() { cvReset(L.id);
   if ($(".stu.cv") && $(".stu.cv").getAttribute("data-l") === L.id) { cvSync(); return; }   // a refresh from another device: keep the page and its pictures
-  app.innerHTML = '<div class="stu clean cv" data-l="' + esc(L.id) + '"><header class="stu-top">' + inkButton() + '<span class="push"></span><span class="cv-pages"></span>' + cvModeSeg() + '</header>' + inkTools() +
-    '<main class="cv-view"><div class="cv-page"></div></main></div>';
+  app.innerHTML = '<div class="stu clean cv" data-l="' + esc(L.id) + '"><header class="stu-top">' + inkButton() + '<span class="push"></span><span class="cv-pages"></span>' + zoomSeg() + cvModeSeg() + '</header>' + inkTools() +
+    '<main class="cv-view"><div class="cv-page"></div></main></div>'; $(".stu").style.setProperty("--stuz", stuZoom());
   inkMount(); cvInkLoad().then(function () { inkDraw(); inkRefresh(); }); cvSync(); cvPoll(); prefetchLesson();
   if (BC) BC.postMessage({ type: "alive", lesson: L.id }); }
 function cvPage(st) { st = st || cvState(); return st.pages[st.cur]; }
@@ -2664,8 +2698,8 @@ document.addEventListener("scroll", function (e) { if (MODE === "student" && STU
 /* a finger scrolls the page (the page itself takes no touch scrolling, so the S Pen writes instead); a tap still picks a piece */
 document.addEventListener("pointerdown", function (e) { if (e.pointerType !== "touch" || INK.finger || MODE !== "student" || !STU || !STU.canvas || CV.drag) return;
   var v = e.target.closest && e.target.closest(".cv-view"); if (!v || e.target.closest("button, input, [data-cvgrip], [data-cvsize]")) return;
-  CV.pan = { id: e.pointerId, y0: e.clientY, top: v.scrollTop, v: v, moved: false }; });
-document.addEventListener("pointermove", function (e) { var p = CV.pan; if (!p || e.pointerId !== p.id) return; var dy = e.clientY - p.y0; if (Math.abs(dy) > 8) p.moved = true; if (p.moved) p.v.scrollTop = p.top - dy; });
+  CV.pan = { id: e.pointerId, x0: e.clientX, y0: e.clientY, top: v.scrollTop, left: v.scrollLeft, v: v, moved: false }; });
+document.addEventListener("pointermove", function (e) { var p = CV.pan; if (!p || e.pointerId !== p.id) return; var dy = e.clientY - p.y0, dx = e.clientX - p.x0; if (Math.abs(dy) > 8 || Math.abs(dx) > 8) p.moved = true; if (p.moved) { p.v.scrollTop = p.top - dy; p.v.scrollLeft = p.left - dx; } inkDraw(); });
 ["pointerup", "pointercancel"].forEach(function (n) { document.addEventListener(n, function (e) { var p = CV.pan; if (p && e.pointerId === p.id) { CV.pan = null; CV.panned = p.moved ? Date.now() : 0; } }); });
 /* tap a piece with a finger (or the mouse) to pick it: then drag it by the cross, resize it by the corner, or remove it */
 document.addEventListener("pointerdown", function (e) { CV.ptr = e.pointerType; if (MODE !== "student" || !STU || !STU.canvas) return;
