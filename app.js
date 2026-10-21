@@ -806,12 +806,13 @@ function workItems(items) { var by = {}; items.forEach(function (i) { by[i.id] =
     if (b.type === "question" && by[b.id]) out.push({ id: b.id, label: pn + " \u00b7 " + (b.label || b.id) });
     else if (b.type === "quiz") (b.items || []).forEach(function (q) { if (by[q.id]) out.push({ id: q.id, label: pn + " \u00b7 " + by[q.id].label }); });
     else if (b.type === "drill") (b.items || []).forEach(function (d) { out.push({ id: drillKey(d[0]), label: pn + " \u00b7 " + texPlain(plain(d[0])).slice(0, 70) }); });
+    else if (b.type === "text") gradeRows(clean(b.html)).rows.forEach(function (r) { out.push({ id: r.k, label: pn + " \u00b7 " + r.label }); });
     if (b.blocks) walk(b.blocks); }); })(p.blocks); });
   items.filter(function (i) { return /^x:/.test(i.id); }).forEach(function (i) { out.push(i); }); return out; }
 function itemsList() { var out = [];
   phases().forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) { if (b.type === "question") out.push({ id: b.id, label: b.label || b.id }); if (b.type === "quiz") (b.items || []).forEach(function (q, i) { out.push({ id: q.id, label: "Quiz " + (i + 1) + ": " + String(q.q).replace(/<[^>]+>/g, "").slice(0, 60) }); }); if (b.blocks) walk(b.blocks); }); })(p.blocks); });
   L.session.extra.forEach(function (e, i) { out.push({ id: "x:" + e.id, label: "Extra " + (i + 1) + ": " + e.q.slice(0, 60) }); }); return out; }
-function labelOf(id) { if (!id) return ""; var a = L.session.answers[id]; if (a && a.q && (/^[dr]:/.test(id) || id.indexOf("~") > 0)) return a.q; var f = itemsList().filter(function (i) { return i.id === id; })[0]; if (!f && /^d:/.test(id)) f = workItems(itemsList()).filter(function (i) { return i.id === id; })[0]; return f ? f.label : id; }
+function labelOf(id) { if (!id) return ""; var a = L.session.answers[id]; if (a && a.q && (/^[dr]:/.test(id) || id.indexOf("~") > 0)) return a.q; var f = itemsList().filter(function (i) { return i.id === id; })[0]; if (!f && /^[dr]:/.test(id)) f = workItems(itemsList()).filter(function (i) { return i.id === id; })[0]; return f ? f.label : id; }
 
 /* times: everything editable, including undoing "End lesson" */
 function tval(iso) { return iso ? hhmm(iso) : ""; }
@@ -855,11 +856,11 @@ function afterOpen() { afterClose(); var btn = $("#afterbtn"); if (!L) return;
   var first = $("#fb-cov", el); if (first) first.focus({ preventScroll: true }); }
 function afterPlace() { var el = $("#afterpop"), btn = $("#afterbtn"); if (!el) return; var r = btn ? btn.getBoundingClientRect() : { bottom: 64, right: innerWidth - 16 }, w = Math.min(1040, innerWidth - 32), top = Math.max(8, r.bottom + 8);
   el.style.width = w + "px"; el.style.left = Math.max(16, Math.min(r.right - w, innerWidth - w - 16)) + "px"; el.style.top = top + "px"; el.style.maxHeight = (innerHeight - top - 16) + "px"; }
-function afterClose() { var el = $("#afterpop"); if (el) el.remove(); var b = $("#afterbtn"); if (b) b.setAttribute("aria-expanded", "false"); }
+function afterClose() { var el = $("#afterpop"), had = el && el.contains(document.activeElement); if (el) el.remove(); var b = $("#afterbtn"); if (b) { b.setAttribute("aria-expanded", "false"); if (had) b.focus({ preventScroll: true }); } }
 document.addEventListener("click", function (e) { if (e.target.closest && e.target.closest("[data-afterx]")) afterClose(); });
 document.addEventListener("keydown", function (e) { if (e.key === "Escape" && $("#afterpop") && !$("#campop")) afterClose(); });
 window.addEventListener("resize", afterPlace);
-window.addEventListener("hashchange", afterClose);
+window.addEventListener("hashchange", function () { afterClose(); camClose(); });
 function afterView() {
   var x = L.session, fb = x.feedback || {}, s = L.script || {}, sc = score(x);
   var cov = [], covTxt = [];
@@ -1052,11 +1053,11 @@ function uploadWork() {
 function workErr(e) { return e.tryout ? "Try-out mode: the photo is not saved." : (e.status ? "GitHub said " + e.status + ". " : "") + (e.message || "Upload failed") + " Try again."; }
 /* each file to GitHub under the lesson's work/ folder, logged in session.work against one question (or the lesson) */
 function sendWork(files, item, kind, note, prog, onSaved) {
-  var base = lessonBase(L.id) + "work/" + new Date().toISOString().slice(0, 23).replace(/[-:]/g, "").replace("T", "-").replace(".", ""), i = 0;
+  var LL = L, base = lessonBase(L.id) + "work/" + new Date().toISOString().slice(0, 23).replace(/[-:]/g, "").replace("T", "-").replace(".", ""), i = 0;
   function next() { if (i >= files.length) return Promise.resolve();
     var f = files[i++]; if (prog) prog(i, files.length);
     return shrink(f).then(function (r) { var path = base + "-" + (item || "lesson").replace(/[^a-z0-9]+/gi, "") + "-" + i + "." + r.ext;
-      return putB64(path, r.b64, CFG.student + " " + L.id + ": his work (" + CFG.device + ")").then(function () { L.session.work.push({ file: path, item: item || null, kind: kind, note: note, at: now(), d: CFG.device }); if (onSaved) onSaved(f, path); touch(); }); }).then(next); }
+      return putB64(path, r.b64, CFG.student + " " + LL.id + ": his work (" + CFG.device + ")").then(function () { LL.session.work.push({ file: path, item: item || null, kind: kind, note: note, at: now(), d: CFG.device }); if (onSaved) onSaved(f, path); touch(); }); }).then(next); }
   return next();
 }
 /* the camera on a question (Ali, 16 Oct): only questions he solves from a past paper or a problem set, not boards from a video.
@@ -1067,15 +1068,16 @@ function camBtn(b, sm) { if (!camOK(b) || PREP) return ""; var n = camCount(b.id
   return '<button class="btn' + (sm ? " sm" : "") + ' cambtn" type="button" data-cam="' + esc(b.id) + '" title="Add a photo of his work on this question">' + CAMIC.replace("icon lg", "icon") + (n ? n + (n > 1 ? " photos" : " photo") : "His work") + '</button>'; }
 /* Ali, 21 Oct: the camera opens a small card on the button, so Teach stays where it is. Paste a photo (Ctrl+V), drop it or choose one;
    the card then shows the photos saved to that question, so he can see the right one went in */
-var CAM = null, CAMURL = {};
+var CAM = null, CAMLID = null, CAMURL = {};
 function camThumbs(id) { var live = L.session.work.filter(function (w) { return !w.removed && w.item === id; });
   return live.length ? live.map(function (w) { var u = CAMURL[w.file];
     return '<span class="campic">' + (/\.pdf$/i.test(w.file) ? '<span class="ph">PDF</span>' : u ? '<img src="' + u + '" alt="Photo of his work">' : '<img data-src="' + esc(w.file) + '" alt="Photo of his work" hidden><span class="ph">Loading</span>') + '<span class="hint">' + esc(hhmm(w.at)) + '</span></span>'; }).join("")
     : '<span class="hint">No photos on this question yet</span>'; }
-function camClose() { var el = $("#campop"); if (el) el.remove(); CAM = null; }
+function camClose() { var el = $("#campop"); if (el) el.remove(); CAM = null; CAMLID = null;
+  Object.keys(CAMURL).forEach(function (k) { URL.revokeObjectURL(CAMURL[k]); }); CAMURL = {}; }   // previews of the full-size photos are let go; reopened, the saved copies load
 function camOpen(btn, id) {
   if (CAM === id && $("#campop")) { camClose(); return; } camClose(); if (!L) return;
-  var q = findQ(id) || {}, el = document.createElement("div"); CAM = id;
+  var q = findQ(id) || {}, el = document.createElement("div"); CAM = id; CAMLID = L.id;
   el.id = "campop"; el.className = "campop raised"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "His work: " + (q.label || id));
   el.innerHTML = '<div class="row"><span class="lab">His work</span>' + (q.source ? refTag(q.source) : tag(esc(q.label || id), "line")) + '<button class="btn sm quiet push" type="button" data-camx aria-label="Close">\u00d7</button></div>' +
     ((q.img || []).length ? '<div class="camq">' + img(q.img[0], q.label) + '</div>' : "") +
@@ -1093,7 +1095,8 @@ function camOpen(btn, id) {
 function camPlace(btn) { var el = $("#campop"); if (!el || !btn) return; var r = btn.getBoundingClientRect(), w = Math.min(380, innerWidth - 32), h = el.offsetHeight;
   el.style.width = w + "px"; el.style.left = Math.max(16, Math.min(r.right - w, innerWidth - w - 16)) + "px";
   el.style.top = (r.top - h - 8 >= 8 ? r.top - h - 8 : Math.min(r.bottom + 8, innerHeight - h - 8)) + "px"; }
-function camSend(files) { var q = CAM; files = files.filter(function (f) { return /^image\//.test(f.type) || /pdf$/i.test(f.type) || /\.(jpe?g|png|heic|webp|pdf)$/i.test(f.name || ""); });
+function camSend(files) { var q = CAM; if (!L || CAMLID !== L.id) { camClose(); return; }
+  files = files.filter(function (f) { return !f.type || /^image\//.test(f.type) || /pdf$/i.test(f.type) || /\.(jpe?g|png|heic|webp|pdf)$/i.test(f.name || ""); });   // a pasted photo can come with no type: shrink() says if it is not a photo
   var st = $("#camst"); if (!files.length || !q || !L) { if (st) st.textContent = "No photo found: copy a photo, then paste."; return; }
   sendWork(files, q, "class", "", function (i, n) { if (st) st.textContent = "Saving " + i + " of " + n + "\u2026"; }, function (f, path) { if (!/pdf/i.test(f.type)) CAMURL[path] = URL.createObjectURL(f); })
     .then(function () { flush(); if (CAM === q) { $("#camst").textContent = (files.length > 1 ? files.length + " photos" : "Photo") + " saved " + hhmm(now()); $("#camshots").innerHTML = camThumbs(q); loadImages($("#camshots")); var cb = $('[data-cam="' + q + '"]'); if (cb) camPlace(cb); }
@@ -1666,7 +1669,7 @@ document.addEventListener("click", function (e) { if (e.target.closest && e.targ
 document.addEventListener("keydown", function (e) { var b = $("#micfix"); if (b && b.contains(e.target) && (e.key === "Enter" || e.key === "Escape")) { e.preventDefault(); e.target.blur(); micFixClose(); } });
 function micJoin(old, add) { old = (old || "").trim(); return old ? old + "; " + add.trim() : add.trim(); }
 document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-mic]"); if (b) { e.preventDefault(); micStart(b.closest("[data-item]")); } });
-document.addEventListener("keydown", function (e) { if ((e.key !== "m" && e.key !== "M") || e.repeat || MODE !== "teach" || e.ctrlKey || e.altKey || e.metaKey) return;
+document.addEventListener("keydown", function (e) { if ((e.key !== "m" && e.key !== "M") || e.repeat || MODE !== "teach" || e.ctrlKey || e.altKey || e.metaKey || $("#campop") || $("#afterpop")) return;
   var ae = document.activeElement; if (ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) return;
   var box = $(".chunk.cur .vrail[data-item]") || $(".chunk.cur .ctl.big:not(.vrail), .tfoot .ctl.big"); if (box && SR) { e.preventDefault(); if (!MIC) micStart(box); } });
 document.addEventListener("keyup", function (e) { if ((e.key === "m" || e.key === "M") && MIC) micStop(); });
