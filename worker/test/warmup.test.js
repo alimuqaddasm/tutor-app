@@ -73,6 +73,21 @@ describe("warm-up deck (21 Oct)", () => {
     expect((await call(T0, "GET", "/api/s/deck", { token: "x".repeat(40) })).status).toBe(404);
   });
 
+  it("loads a deck of 300 cards, then a smaller one (D1's 100 bound values a statement); a resent round is not counted twice", async () => {
+    const { id, token } = await makePack();
+    const big = Array.from({ length: 300 }, (_, i) => card("c" + i));
+    const r1 = await teacher(T0, "PUT", `/api/t/exams/${id}/cards`, { json: { cards: big } });
+    expect(r1.status).toBe(200); expect(r1.data.cards).toBe(300);
+    const r2 = await teacher(T0, "PUT", `/api/t/exams/${id}/cards`, { json: { cards: big.slice(0, 120) } });
+    expect(r2.status).toBe(200);
+    expect((await env.DB.prepare("SELECT COUNT(*) n FROM cards WHERE exam_id = ?").bind(id).first()).n).toBe(120);
+    const d = await call(T0, "GET", "/api/s/deck", { token });
+    const tries = d.data.cards.map((c) => ({ card: c.id, picked: c.options[c.answer] }));
+    await call(T0, "POST", "/api/s/deck", { token, json: { run: d.data.run, tries } });
+    await call(T0, "POST", "/api/s/deck", { token, json: { run: d.data.run, tries } });
+    expect((await teacher(T0, "GET", `/api/t/exams/${id}/cards`)).data.tries).toHaveLength(15);
+  });
+
   it("a practice copy takes the cards along; deleting the exam removes them", async () => {
     const { id } = await makePack();
     await teacher(T0, "PUT", `/api/t/exams/${id}/cards`, { json: { cards: [card("a"), card("b")] } });

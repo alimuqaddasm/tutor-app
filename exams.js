@@ -944,8 +944,10 @@ function warmSend() { if (!WC.exam) return;
     return { id: c.id, kind: c.kind, subject: c.subject, q: c.q, options: c.options, why: c.why, page: c.page, topic: c.topic, status: c.status === "approved" ? "live" : "pending", msWorded: !!c.msWorded, liveAt: c.liveAt || null }; });
   var bad = out.filter(function (c) { return !c.q.trim() || c.options.length < 2 || c.options.some(function (o) { return !String(o).trim(); }) || new Set(c.options).size !== c.options.length; });
   if (bad.length) { T.toast("Fix first: " + bad.map(function (c) { return c.id; }).slice(0, 3).join(", ") + " (empty or repeated answers)"); return; }
+  if (!out.length && !confirm("No cards are approved. This takes every card off his deck. Carry on?")) return;
   var b = $("[data-wcsend]"); if (b) { b.disabled = true; b.textContent = "Sending…"; }
-  (WC.dirty ? warmSave() : Promise.resolve(true)).then(function () {
+  (WC.dirty ? warmSave() : Promise.resolve(true)).then(function (saved) {
+    if (!saved) throw new Error("Save to the tutoring repo first. Nothing was sent.");
     return call("PUT", "/api/t/exams/" + encodeURIComponent(WC.exam) + "/cards", { cards: out }); })
     .then(function (r) { T.toast(r.live + " cards live on his deck"); return warmTries(); }, function (e) { T.toast(e.message); })
     .then(warmDraw); }

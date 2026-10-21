@@ -58,11 +58,24 @@ with sync_playwright() as p:
         check("  ...a wrong card shows his choice, the answer and the book's words", pg.locator(".a-wures.bad .a-wumine").count() == 5 and pg.locator(".a-wures.bad .hint").count() == 5)
         pg.screenshot(path=os.path.join(SHOTS, "r41-done-%d.png" % w), full_page=True)
         check("  ...no sideways scroll", pg.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
+        if w == 1440:   # the connection drops while saving: his tries stay and he can save again, counted once
+            pg.click(".a-wudone [data-a-warm]"); pg.wait_for_selector(".a-wucard", timeout=10000)
+            fail = {"n": 1}
+            def drop(route):
+                if route.request.method == "POST" and fail["n"]: fail["n"] -= 1; route.abort()
+                else: route.continue_()
+            pg.route("**/api/s/deck", drop)
+            for i in range(15): pg.click('[data-a-wpick="0"]'); pg.wait_for_timeout(40)
+            pg.wait_for_selector("[data-a-wsave]", timeout=10000)
+            check("  ...no connection: 'Try saving again', results still there", pg.locator(".a-wures").count() == 15)
+            pg.click("[data-a-wsave]"); pg.wait_for_timeout(1200)
+            check("  ...saving again works", pg.locator("[data-a-wsave]").count() == 0 and "Not saved" not in pg.inner_text(".a-wudone"))
+            pg.unroute("**/api/s/deck")
         pg.click(".a-wudone [data-a-home]"); pg.wait_for_timeout(300)
         check("  ...Back to all days", pg.locator(".a-home2").count() == 1)
         c.close()
     tr = tapi("GET", "/api/t/exams/%s/cards" % eid)["tries"]
-    check("his 30 tries reached the exam server, 20 right", len(tr) == 30 and sum(t["right"] for t in tr) == 20, (len(tr), sum(t["right"] for t in tr)))
+    check("his 45 tries reached the exam server once each", len(tr) == 45, len(tr))
     check("no script errors", not errs, errs)
     b.close()
 print("%d/%d checks passed" % (sum(results), len(results)))

@@ -619,15 +619,18 @@ function asgHome(m) {
 var WU = null;     // { run, cards, i, picks, saved, err }
 function warmStart() {
   if (PREVIEW) { toast("The warm-up is his own: not shown in Student view"); return; }
-  WU = { loading: true, cards: [], i: 0, picks: [] }; render(); window.scrollTo(0, 0);
-  api("GET", "/api/s/deck").then(function (d) { WU = { run: d.run, cards: d.cards || [], i: 0, picks: [] }; render(); },
-    function (e) { WU = { err: e.message, cards: [], i: 0, picks: [] }; render(); });
+  var me = WU = { loading: true, cards: [], i: 0, picks: [] }; render(); window.scrollTo(0, 0);
+  // a reply for a round he has already left is dropped
+  api("GET", "/api/s/deck").then(function (d) { if (WU !== me) return; WU = { run: d.run, cards: d.cards || [], i: 0, picks: [] }; render(); },
+    function (e) { if (WU !== me) return; WU = { err: e.message, cards: [], i: 0, picks: [] }; render(); });
 }
 function warmPick(n) { if (!WU || WU.saved != null) return; WU.picks[WU.i] = n;
   if (WU.i < WU.cards.length - 1) { WU.i++; render(); return; }
-  WU.saved = false; render();
-  api("POST", "/api/s/deck", { run: WU.run, tries: WU.cards.map(function (c, i) { return { card: c.id, picked: c.options[WU.picks[i]] }; }) })
-    .then(function () { if (WU) { WU.saved = true; render(); } }, function (e) { if (WU) { WU.saved = true; WU.err = "Not saved: " + e.message; render(); } }); }
+  warmSave(); }
+/* his tries go to the server; if that fails he can try again (the server keeps one try per card per round, so a resend after a lost reply is not counted twice) */
+function warmSave() { var me = WU; me.saved = false; me.err = ""; render();
+  api("POST", "/api/s/deck", { run: me.run, tries: me.cards.map(function (c, i) { return { card: c.id, picked: c.options[me.picks[i]] }; }) })
+    .then(function () { if (WU !== me) return; me.saved = true; render(); }, function (e) { if (WU !== me) return; me.saved = "failed"; me.err = "Not saved: " + e.message; render(); }); }
 function asgWarm(m) {
   var top = '<header class="a-top"><button type="button" class="a-btn" data-a-home>All days</button><span class="tag ask">Warm-up</span>' +
     (WU.cards.length && WU.saved == null ? '<span class="a-wucount">' + (WU.i + 1) + ' of ' + WU.cards.length + '</span>' : "") + '<span class="grow"></span></header>';
@@ -642,7 +645,7 @@ function asgWarm(m) {
       '<div class="row a-wunav">' + (WU.i ? '<button type="button" class="a-btn" data-a-wback>Back</button>' : "") + '<span class="hint">Right or wrong shows after the last card.</span></div></section>';
   } else {
     var right = WU.cards.filter(function (c, i) { return WU.picks[i] === c.answer; }).length;
-    body = '<section class="card pad a-wudone"><div class="row"><b class="a-wuscore">' + right + '/' + WU.cards.length + ' right</b>' + (WU.saved ? "" : '<span class="hint">Saving\u2026</span>') + (WU.err ? '<span class="hint">' + esc(WU.err) + '</span>' : "") + '</div>' +
+    body = '<section class="card pad a-wudone"><div class="row"><b class="a-wuscore">' + right + '/' + WU.cards.length + ' right</b>' + (WU.saved === false ? '<span class="hint">Saving\u2026</span>' : "") + (WU.err ? '<span class="hint">' + esc(WU.err) + '</span>' : "") + (WU.saved === "failed" ? '<button type="button" class="a-btn" data-a-wsave>Try saving again</button>' : "") + '</div>' +
       '<div class="row"><button type="button" class="a-btn dark" data-a-warm>Another round</button><button type="button" class="a-btn" data-a-home>Back to all days</button></div></section>' +
       '<div class="a-wulist">' + WU.cards.map(function (c, i) { return i; }).sort(function (x, y) { return (WU.picks[x] === WU.cards[x].answer) - (WU.picks[y] === WU.cards[y].answer); }).map(function (i) { var c = WU.cards[i], ok = WU.picks[i] === c.answer;
         return '<section class="card a-wures ' + (ok ? "ok" : "bad") + '"><div class="row"><span class="tag ' + (ok ? "ok" : "bad") + '">' + (ok ? "\u2713 Right" : "\u2715 Wrong") + '</span>' + (c.page ? '<span class="tag">' + esc(c.page) + '</span>' : "") + '</div><b>' + esc(c.q) + '</b>' +
@@ -798,10 +801,11 @@ function asgFinish() {
 
 document.addEventListener("click", function (e) {
   if (!ASG()) return;
-  var t = e.target.closest && e.target.closest("[data-a-day],[data-a-sec],[data-a-home],[data-a-q],[data-a-prev],[data-a-next],[data-a-sw],[data-a-finish],[data-a-mode],[data-a-again],[data-a-warm],[data-a-wpick],[data-a-wback]"); if (!t) return;
+  var t = e.target.closest && e.target.closest("[data-a-day],[data-a-sec],[data-a-home],[data-a-q],[data-a-prev],[data-a-next],[data-a-sw],[data-a-finish],[data-a-mode],[data-a-again],[data-a-warm],[data-a-wpick],[data-a-wback],[data-a-wsave]"); if (!t) return;
   if (t.hasAttribute("data-a-warm")) { warmStart(); return; }
   if (t.hasAttribute("data-a-wpick")) { warmPick(Number(t.getAttribute("data-a-wpick"))); return; }
   if (t.hasAttribute("data-a-wback")) { if (WU && WU.i > 0) { WU.i--; render(); } return; }
+  if (t.hasAttribute("data-a-wsave")) { if (WU && WU.saved === "failed") warmSave(); return; }
   if (t.hasAttribute("data-a-home") && WU) { WU = null; render(); window.scrollTo(0, 0); return; }
   var ord = secQs(SEC || "").map(function (q) { return S.questions.indexOf(q); }), k = ord.indexOf(cur);
   if (t.hasAttribute("data-a-day")) { ADAY = Number(t.getAttribute("data-a-day")); render(); }

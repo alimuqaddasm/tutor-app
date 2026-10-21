@@ -863,7 +863,9 @@ async function saveDeck(env, exam, b, now) {
   const cs = (await env.DB.prepare("SELECT id, options FROM cards WHERE exam_id = ? AND id IN (" + ids.map(() => "?").join(",") + ")").bind(exam.id, ...ids).all()).results;
   const right = {}; for (const c of cs) right[c.id] = JSON.parse(c.options)[0];
   const rows = list.filter((t) => right[t.card] !== undefined).map((t) => { const picked = String(t.picked == null ? "" : t.picked).slice(0, 2000);
-    return env.DB.prepare("INSERT INTO card_tries (exam_id, card_id, run_id, at, picked, right) VALUES (?, ?, ?, ?, ?, ?)").bind(exam.id, t.card, run, now, picked, picked === right[t.card] ? 1 : 0); });
+    // one try per card per round: a resend after a lost reply is not counted twice
+    return env.DB.prepare("INSERT INTO card_tries (exam_id, card_id, run_id, at, picked, right) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM card_tries WHERE exam_id = ? AND card_id = ? AND run_id = ?)")
+      .bind(exam.id, t.card, run, now, picked, picked === right[t.card] ? 1 : 0, exam.id, t.card, run); });
   if (!rows.length) fail(400, "None of those cards are in this deck.");
   await env.DB.batch(rows);
   return { ok: true, saved: rows.length };
@@ -889,7 +891,10 @@ async function putCards(env, exam, b, now) {
         String(c.page || "").slice(0, 80), String(c.topic || "").slice(0, 40), status, c.msWorded ? 1 : 0, Number.isFinite(liveAt) ? liveAt : null));
   });
   const keep = [...seen];
-  stmts.unshift(keep.length ? env.DB.prepare("DELETE FROM cards WHERE exam_id = ? AND id NOT IN (" + keep.map(() => "?").join(",") + ")").bind(exam.id, ...keep) : env.DB.prepare("DELETE FROM cards WHERE exam_id = ?").bind(exam.id));
+  // D1 takes at most 100 bound values a statement: delete the dropped cards in chunks, not with one NOT IN (all kept ids)
+  const gone = (await env.DB.prepare("SELECT id FROM cards WHERE exam_id = ?").bind(exam.id).all()).results.map((r) => r.id).filter((x) => !seen.has(x));
+  for (let i = 0; i < gone.length; i += 90) { const part = gone.slice(i, i + 90);
+    stmts.unshift(env.DB.prepare("DELETE FROM cards WHERE exam_id = ? AND id IN (" + part.map(() => "?").join(",") + ")").bind(exam.id, ...part)); }
   for (let i = 0; i < stmts.length; i += 90) await env.DB.batch(stmts.slice(i, i + 90));
   return { ok: true, cards: keep.length, live: (await env.DB.prepare("SELECT status, ms_worded, live_at FROM cards WHERE exam_id = ?").bind(exam.id).all()).results.filter((c) => cardLive(c, now)).length };
 }
