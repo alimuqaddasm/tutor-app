@@ -111,6 +111,7 @@ describe("phone push when he finishes a section (21 Oct)", () => {
     expect(url).toBe("https://ntfy.sh/tutor-test-topic");
     expect(init.headers.Title).toBe("finished Day 1 Chemistry");
     expect(init.body).toContain("took 40 min");
+    expect(init.headers.Authorization).toBeUndefined();
     await call(T0 + 2 * MIN, "POST", "/api/s/sections/d1-chem/done", { token, json: {} });
     expect(f).toHaveBeenCalledTimes(1);
   });

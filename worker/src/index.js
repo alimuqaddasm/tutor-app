@@ -899,11 +899,11 @@ async function putCards(env, exam, b, now) {
   return { ok: true, cards: keep.length, live: (await env.DB.prepare("SELECT status, ms_worded, live_at FROM cards WHERE exam_id = ?").bind(exam.id).all()).results.filter((c) => cardLive(c, now)).length };
 }
 
-/* A phone push to Ali (ntfy app, topic in the Worker secret NTFY_TOPIC). Never holds up his save: 3 seconds at most, errors ignored. */
+/* A phone push to Ali (ntfy app, topic in the Worker secret NTFY_TOPIC; NTFY_TOKEN, a free ntfy account's token, lifts the shared daily limit). Never holds up his save: 3 seconds at most, errors ignored. */
 async function notify(env, title, msg) {
   if (!env.NTFY_TOPIC) return;
   try {
-    await Promise.race([fetch("https://ntfy.sh/" + encodeURIComponent(env.NTFY_TOPIC), { method: "POST", body: msg, headers: { Title: title, Tags: "pencil" } }),
+    await Promise.race([fetch("https://ntfy.sh/" + encodeURIComponent(env.NTFY_TOPIC), { method: "POST", body: msg, headers: { Title: title, Tags: "pencil", ...(env.NTFY_TOKEN ? { Authorization: "Bearer " + env.NTFY_TOKEN } : {}) } }),
       new Promise((res) => setTimeout(res, 3000))]);
   } catch (e) { console.error("push failed", e && e.message); }
 }
