@@ -905,7 +905,7 @@ function warmDraw() {
   var ex = (WC.exams || []).filter(function (e) { return e.id === WC.exam; })[0];
   var h = '<div class="wrap exams wc"><header class="head"><div class="stack s2"><div class="crumb"><a href="#/exams">Exams</a><span aria-hidden="true">/</span><span>Warm-up cards</span></div><h1 class="t-page">Warm-up cards</h1>' +
     '<div class="tags">' + T.tag(cards.length + " cards") + T.tag(cnt("draft") + " waiting", cnt("draft") ? "live" : "") + T.tag(cnt("approved") + " approved", "ok") + (WC.onServer != null ? T.tag(WC.live + " live on his deck") : "") + '</div></div>' +
-    '<div class="row s2"><button class="btn" type="button" data-wcsave' + (WC.dirty && !T.isTry ? "" : " disabled") + '>' + (WC.dirty ? "Save to tutoring repo" : "Saved") + '</button>' +
+    '<div class="row s2">' + (T.isTry ? T.tag("Try-out: nothing is saved to the repo") : '<button class="btn" type="button" data-wcsave' + (WC.dirty ? "" : " disabled") + '>' + (WC.dirty ? "Save to tutoring repo" : "Saved") + '</button>') +
     '<button class="btn pri" type="button" data-wcsend' + (WC.exam ? "" : " disabled") + '>Send to his deck</button></div></header>' +
     '<div class="card pad stack s3"><div class="row s2"><span class="lab">His deck</span>' + (WC.exams && WC.exams.length ? '<select class="input wc-ex" data-wcex>' + WC.exams.map(function (e) { return '<option value="' + esc(e.id) + '"' + (e.id === WC.exam ? " selected" : "") + '>' + esc(e.title) + (e.practice ? " (practice)" : "") + '</option>'; }).join("") + '</select>' : '<span class="hint">Load the holiday pack on the exam server first.</span>') + '</div>' +
     '<span class="hint">Approved cards go to his deck. A waiting card that carries a mark-scheme answer and a time goes live by itself at that time. Waiting and rejected cards never reach him.</span></div>' +
@@ -927,7 +927,7 @@ function warmCard(c) {
     '<span class="hint push">' + esc(c.from || "") + '</span></div></article>';
 }
 function warmSet(el, fn) { var art = el.closest("[data-wci]"); if (!art || !WC) return; var c = WC.data.cards[+art.getAttribute("data-wci")]; if (!c) return; fn(c, art); WC.dirty = true; WC.data.updated = new Date().toISOString().slice(0, 10);
-  var b = $("[data-wcsave]"); if (b) { b.disabled = T.isTry; b.textContent = "Save to tutoring repo"; } }
+  var b = $("[data-wcsave]"); if (b) { b.disabled = false; b.textContent = "Save to tutoring repo"; } }
 document.addEventListener("input", function (e) { var t = e.target; if (!WC || !t.closest || !t.closest(".wc-card")) return;
   if (t.hasAttribute("data-wcq")) warmSet(t, function (c) { c.q = t.value; });
   else if (t.hasAttribute("data-wco")) warmSet(t, function (c) { c.options[+t.getAttribute("data-wco")] = t.value; });
@@ -944,9 +944,12 @@ function warmSend() { if (!WC.exam) return;
     return { id: c.id, kind: c.kind, subject: c.subject, q: c.q, options: c.options, why: c.why, page: c.page, topic: c.topic, status: c.status === "approved" ? "live" : "pending", msWorded: !!c.msWorded, liveAt: c.liveAt || null }; });
   var bad = out.filter(function (c) { return !c.q.trim() || c.options.length < 2 || c.options.some(function (o) { return !String(o).trim(); }) || new Set(c.options).size !== c.options.length; });
   if (bad.length) { T.toast("Fix first: " + bad.map(function (c) { return c.id; }).slice(0, 3).join(", ") + " (empty or repeated answers)"); return; }
+  var ex = (WC.exams || []).filter(function (e) { return e.id === WC.exam; })[0];
+  // Try-out: nothing goes to the repo, and only a practice copy may change
+  if (T.isTry && !(ex && ex.practice)) { T.toast("Try-out: pick a practice copy as his deck. The real one can't change here."); return; }
   if (!out.length && !confirm("No cards are approved. This takes every card off his deck. Carry on?")) return;
   var b = $("[data-wcsend]"); if (b) { b.disabled = true; b.textContent = "Sending…"; }
-  (WC.dirty ? warmSave() : Promise.resolve(true)).then(function (saved) {
+  (WC.dirty && !T.isTry ? warmSave() : Promise.resolve(true)).then(function (saved) {
     if (!saved) throw new Error("Save to the tutoring repo first. Nothing was sent.");
     return call("PUT", "/api/t/exams/" + encodeURIComponent(WC.exam) + "/cards", { cards: out }); })
     .then(function (r) { T.toast(r.live + " cards live on his deck"); return warmTries(); }, function (e) { T.toast(e.message); })
