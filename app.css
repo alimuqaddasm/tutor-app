@@ -1388,3 +1388,29 @@ span.cvlab{cursor:default}
 .cvtype{flex:1;min-width:0}
 .pcprev{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);padding:var(--s3) 0}
 .pcprev > .prose,.pcprev > .fig{flex-basis:100%}
+
+/* the camera card on a question (21 Oct): paste, drop or choose a photo; shows what was saved */
+.campop{position:fixed;z-index:52;display:flex;flex-direction:column;gap:var(--s3);padding:var(--s4);max-height:calc(100vh - 16px);overflow:auto;border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line-strong);box-shadow:var(--raise)}
+.campop .row{flex-wrap:nowrap;min-width:0}
+.campop .ref{min-width:0;overflow:hidden}
+.camq{max-height:96px;overflow:hidden;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
+.camq img{display:block;width:100%;height:auto}
+.campaste{display:flex;flex-direction:column;align-items:center;gap:var(--s2);padding:var(--s4);border:2px dashed var(--line-strong);border-radius:var(--r-md);background:var(--ground);text-align:center;cursor:text;outline:none}
+.campaste:focus-visible,.campaste.on{border-color:var(--maths);background:var(--maths-wash)}
+.campaste .cam{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--maths-wash);color:var(--maths)}
+.camshots{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.campic{display:flex;flex-direction:column;gap:var(--s1);width:96px}
+.campic img,.campic .ph{width:96px;height:128px;object-fit:cover;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--sunk)}
+.campic .ph{display:grid;place-items:center}
+
+/* zoom on his screen (21 Oct): − 100% + in the top bar; Questions view grows inside the scrolling view, the canvas page grows and scrolls sideways */
+.stu-zoom button{min-width:44px}
+.stu:not(.cv) .stu-view > *{zoom:var(--stuz,1)}
+.stu.cv .cv-page{width:calc(min(100%,1600px) * var(--stuz,1));max-width:none}
+.stu.cv .cv-view{overflow-x:auto}
+@media (max-width:760px){.stu-zoom [data-stuz="0"]{display:none}}
+
+/* After the lesson as a card in Teach (21 Oct): opens under the After the lesson button when End lesson is pressed */
+.afterpop{position:fixed;z-index:52;overflow:auto;padding:var(--s5);border-radius:var(--r-lg);background:var(--ground);border:1px solid var(--line-strong);box-shadow:var(--raise-lg)}
+.afterpop .afterx{position:sticky;top:0;float:right;z-index:1;min-width:44px;min-height:44px}
+@media (max-width:760px){.afterpop{padding:var(--s4)}}

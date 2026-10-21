@@ -30,6 +30,8 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/runtest.py tests/test_round36.py   # round 36 (18 Oct, app v64): canvas phase 2: pieces in the script (heading, equation, structure, text), solution lines dropped under their question, Type a piece in Teach (26 checks; needs the local exam server)
     python tests/runtest.py tests/test_round37.py   # round 37 (18 Oct, app v66): the eraser like Samsung Notes (Whole line or Area, sizes, both kept on the device, a circle while erasing), no writing in the air, the pen draws only the new piece of a line (23 checks)
     python tests/runtest.py tests/test_round38.py   # round 38 (18 Oct, app v69): Record pen under More: 8 seconds of every pen, touch, mouse and key event, folded and ready to copy, to find how his S Pen button reports (18 checks)
+    python tests/runtest.py tests/test_round39.py   # round 39 (21 Oct, app v72): the camera on a question opens a card on the button: paste (Ctrl+V), drop or Choose photo, a picture of the question, the saved photos at once, Teach keys paused; His work page takes a pasted photo (34 checks)
+    python tests/runtest.py tests/test_round40.py   # round 40 (21 Oct, app v72): no 'Hard:' on his screens, zoom on Student view (Questions and canvas), End lesson opens After the lesson as a card in Teach, every question (video ones too) in the His work list (20 checks)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
 On Windows run with PYTHONIOENCODING=utf-8, or printing ★ crashes the console.
@@ -66,7 +68,7 @@ the tutoring repo (next to this repo as ../tutoring, or set TUTORING_CLONE) and 
     python tests/test_sayit.py                      # Say it: the mic in the icons on the right (and M) writes the note; nothing in preview (7 checks)
     python tests/test_topbar_5oct.py                # Teach top bar in one slim row, the ⋯ menu, Preview label, quick flow as the default (11 checks)
     python tests/test_vrail_5oct.py                 # marking icons down the right edge: a tick opens the next question, a cross stays; the ⋯ menu; 1024 and phone widths, Solid or Soft tiles (24 checks)
-    python tests/test_slider_5oct.py                # exam questions part by part: paper-twin text, marks per part add up, A turns one part over; round buttons on picture questions too (28 checks)
+    python tests/test_slider_5oct.py                # exam questions part by part: paper-twin text, marks per part add up, A turns one part over; round buttons on picture questions too (34 checks)
 
 Since 5 Oct quick flow is the app's default. tests/fakegh.py starts every test browser in step by step unless the
 test sets tutor.flow itself, because the older tests were written for it.
