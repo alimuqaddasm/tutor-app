@@ -609,7 +609,7 @@ function asgHome(m) {
       '<div class="row a-warn"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 16H3z"></path><path d="M12 10v4M12 17h.01"></path></svg>After Done you can’t change your answers. The mark scheme opens.</div></section>';
   };
   m.innerHTML = '<div class="a-root">' +
-    '<header class="topbar a-hometop"><div class="stack" style="gap:2px;flex:1;min-width:0"><b class="a-htitle">' + esc(himTitle(S.title)) + '</b><div class="tags"><span class="tag">' + days.length + ' days</span><span class="tag">No clock</span><span class="tag">Saves as you go</span></div></div><div class="ex-save" aria-live="polite"></div></header>' + pvBar() +
+    '<header class="topbar a-hometop"><div class="stack" style="gap:2px;flex:1;min-width:0"><b class="a-htitle">' + esc(himTitle(S.title)) + '</b><div class="tags"><span class="tag">' + days.length + (days.length === 1 ? ' day' : ' days') + '</span><span class="tag">No clock</span><span class="tag">Saves as you go</span></div></div><div class="ex-save" aria-live="polite"></div></header>' + pvBar() +
     '<div class="a-home2"><nav class="a-days" aria-label="Days">' + (S.deck ? '<button type="button" class="a-dayb a-wub" data-a-warm><span class="tag ask">Warm-up</span><span class="stack" style="gap:0"><span class="hint">' + S.deck + ' quick cards</span><span class="hint">Optional</span></span></button>' : "") + days.map(dayBtn).join("") + '</nav>' +
       '<main class="a-main2">' + (ADAY != null && by[ADAY] && by[ADAY][0].open ? by[ADAY].map(secCard).join("") : '<div class="empty"><b class="t-card">Your first day opens soon.</b></div>') + qrAside(false) + '</main></div></div>';
 }
@@ -644,7 +644,7 @@ function asgWarm(m) {
     var right = WU.cards.filter(function (c, i) { return WU.picks[i] === c.answer; }).length;
     body = '<section class="card pad a-wudone"><div class="row"><b class="a-wuscore">' + right + '/' + WU.cards.length + ' right</b>' + (WU.saved ? "" : '<span class="hint">Saving\u2026</span>') + (WU.err ? '<span class="hint">' + esc(WU.err) + '</span>' : "") + '</div>' +
       '<div class="row"><button type="button" class="a-btn dark" data-a-warm>Another round</button><button type="button" class="a-btn" data-a-home>Back to all days</button></div></section>' +
-      '<div class="a-wulist">' + WU.cards.map(function (c, i) { var ok = WU.picks[i] === c.answer;
+      '<div class="a-wulist">' + WU.cards.map(function (c, i) { return i; }).sort(function (x, y) { return (WU.picks[x] === WU.cards[x].answer) - (WU.picks[y] === WU.cards[y].answer); }).map(function (i) { var c = WU.cards[i], ok = WU.picks[i] === c.answer;
         return '<section class="card a-wures ' + (ok ? "ok" : "bad") + '"><div class="row"><span class="tag ' + (ok ? "ok" : "bad") + '">' + (ok ? "\u2713 Right" : "\u2715 Wrong") + '</span>' + (c.page ? '<span class="tag">' + esc(c.page) + '</span>' : "") + '</div><b>' + esc(c.q) + '</b>' +
           (ok ? "" : '<p class="a-wumine">You chose: ' + esc(c.options[WU.picks[i]]) + '</p>') + '<p class="a-wuans">Answer: ' + esc(c.options[c.answer]) + '</p>' + (c.why ? '<p class="hint">' + esc(c.why) + '</p>' : "") + '</section>'; }).join("") + '</div>';
   }
