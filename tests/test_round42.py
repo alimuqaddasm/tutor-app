@@ -60,6 +60,22 @@ with sync_playwright() as p:
     check("his tries show on the cards", pg.locator(".wc-card", has_text="right on his deck").count() == 4, pg.locator(".wc-card").count())
     pg.screenshot(path=os.path.join(SHOTS, "r42-approved-1440.png"))
     c.close()
+    # Try-out (Ali, 21 Oct): no repo save; Send works on a practice copy, never on the real one
+    prac = tapi("POST", "/api/t/exams/%s/practice-copy" % eid)["id"]
+    c = ctx(1440, 900); pg = c.new_page(); pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.goto(APP + "?try#/exams/warmup"); pg.wait_for_selector(".wc-card", timeout=30000); pg.wait_for_timeout(800)
+    check("Try-out: no Save button, a tag says nothing is saved", pg.locator("[data-wcsave]").count() == 0 and "nothing is saved" in pg.inner_text(".wc .head"))
+    pg.select_option("[data-wcex]", eid); pg.wait_for_timeout(300)
+    pg.click("[data-wcsend]"); pg.wait_for_timeout(500)
+    check("Try-out: the real deck is refused", "practice copy" in pg.inner_text("#toast"), pg.inner_text("#toast"))
+    pg.select_option("[data-wcex]", prac); pg.wait_for_timeout(600)
+    pg.click('[data-wcf="st:draft"]'); pg.wait_for_timeout(200)
+    pg.locator(".wc-card[data-st=draft] [data-wcst=approved]").first.click(); pg.wait_for_timeout(150)
+    n0 = len(fake.puts); pg.click("[data-wcsend]"); pg.wait_for_timeout(1500)
+    pc = tapi("GET", "/api/t/exams/%s/cards" % prac)["cards"]
+    check("Try-out: Send puts the approved cards on the practice copy", len(pc) >= 1 and all(x["live"] for x in pc), len(pc))
+    check("Try-out: nothing went to the repo", len(fake.puts) == n0)
+    c.close()
     c = ctx(390, 844); pg = c.new_page(); pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto(APP + "#/exams/warmup"); pg.wait_for_selector(".wc-card", timeout=30000); pg.wait_for_timeout(500)
     check("390 px: no sideways scroll", pg.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
