@@ -7,7 +7,8 @@
    /api/s/deck: his warm-up deck (15 multiple-choice cards from his mistakes and his book pages); /api/t/exams/<id>/cards loads them.
    A finished section sends Ali a phone push through ntfy when the Worker secret NTFY_TOPIC is set.
    kind "assignment": no clock. The link opens it at once; it stays open until Ali locks it. Questions sit in sections;
-   Done on a section opens that section's mark schemes to him, and later saves are flagged afterDone. */
+   Done on a section opens that section's mark schemes to him, and later saves are flagged afterDone. A day opens at once when
+   every section of the day before is finished, else gap_hours after he first opened the day before. */
 
 import { checkImage } from "./image.js";
 
@@ -192,14 +193,17 @@ function withDays(exam, secs, now) {
   const gap = (exam.gap_hours == null ? 12 : exam.gap_hours) * 3600000;
   const key = (x) => (x.day != null ? x.day : 100000 + x.pos);
   const days = [...new Set(secs.map(key))].sort((a, b) => a - b);
-  let prevOpened = null;
+  let prevOpened = null, prevDone = false;
   days.forEach((d, i) => {
     const ss = secs.filter((x) => key(x) === d);
-    let open = i === 0 || ss.some((x) => x.releasedAt != null), opensAt = null;
+    // open: the first day; a day Ali opened by hand; the day after one whose sections are all finished (Ali, 21 Oct:
+    // "open it right away"); otherwise gap_hours after he first opened the day before
+    let open = i === 0 || prevDone || ss.some((x) => x.releasedAt != null), opensAt = null;
     if (!open && prevOpened != null) { opensAt = prevOpened + gap; open = now >= opensAt; }
     ss.forEach((x) => { x.open = open; x.opensAt = opensAt; });
     const opened = ss.map((x) => x.openedAt).filter((v) => v != null);
     prevOpened = open && opened.length ? Math.min(...opened) : null;
+    prevDone = open && ss.every((x) => x.doneAt != null);
   });
   return secs;
 }
