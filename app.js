@@ -786,7 +786,7 @@ var CAMIC = '<svg class="icon lg" viewBox="0 0 24 24" aria-hidden="true"><rect x
 function workView() {
   var x = L.session, items = itemsList(), live = x.work.filter(function (w) { return !w.removed; }), m = L.marking;
   var h = pageHead("His work", "", '<div class="tags">' + tag("Goes to GitHub") + tag("Auto-checker marks it") + '</div>');
-  h += '<div class="split"><form class="card pad-l stack s5" id="wkform" style="flex:1 1 360px;max-width:420px"><label for="wk-files" class="drop"><span class="cam">' + CAMIC + '</span><b>Take a photo or choose files</b><span class="tags" style="justify-content:center">' + tag("Photos") + tag("PDFs") + tag("Many pages at once") + '</span><span class="hint" id="wk-pick"></span>' +
+  h += '<div class="split"><form class="card pad-l stack s5" id="wkform" style="flex:1 1 360px;max-width:420px"><label for="wk-files" class="drop"><span class="cam">' + CAMIC + '</span><b>Take a photo, choose files or paste</b><span class="tags" style="justify-content:center">' + tag("Photos") + tag("PDFs") + tag("Ctrl+V") + tag("Many pages at once") + '</span><span class="hint" id="wk-pick"></span>' +
     '<input id="wk-files" class="sr" type="file" accept="image/*,application/pdf" multiple required></label>' +
     '<div class="field"><label for="wk-item">Which question?</label><select class="input" id="wk-item"><option value="">Whole lesson or several questions</option>' + items.map(function (i) { return '<option value="' + esc(i.id) + '">' + esc(i.label) + '</option>'; }).join("") + '</select></div>' +
     '<div class="field"><label for="wk-kind">What is it?</label><select class="input" id="wk-kind"><option value="class">Working in the lesson</option><option value="homework">Homework</option><option value="test">Test</option><option value="other">Other</option></select></div>' +
@@ -1027,12 +1027,12 @@ function uploadWork() {
 }
 function workErr(e) { return e.tryout ? "Try-out mode: the photo is not saved." : (e.status ? "GitHub said " + e.status + ". " : "") + (e.message || "Upload failed") + " Try again."; }
 /* each file to GitHub under the lesson's work/ folder, logged in session.work against one question (or the lesson) */
-function sendWork(files, item, kind, note, prog) {
-  var base = lessonBase(L.id) + "work/" + new Date().toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "-"), i = 0;
+function sendWork(files, item, kind, note, prog, onSaved) {
+  var base = lessonBase(L.id) + "work/" + new Date().toISOString().slice(0, 23).replace(/[-:]/g, "").replace("T", "-").replace(".", ""), i = 0;
   function next() { if (i >= files.length) return Promise.resolve();
     var f = files[i++]; if (prog) prog(i, files.length);
     return shrink(f).then(function (r) { var path = base + "-" + (item || "lesson").replace(/[^a-z0-9]+/gi, "") + "-" + i + "." + r.ext;
-      return putB64(path, r.b64, CFG.student + " " + L.id + ": his work (" + CFG.device + ")").then(function () { L.session.work.push({ file: path, item: item || null, kind: kind, note: note, at: now(), d: CFG.device }); touch(); }); }).then(next); }
+      return putB64(path, r.b64, CFG.student + " " + L.id + ": his work (" + CFG.device + ")").then(function () { L.session.work.push({ file: path, item: item || null, kind: kind, note: note, at: now(), d: CFG.device }); if (onSaved) onSaved(f, path); touch(); }); }).then(next); }
   return next();
 }
 /* the camera on a question (Ali, 16 Oct): only questions he solves from a past paper or a problem set, not boards from a video.
@@ -1041,13 +1041,58 @@ function camOK(b) { return b && b.type === "question" && !b.board && b.source &&
 function camCount(id) { return L.session.work.filter(function (w) { return !w.removed && w.item === id; }).length; }
 function camBtn(b, sm) { if (!camOK(b) || PREP) return ""; var n = camCount(b.id);
   return '<button class="btn' + (sm ? " sm" : "") + ' cambtn" type="button" data-cam="' + esc(b.id) + '" title="Add a photo of his work on this question">' + CAMIC.replace("icon lg", "icon") + (n ? n + (n > 1 ? " photos" : " photo") : "His work") + '</button>'; }
-var CAM = null;
-function camPick(id) { var inp = $("#camin"); if (!inp) { inp = document.createElement("input"); inp.type = "file"; inp.id = "camin"; inp.className = "sr"; inp.accept = "image/*,application/pdf"; inp.multiple = true; inp.tabIndex = -1; document.body.appendChild(inp);
-    inp.addEventListener("change", function () { var files = Array.prototype.slice.call(inp.files || []), q = CAM; inp.value = ""; if (!files.length || !q || !L) return;
-      toast("Saving " + files.length + (files.length > 1 ? " photos" : " photo") + "…");
-      sendWork(files, q, "class", "").then(function () { toast("Saved to " + (labelOf(q) || "the question")); flush(); $$('[data-cam="' + q + '"]').forEach(function (b) { b.outerHTML = camBtn(findQ(q), b.classList.contains("sm")); }); })
-        .catch(function (e) { toast(workErr(e)); }); }); }
-  CAM = id; inp.click(); }
+/* Ali, 21 Oct: the camera opens a small card on the button, so Teach stays where it is. Paste a photo (Ctrl+V), drop it or choose one;
+   the card then shows the photos saved to that question, so he can see the right one went in */
+var CAM = null, CAMURL = {};
+function camThumbs(id) { var live = L.session.work.filter(function (w) { return !w.removed && w.item === id; });
+  return live.length ? live.map(function (w) { var u = CAMURL[w.file];
+    return '<span class="campic">' + (/\.pdf$/i.test(w.file) ? '<span class="ph">PDF</span>' : u ? '<img src="' + u + '" alt="Photo of his work">' : '<img data-src="' + esc(w.file) + '" alt="Photo of his work" hidden><span class="ph">Loading</span>') + '<span class="hint">' + esc(hhmm(w.at)) + '</span></span>'; }).join("")
+    : '<span class="hint">No photos on this question yet</span>'; }
+function camClose() { var el = $("#campop"); if (el) el.remove(); CAM = null; }
+function camOpen(btn, id) {
+  if (CAM === id && $("#campop")) { camClose(); return; } camClose(); if (!L) return;
+  var q = findQ(id) || {}, el = document.createElement("div"); CAM = id;
+  el.id = "campop"; el.className = "campop raised"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "His work: " + (q.label || id));
+  el.innerHTML = '<div class="row"><span class="lab">His work</span>' + (q.source ? refTag(q.source) : tag(esc(q.label || id), "line")) + '<button class="btn sm quiet push" type="button" data-camx aria-label="Close">\u00d7</button></div>' +
+    ((q.img || []).length ? '<div class="camq">' + img(q.img[0], q.label) + '</div>' : "") +
+    '<div class="campaste" id="campaste" tabindex="0"><span class="cam">' + CAMIC.replace("icon lg", "icon") + '</span><b>Paste a photo here</b><span class="hint">Ctrl+V, or drop it on this box</span></div>' +
+    '<div class="row"><button class="btn sm" type="button" data-camfile>Choose photo</button><span class="hint" id="camst" role="status"></span></div>' +
+    '<div class="camshots" id="camshots">' + camThumbs(id) + '</div>';
+  document.body.appendChild(el); camPlace(btn); loadImages(el);
+  el.addEventListener("load", function () { var b = $('[data-cam="' + id + '"]'); if (b && CAM === id) camPlace(b); }, true);
+  var box = $("#campaste"); box.focus({ preventScroll: true });
+  box.addEventListener("dragover", function (e) { e.preventDefault(); box.classList.add("on"); });
+  box.addEventListener("dragleave", function () { box.classList.remove("on"); });
+  box.addEventListener("drop", function (e) { e.preventDefault(); box.classList.remove("on"); camSend(Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.files) || [])); });
+}
+/* beside the button: above it when there is room (the button is usually low on the screen), never off the edge */
+function camPlace(btn) { var el = $("#campop"); if (!el || !btn) return; var r = btn.getBoundingClientRect(), w = Math.min(380, innerWidth - 32), h = el.offsetHeight;
+  el.style.width = w + "px"; el.style.left = Math.max(16, Math.min(r.right - w, innerWidth - w - 16)) + "px";
+  el.style.top = (r.top - h - 8 >= 8 ? r.top - h - 8 : Math.min(r.bottom + 8, innerHeight - h - 8)) + "px"; }
+function camSend(files) { var q = CAM; files = files.filter(function (f) { return /^image\//.test(f.type) || /pdf$/i.test(f.type) || /\.(jpe?g|png|heic|webp|pdf)$/i.test(f.name || ""); });
+  var st = $("#camst"); if (!files.length || !q || !L) { if (st) st.textContent = "No photo found: copy a photo, then paste."; return; }
+  sendWork(files, q, "class", "", function (i, n) { if (st) st.textContent = "Saving " + i + " of " + n + "\u2026"; }, function (f, path) { if (!/pdf/i.test(f.type)) CAMURL[path] = URL.createObjectURL(f); })
+    .then(function () { flush(); if (CAM === q) { $("#camst").textContent = (files.length > 1 ? files.length + " photos" : "Photo") + " saved " + hhmm(now()); $("#camshots").innerHTML = camThumbs(q); loadImages($("#camshots")); var cb = $('[data-cam="' + q + '"]'); if (cb) camPlace(cb); }
+      $$('[data-cam="' + q + '"]').forEach(function (b) { b.outerHTML = camBtn(findQ(q), b.classList.contains("sm")); }); })
+    .catch(function (e) { var s2 = $("#camst"); if (s2 && CAM === q) s2.textContent = workErr(e); else toast(workErr(e)); }); }
+function camPick() { var inp = $("#camin"); if (!inp) { inp = document.createElement("input"); inp.type = "file"; inp.id = "camin"; inp.className = "sr"; inp.accept = "image/*,application/pdf"; inp.multiple = true; inp.tabIndex = -1; document.body.appendChild(inp);
+    inp.addEventListener("change", function () { var files = Array.prototype.slice.call(inp.files || []); inp.value = ""; camSend(files); }); }
+  inp.click(); }
+function clipFiles(e) { var cd = e.clipboardData, out = []; if (!cd) return out;
+  Array.prototype.forEach.call(cd.items || [], function (it) { if (it.kind === "file") { var f = it.getAsFile(); if (f) out.push(f); } });
+  if (!out.length) out = Array.prototype.slice.call(cd.files || []); return out; }
+document.addEventListener("paste", function (e) {
+  if (CAM && $("#campop")) { var f = clipFiles(e); e.preventDefault(); camSend(f); return; }
+  var inp = $("#wk-files"); if (!inp || /INPUT|TEXTAREA/.test((e.target || {}).tagName || "") && e.target.id !== "wk-files") return;
+  var fs = clipFiles(e); if (!fs.length) return; e.preventDefault();
+  try { var dt = new DataTransfer(); fs.forEach(function (f) { dt.items.add(f); }); inp.files = dt.files; } catch (x) { return; }
+  inp.dispatchEvent(new Event("change", { bubbles: true })); });
+document.addEventListener("click", function (e) { var pop = $("#campop"); if (!pop) return; var t = e.target;
+  if (t.closest && t.closest("[data-camx]")) { camClose(); return; }
+  if (t.closest && t.closest("[data-camfile]")) { camPick(); return; }
+  if (!pop.contains(t) && !(t.closest && t.closest("[data-cam]")) && t.id !== "camin") camClose(); }, true);
+document.addEventListener("keydown", function (e) { if (e.key === "Escape" && $("#campop")) camClose(); });
+window.addEventListener("resize", function () { var b = CAM && $('[data-cam="' + CAM + '"]'); if (b) camPlace(b); else camClose(); });
 function findQ(id) { var hit = null; phases().forEach(function (p) { (function walk(bs) { (bs || []).forEach(function (b) { if (b.type === "question" && b.id === id) hit = b; if (b.blocks) walk(b.blocks); }); })(p.blocks); }); return hit; }
 
 /* ---------------- record ---------------- */
@@ -1141,7 +1186,7 @@ function drawShow() { var s = SH.sl[SH.i]; $("#sh-lab").textContent = ""; $("#sh
 function stepShow(d) { if (!SH) return; var n = SH.i + d; if (n < 0 || n >= SH.sl.length) return; SH.i = n; drawShow(); }
 function closeShow() { var el = $("#show"); if (el) el.remove(); SH = null; try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {} }
 document.addEventListener("click", function (e) { var t = e.target.closest("button"); if (!t) return;
-  if (t.hasAttribute("data-cam")) { camPick(t.getAttribute("data-cam")); return; }
+  if (t.hasAttribute("data-cam")) { camOpen(t, t.getAttribute("data-cam")); return; }
   if (t.hasAttribute("data-show")) { showHim(t.getAttribute("data-show")); return; }
   if (t.id === "sh-x") closeShow(); else if (t.id === "sh-prev") stepShow(-1); else if (t.id === "sh-next") stepShow(1); });
 document.addEventListener("keydown", function (e) { if (!SH) return; if (e.key === "ArrowRight") stepShow(1); else if (e.key === "ArrowLeft") stepShow(-1); else if (e.key === "Escape") closeShow(); });
@@ -1952,7 +1997,7 @@ document.addEventListener("click", function (e) { if (MODE !== "teach" || !L) re
 });
 document.addEventListener("toggle", function (e) { var d = e.target; if (MODE === "teach" && d.classList && d.classList.contains("opart")) TCH.open[d.getAttribute("data-pid")] = d.open; }, true);
 document.addEventListener("keydown", function (e) { if (MODE !== "teach" || SH || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || "")) return;
-  if ($("#wuov") || $("#sug") || !$("#zoom").hidden || e.ctrlKey || e.altKey || e.metaKey) return;
+  if ($("#wuov") || $("#sug") || $("#campop") || !$("#zoom").hidden || e.ctrlKey || e.altKey || e.metaKey) return;
   if (PREP && /^[0-6]$/.test(e.key)) return;
   if (e.key === "0") { iskipIt(); return; }
   if ((e.key === "a" || e.key === "A") && ($(".chunk.cur.flip") || $(".chunk.cur .slider"))) { flipIt(); return; }
@@ -2721,7 +2766,7 @@ addEventListener("hashchange", function () { setTimeout(function () { if (MODE !
 /* ---------------- suggestions: Ali's notes on the app itself, tied to the exact screen ----------------
    Saved to docs/ui-feedback.jsonl in the data repo (never into a lesson). Claude reads that file and answers
    each line with {"id", "status": "done"|"later"|"no", "note"}. Works in try-out mode too. */
-var APP_VERSION = "v71", SUG = { open: false, pointing: false, target: "", tags: {} };
+var APP_VERSION = "v72", SUG = { open: false, pointing: false, target: "", tags: {} };
 var SUGFILE = "docs/ui-feedback.jsonl";
 function whereAmI() {
   var r = route(), parts = [];

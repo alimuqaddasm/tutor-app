@@ -38,7 +38,8 @@ with sync_playwright() as p:
     check("Teach: no camera on a board from a video", pg.locator(".chunk.cur [data-cam]").count() == 0)
     go("c.t==='question'&&c.b.id==='s6q17'"); pg.wait_for_timeout(300)
     before = len(fake.puts)
-    with pg.expect_file_chooser() as fc: pg.click('.chunk.cur [data-cam="s6q17"]')
+    pg.click('.chunk.cur [data-cam="s6q17"]'); pg.wait_for_selector("#campop")
+    with pg.expect_file_chooser() as fc: pg.click("#campop [data-camfile]")
     fc.value.set_files(PHOTO)
     pg.wait_for_function("()=>{var b=document.querySelector('.chunk.cur [data-cam=\"s6q17\"]');return b&&/1 photo/.test(b.textContent)}", timeout=15000)
     work = [k for k in fake.puts if "/work/" in k]
