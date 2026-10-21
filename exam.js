@@ -567,7 +567,8 @@ function qrAside(compact) {
 function asgRender(m) {
   document.body.classList.add("a-body");
   m.setAttribute("data-asig", asgSig());
-  if (!SEC) asgHome(m);
+  if (WU) asgWarm(m);
+  else if (!SEC) asgHome(m);
   else if (secDone(SEC)) asgReview(m);
   else asgWork(m);
   $$(".a-qr").forEach(qrInto);
@@ -608,9 +609,49 @@ function asgHome(m) {
       '<div class="row a-warn"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 16H3z"></path><path d="M12 10v4M12 17h.01"></path></svg>After Done you can’t change your answers. The mark scheme opens.</div></section>';
   };
   m.innerHTML = '<div class="a-root">' +
-    '<header class="topbar a-hometop"><div class="stack" style="gap:2px;flex:1;min-width:0"><b class="a-htitle">' + esc(himTitle(S.title)) + '</b><div class="tags"><span class="tag">' + days.length + ' days</span><span class="tag">No clock</span><span class="tag">Saves as you go</span></div></div><div class="ex-save" aria-live="polite"></div></header>' + pvBar() +
-    '<div class="a-home2"><nav class="a-days" aria-label="Days">' + days.map(dayBtn).join("") + '</nav>' +
+    '<header class="topbar a-hometop"><div class="stack" style="gap:2px;flex:1;min-width:0"><b class="a-htitle">' + esc(himTitle(S.title)) + '</b><div class="tags"><span class="tag">' + days.length + (days.length === 1 ? ' day' : ' days') + '</span><span class="tag">No clock</span><span class="tag">Saves as you go</span></div></div><div class="ex-save" aria-live="polite"></div></header>' + pvBar() +
+    '<div class="a-home2"><nav class="a-days" aria-label="Days">' + (S.deck ? '<button type="button" class="a-dayb a-wub" data-a-warm><span class="tag ask">Warm-up</span><span class="stack" style="gap:0"><span class="hint">' + S.deck + ' quick cards</span><span class="hint">Optional</span></span></button>' : "") + days.map(dayBtn).join("") + '</nav>' +
       '<main class="a-main2">' + (ADAY != null && by[ADAY] && by[ADAY][0].open ? by[ADAY].map(secCard).join("") : '<div class="empty"><b class="t-card">Your first day opens soon.</b></div>') + qrAside(false) + '</main></div></div>';
+}
+
+/* ---------- warm-up deck (Ali, 21 Oct): quick multiple-choice cards from your old mistakes and your book pages.
+   Optional. Tap an answer and the next card comes; right or wrong shows after the last card, with the book's words. ---------- */
+var WU = null;     // { run, cards, i, picks, saved, err }
+function warmStart() {
+  if (PREVIEW) { toast("The warm-up is his own: not shown in Student view"); return; }
+  var me = WU = { loading: true, cards: [], i: 0, picks: [] }; render(); window.scrollTo(0, 0);
+  // a reply for a round he has already left is dropped
+  api("GET", "/api/s/deck").then(function (d) { if (WU !== me) return; WU = { run: d.run, cards: d.cards || [], i: 0, picks: [] }; render(); },
+    function (e) { if (WU !== me) return; WU = { err: e.message, cards: [], i: 0, picks: [] }; render(); });
+}
+function warmPick(n) { if (!WU || WU.saved != null) return; WU.picks[WU.i] = n;
+  if (WU.i < WU.cards.length - 1) { WU.i++; render(); return; }
+  warmSave(); }
+/* his tries go to the server; if that fails he can try again (the server keeps one try per card per round, so a resend after a lost reply is not counted twice) */
+function warmSave() { var me = WU; me.saved = false; me.err = ""; render();
+  api("POST", "/api/s/deck", { run: me.run, tries: me.cards.map(function (c, i) { return { card: c.id, picked: c.options[me.picks[i]] }; }) })
+    .then(function () { if (WU !== me) return; me.saved = true; render(); }, function (e) { if (WU !== me) return; me.saved = "failed"; me.err = "Not saved: " + e.message; render(); }); }
+function asgWarm(m) {
+  var top = '<header class="a-top"><button type="button" class="a-btn" data-a-home>All days</button><span class="tag ask">Warm-up</span>' +
+    (WU.cards.length && WU.saved == null ? '<span class="a-wucount">' + (WU.i + 1) + ' of ' + WU.cards.length + '</span>' : "") + '<span class="grow"></span></header>';
+  var body;
+  if (WU.loading) body = '<div class="empty"><b class="t-card">Shuffling your cards\u2026</b></div>';
+  else if (!WU.cards.length) body = '<div class="empty"><b class="t-card">' + esc(WU.err || "No cards right now. Come back later.") + '</b></div>';
+  else if (WU.saved == null) {
+    var c = WU.cards[WU.i];
+    body = '<section class="card a-wucard"><div class="a-wubar" aria-hidden="true"><i style="width:' + Math.round(100 * WU.i / WU.cards.length) + '%"></i></div>' +
+      (c.page ? '<span class="tag">' + esc(c.page) + '</span>' : "") + '<h2 class="a-wuq">' + esc(c.q) + '</h2>' +
+      '<div class="a-wuopts">' + c.options.map(function (o, n) { return '<button type="button" class="a-wuopt" data-a-wpick="' + n + '"' + (WU.picks[WU.i] === n ? ' aria-pressed="true"' : "") + '><span class="a-wul">' + "ABCDEF".charAt(n) + '</span><span>' + esc(o) + '</span></button>'; }).join("") + '</div>' +
+      '<div class="row a-wunav">' + (WU.i ? '<button type="button" class="a-btn" data-a-wback>Back</button>' : "") + '<span class="hint">Right or wrong shows after the last card.</span></div></section>';
+  } else {
+    var right = WU.cards.filter(function (c, i) { return WU.picks[i] === c.answer; }).length;
+    body = '<section class="card pad a-wudone"><div class="row"><b class="a-wuscore">' + right + '/' + WU.cards.length + ' right</b>' + (WU.saved === false ? '<span class="hint">Saving\u2026</span>' : "") + (WU.err ? '<span class="hint">' + esc(WU.err) + '</span>' : "") + (WU.saved === "failed" ? '<button type="button" class="a-btn" data-a-wsave>Try saving again</button>' : "") + '</div>' +
+      '<div class="row"><button type="button" class="a-btn dark" data-a-warm>Another round</button><button type="button" class="a-btn" data-a-home>Back to all days</button></div></section>' +
+      '<div class="a-wulist">' + WU.cards.map(function (c, i) { return i; }).sort(function (x, y) { return (WU.picks[x] === WU.cards[x].answer) - (WU.picks[y] === WU.cards[y].answer); }).map(function (i) { var c = WU.cards[i], ok = WU.picks[i] === c.answer;
+        return '<section class="card a-wures ' + (ok ? "ok" : "bad") + '"><div class="row"><span class="tag ' + (ok ? "ok" : "bad") + '">' + (ok ? "\u2713 Right" : "\u2715 Wrong") + '</span>' + (c.page ? '<span class="tag">' + esc(c.page) + '</span>' : "") + '</div><b>' + esc(c.q) + '</b>' +
+          (ok ? "" : '<p class="a-wumine">You chose: ' + esc(c.options[WU.picks[i]]) + '</p>') + '<p class="a-wuans">Answer: ' + esc(c.options[c.answer]) + '</p>' + (c.why ? '<p class="hint">' + esc(c.why) + '</p>' : "") + '</section>'; }).join("") + '</div>';
+  }
+  m.innerHTML = '<div class="a-root">' + top + '<main class="a-wu">' + body + '</main></div>';
 }
 
 function header(x, extra) {
@@ -760,7 +801,12 @@ function asgFinish() {
 
 document.addEventListener("click", function (e) {
   if (!ASG()) return;
-  var t = e.target.closest && e.target.closest("[data-a-day],[data-a-sec],[data-a-home],[data-a-q],[data-a-prev],[data-a-next],[data-a-sw],[data-a-finish],[data-a-mode],[data-a-again]"); if (!t) return;
+  var t = e.target.closest && e.target.closest("[data-a-day],[data-a-sec],[data-a-home],[data-a-q],[data-a-prev],[data-a-next],[data-a-sw],[data-a-finish],[data-a-mode],[data-a-again],[data-a-warm],[data-a-wpick],[data-a-wback],[data-a-wsave]"); if (!t) return;
+  if (t.hasAttribute("data-a-warm")) { warmStart(); return; }
+  if (t.hasAttribute("data-a-wpick")) { warmPick(Number(t.getAttribute("data-a-wpick"))); return; }
+  if (t.hasAttribute("data-a-wback")) { if (WU && WU.i > 0) { WU.i--; render(); } return; }
+  if (t.hasAttribute("data-a-wsave")) { if (WU && WU.saved === "failed") warmSave(); return; }
+  if (t.hasAttribute("data-a-home") && WU) { WU = null; render(); window.scrollTo(0, 0); return; }
   var ord = secQs(SEC || "").map(function (q) { return S.questions.indexOf(q); }), k = ord.indexOf(cur);
   if (t.hasAttribute("data-a-day")) { ADAY = Number(t.getAttribute("data-a-day")); render(); }
   else if (t.hasAttribute("data-a-sec")) { openSec(t.getAttribute("data-a-sec")); if (t.hasAttribute("data-a-qi")) goQ(Number(t.getAttribute("data-a-qi"))); }

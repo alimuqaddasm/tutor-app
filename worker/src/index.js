@@ -4,6 +4,8 @@
    /api/s/*  student, needs the X-Exam-Token header (the long random token in the student link)
    /api/p/*  phone upload, needs the X-Phone-Token header (one question of one exam)
    Student and phone replies never contain marks or comments.
+   /api/s/deck: his warm-up deck (15 multiple-choice cards from his mistakes and his book pages); /api/t/exams/<id>/cards loads them.
+   A finished section sends Ali a phone push through ntfy when the Worker secret NTFY_TOPIC is set.
    kind "assignment": no clock. The link opens it at once; it stays open until Ali locks it. Questions sit in sections;
    Done on a section opens that section's mark schemes to him, and later saves are flagged afterDone. */
 
@@ -331,7 +333,8 @@ async function route(request, env, now) {
       const seen = env.DB.prepare("UPDATE exams SET last_seen_at = ? WHERE id = ?").bind(now, exam.id);
       const asg = isAssignment(exam);
       const r = (await reads(env, open ? [seen, extensionsQ(env, exam.id), questionsQ(env, exam.id), answersQ(env, exam.id), uploadsQ(env, exam.id), sectionsQ(env, exam.id),
-        env.DB.prepare("SELECT question_id, score, note FROM marks WHERE exam_id = ?").bind(exam.id), viewsQ(env, exam.id)] : [seen, extensionsQ(env, exam.id)])).slice(1);
+        env.DB.prepare("SELECT question_id, score, note FROM marks WHERE exam_id = ?").bind(exam.id), viewsQ(env, exam.id),
+        env.DB.prepare("SELECT status, ms_worded, live_at FROM cards WHERE exam_id = ?").bind(exam.id)] : [seen, extensionsQ(env, exam.id)])).slice(1);
       const out = { title: exam.title, subject: exam.subject, practice: !!exam.practice, kind: exam.kind || "exam", ...clock(exam, now, r[0]) };
       if (open) {
         const secs = asg ? withDays(exam, sectionList(r[4]), now) : sectionList(r[4]);
@@ -354,6 +357,7 @@ async function route(request, env, now) {
           }
           out.notes = notes;
           out.on = timeOn(r[6], now).on;
+          out.deck = Math.min(DECK, r[7].filter((c) => cardLive(c, now)).length);   // how many warm-up cards a run has
         }
       }
       return json(out);
@@ -391,7 +395,17 @@ async function route(request, env, now) {
       if (took != null && !(took >= 0 && took <= 1440)) fail(400, "The minutes must be between 0 and 1440.");
       await env.DB.batch([env.DB.prepare("UPDATE sections SET done_at = ?, took_min = ? WHERE exam_id = ? AND id = ?").bind(now, took, exam.id, a[1]),
         env.DB.prepare("INSERT INTO events (exam_id, at, kind, detail) VALUES (?, ?, 'done', ?)").bind(exam.id, now, a[1])]);
+      const st = await env.DB.prepare("SELECT title FROM sections WHERE exam_id = ? AND id = ?").bind(exam.id, a[1]).first();
+      await notify(env, (exam.practice ? "Practice: " : "") + "finished " + ((st && st.title) || a[1]), exam.title + (took != null ? " \u00b7 took " + took + " min" : ""));
       return json({ ok: true, doneAt: now, tookMin: took });
+    }
+    if (p === "/api/s/deck" && m === "GET") {
+      if (!isAssignment(exam) || exam.status === "locked") fail(403, "The warm-up is not open.");
+      return json(await deck(env, exam, now));
+    }
+    if (p === "/api/s/deck" && m === "POST") {
+      if (!isAssignment(exam) || exam.status === "locked") fail(403, "The warm-up is not open.");
+      return json(await saveDeck(env, exam, await body(request), now));
     }
     if ((a = p.match(/^\/api\/s\/answers\/([\w-]+)$/)) && m === "PUT") {
       if (!canWrite(exam)) fail(409, exam.status === "waiting" || exam.status === "draft" ? "The exam has not started yet." : "The exam has ended, so answers can't be changed.");
@@ -611,7 +625,7 @@ async function route(request, env, now) {
       }
       if (sub === "" && m === "DELETE") {
         if (exam.status === "running") fail(409, "Lock the exam before deleting it.");
-        await env.DB.batch(["exams:id", "questions:exam_id", "extensions:exam_id", "answer_revisions:exam_id", "uploads:exam_id", "phone_tokens:exam_id", "marks:exam_id", "events:exam_id", "question_views:exam_id", "sections:exam_id"]
+        await env.DB.batch(["exams:id", "questions:exam_id", "extensions:exam_id", "answer_revisions:exam_id", "uploads:exam_id", "phone_tokens:exam_id", "marks:exam_id", "events:exam_id", "question_views:exam_id", "sections:exam_id", "cards:exam_id", "card_tries:exam_id"]
           .map((t) => { const [table, col] = t.split(":"); return env.DB.prepare("DELETE FROM " + table + " WHERE " + col + " = ?").bind(exam.id); }));
         return json({ ok: true });
       }
@@ -650,12 +664,19 @@ async function route(request, env, now) {
       /* A practice copy for Try-out, made here on the server (no pictures through the browser): the questions with
          their pictures, mark schemes and study pointers, the sections, nothing he did. Marked practice, so it never
          goes to the tutoring repo. */
+      if (sub === "/cards" && m === "PUT") return json(await putCards(env, exam, await body(request), now));
+      if (sub === "/cards" && m === "GET") {
+        const r = await reads(env, [env.DB.prepare("SELECT * FROM cards WHERE exam_id = ? ORDER BY pos").bind(exam.id),
+          env.DB.prepare("SELECT card_id, run_id, at, picked, right FROM card_tries WHERE exam_id = ? ORDER BY at").bind(exam.id)]);
+        return json({ cards: r[0].map((c) => ({ ...cardOut(c), status: c.status, msWorded: !!c.ms_worded, liveAt: c.live_at, live: cardLive(c, now) })), tries: r[1], serverNow: now });
+      }
       if (sub === "/practice-copy" && m === "POST") {
         const id = randomToken(9);
         await env.DB.batch([
           env.DB.prepare("INSERT INTO exams (id, title, subject, source_path, ratio, base_minutes, practice, kind, gap_hours, created_at) SELECT ?, 'Practice: ' || title, subject, source_path, ratio, base_minutes, 1, kind, gap_hours, ? FROM exams WHERE id = ?").bind(id, now, exam.id),
           env.DB.prepare("INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, img, img_mime, section_id, ms_img, ms_mime, study, choices, work, typed) SELECT id, ?, pos, label, text_html, marks, type, suggested_min, img, img_mime, section_id, ms_img, ms_mime, study, choices, work, typed FROM questions WHERE exam_id = ?").bind(id, exam.id),
           env.DB.prepare("INSERT INTO sections (exam_id, id, pos, title, subject, day, date, suggest_min) SELECT ?, id, pos, title, subject, day, date, suggest_min FROM sections WHERE exam_id = ?").bind(id, exam.id),
+          env.DB.prepare("INSERT INTO cards (exam_id, id, pos, kind, subject, q, options, why, page, topic, status, ms_worded, live_at) SELECT ?, id, pos, kind, subject, q, options, why, page, topic, status, ms_worded, live_at FROM cards WHERE exam_id = ?").bind(id, exam.id),
           env.DB.prepare("INSERT INTO events (exam_id, at, kind, detail) VALUES (?, ?, 'created', ?)").bind(id, now, "practice copy of " + exam.id)
         ]);
         return json({ id }, 201);
@@ -804,4 +825,85 @@ async function route(request, env, now) {
   }
 
   fail(404, "Not found.");
+}
+
+/* ===== warm-up deck (Ali, 21 Oct) ===== */
+const DECK = 15, MISTAKE_MAX = 10, DAYMS = 86400000;
+const SPACING = [0, 1, 3, 7, 14, 30];       // days after the last try, by how many times in a row he got it right
+const cardLive = (c, now) => c.status === "live" || (c.status === "pending" && !!c.ms_worded && c.live_at != null && c.live_at <= now);
+const cardOut = (c) => ({ id: c.id, kind: c.kind, subject: c.subject, q: c.q, options: JSON.parse(c.options), why: c.why, page: c.page, topic: c.topic });
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+/* Year 2 organic (3.3.7 and on) counts twice when general cards are drawn */
+const year2 = (t) => { const m = /^3\.3\.(\d+)/.exec(t || ""); return m && +m[1] >= 7; };
+
+async function deck(env, exam, now) {
+  const r = await reads(env, [env.DB.prepare("SELECT * FROM cards WHERE exam_id = ?").bind(exam.id),
+    env.DB.prepare("SELECT card_id, at, right FROM card_tries WHERE exam_id = ? ORDER BY at").bind(exam.id)]);
+  const tries = {};
+  for (const t of r[1]) (tries[t.card_id] = tries[t.card_id] || []).push(t);
+  const live = r[0].filter((c) => cardLive(c, now));
+  const streak = (ts) => { let n = 0; for (let i = ts.length - 1; i >= 0 && ts[i].right; i--) n++; return n; };
+  const due = live.filter((c) => c.kind === "mistake").filter((c) => { const ts = tries[c.id] || []; if (!ts.length) return true;
+    const n = streak(ts); if (n >= SPACING.length - 1) return false;     // right 5 times in a row: learnt
+    return now - ts[ts.length - 1].at >= SPACING[n] * DAYMS - 3600000; });
+  const pick = shuffle(due).slice(0, MISTAKE_MAX);
+  const recent = (c) => { const ts = tries[c.id] || []; return ts.length && now - ts[ts.length - 1].at < 2 * DAYMS; };
+  let pool = live.filter((c) => c.kind !== "mistake" && !recent(c));
+  if (pool.length < DECK - pick.length) pool = live.filter((c) => c.kind !== "mistake");
+  const weighted = shuffle(pool.flatMap((c) => year2(c.topic) ? [c, c] : [c]));
+  for (const c of weighted) { if (pick.length >= DECK) break; if (!pick.includes(c)) pick.push(c); }
+  const cards = shuffle(pick).map((c) => { const o = cardOut(c), right = o.options[0]; o.options = shuffle(o.options.slice()); o.answer = o.options.indexOf(right); return o; });
+  return { run: randomToken(9), cards, due: due.length, total: live.length, serverNow: now };
+}
+
+async function saveDeck(env, exam, b, now) {
+  const run = String(b.run || "").slice(0, 40), list = Array.isArray(b.tries) ? b.tries.slice(0, 50) : [];
+  if (!run || !list.length) fail(400, "Nothing to save.");
+  const ids = [...new Set(list.map((t) => String(t.card || "")))];
+  const cs = (await env.DB.prepare("SELECT id, options FROM cards WHERE exam_id = ? AND id IN (" + ids.map(() => "?").join(",") + ")").bind(exam.id, ...ids).all()).results;
+  const right = {}; for (const c of cs) right[c.id] = JSON.parse(c.options)[0];
+  const rows = list.filter((t) => right[t.card] !== undefined).map((t) => { const picked = String(t.picked == null ? "" : t.picked).slice(0, 2000);
+    // one try per card per round: a resend after a lost reply is not counted twice
+    return env.DB.prepare("INSERT INTO card_tries (exam_id, card_id, run_id, at, picked, right) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM card_tries WHERE exam_id = ? AND card_id = ? AND run_id = ?)")
+      .bind(exam.id, t.card, run, now, picked, picked === right[t.card] ? 1 : 0, exam.id, t.card, run); });
+  if (!rows.length) fail(400, "None of those cards are in this deck.");
+  await env.DB.batch(rows);
+  return { ok: true, saved: rows.length };
+}
+
+/* Ali's cards from the tutoring repo replace the deck's cards; his tries stay */
+async function putCards(env, exam, b, now) {
+  if (!Array.isArray(b.cards) || b.cards.length > 2000) fail(400, "Send cards as a list (at most 2000).");
+  const seen = new Set(), stmts = [];
+  b.cards.forEach((c, i) => {
+    const id = String(c.id || "");
+    if (!/^[\w.:-]{1,80}$/.test(id) || seen.has(id)) fail(400, "Each card needs its own id (" + (id || "card " + (i + 1)) + ").");
+    seen.add(id);
+    const opts = Array.isArray(c.options) ? c.options.map((x) => String(x)) : [];
+    if (opts.length < 2 || opts.length > 6 || opts.some((x) => !x.trim()) || new Set(opts).size !== opts.length) fail(400, "Card " + id + " needs 2 to 6 different options, the right one first.");
+    const status = ["live", "pending", "off"].includes(c.status) ? c.status : "live";
+    const q = String(c.q || "").trim(); if (!q) fail(400, "Card " + id + " has no question.");
+    if (q.length + opts.join("").length > 8000) fail(413, "Card " + id + " is too long.");
+    const liveAt = c.liveAt == null || c.liveAt === "" ? null : Number(c.liveAt);
+    stmts.push(env.DB.prepare("INSERT INTO cards (exam_id, id, pos, kind, subject, q, options, why, page, topic, status, ms_worded, live_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+      "ON CONFLICT (exam_id, id) DO UPDATE SET pos = excluded.pos, kind = excluded.kind, subject = excluded.subject, q = excluded.q, options = excluded.options, why = excluded.why, page = excluded.page, topic = excluded.topic, status = excluded.status, ms_worded = excluded.ms_worded, live_at = excluded.live_at")
+      .bind(exam.id, id, i, c.kind === "mistake" ? "mistake" : "general", String(c.subject || "chem").slice(0, 20), q, JSON.stringify(opts), String(c.why || "").slice(0, 4000),
+        String(c.page || "").slice(0, 80), String(c.topic || "").slice(0, 40), status, c.msWorded ? 1 : 0, Number.isFinite(liveAt) ? liveAt : null));
+  });
+  const keep = [...seen];
+  // D1 takes at most 100 bound values a statement: delete the dropped cards in chunks, not with one NOT IN (all kept ids)
+  const gone = (await env.DB.prepare("SELECT id FROM cards WHERE exam_id = ?").bind(exam.id).all()).results.map((r) => r.id).filter((x) => !seen.has(x));
+  for (let i = 0; i < gone.length; i += 90) { const part = gone.slice(i, i + 90);
+    stmts.unshift(env.DB.prepare("DELETE FROM cards WHERE exam_id = ? AND id IN (" + part.map(() => "?").join(",") + ")").bind(exam.id, ...part)); }
+  for (let i = 0; i < stmts.length; i += 90) await env.DB.batch(stmts.slice(i, i + 90));
+  return { ok: true, cards: keep.length, live: (await env.DB.prepare("SELECT status, ms_worded, live_at FROM cards WHERE exam_id = ?").bind(exam.id).all()).results.filter((c) => cardLive(c, now)).length };
+}
+
+/* A phone push to Ali (ntfy app, topic in the Worker secret NTFY_TOPIC; NTFY_TOKEN, a free ntfy account's token, lifts the shared daily limit). Never holds up his save: 3 seconds at most, errors ignored. */
+async function notify(env, title, msg) {
+  if (!env.NTFY_TOPIC) return;
+  try {
+    await Promise.race([fetch("https://ntfy.sh/" + encodeURIComponent(env.NTFY_TOPIC), { method: "POST", body: msg, headers: { Title: title, Tags: "pencil", ...(env.NTFY_TOKEN ? { Authorization: "Bearer " + env.NTFY_TOKEN } : {}) } }),
+      new Promise((res) => setTimeout(res, 3000))]);
+  } catch (e) { console.error("push failed", e && e.message); }
 }

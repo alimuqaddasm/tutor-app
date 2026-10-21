@@ -1414,3 +1414,19 @@ span.cvlab{cursor:default}
 .afterpop{position:fixed;z-index:52;overflow:auto;padding:var(--s5);border-radius:var(--r-lg);background:var(--ground);border:1px solid var(--line-strong);box-shadow:var(--raise-lg)}
 .afterpop .afterx{position:sticky;top:0;float:right;z-index:1;min-width:44px;min-height:44px}
 @media (max-width:760px){.afterpop{padding:var(--s4)}}
+
+/* warm-up cards review (21 Oct): one card per question; the right answer first, then the wrong ones; approve, reject, edit in place */
+.wc .qbar{align-items:center}
+.wc-topic,.wc-ex{width:auto;min-width:200px}
+.wc-list{display:flex;flex-direction:column;gap:var(--s4)}
+.wc-card{display:flex;flex-direction:column;gap:var(--s3);padding:var(--s5);border-left:4px solid var(--live)}
+.wc-card[data-st="approved"]{border-left-color:var(--right)}
+.wc-card[data-st="rejected"]{border-left-color:var(--line-strong);opacity:.75}
+.wc-l{display:flex;flex-direction:column;gap:var(--s2);font-size:var(--fs-sm);font-weight:600;color:var(--text-2)}
+.wc-q{font-weight:600;color:var(--text)}
+.wc-why{min-height:64px;font-weight:400;color:var(--text)}
+.wc-opts{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
+.wc-opt{display:flex;align-items:center;gap:var(--s2)}
+.wc-opt .tag{flex:0 0 64px;justify-content:center}
+.wc-acts .push{margin-left:auto}
+@media (max-width:760px){.wc-opts{grid-template-columns:1fr}.wc-topic,.wc-ex{min-width:0;width:100%}.wc-acts .push{margin-left:0;flex-basis:100%}}
