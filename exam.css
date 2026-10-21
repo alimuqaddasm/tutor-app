@@ -321,3 +321,27 @@ body.a-body .ex-main{max-width:none;padding:0}
 .ex-pick[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
 .ex-pick:disabled{opacity:.6;cursor:default}
 .ex-pick[aria-pressed="true"]:disabled{opacity:1}
+
+/* warm-up deck on his assignment (21 Oct): one card at a time, four big answers, results after the last card */
+.a-wub{margin-bottom:var(--s2);border:1px dashed var(--line-strong)}
+.a-wu{display:flex;flex-direction:column;gap:var(--s4);max-width:760px;width:100%;margin:0 auto;padding:32px 24px;box-sizing:border-box}
+.a-wucount{font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums}
+.a-wucard{display:flex;flex-direction:column;gap:var(--s4);padding:var(--s5);align-items:flex-start}
+.a-wubar{width:100%;height:6px;border-radius:var(--r-full);background:var(--sunk);overflow:hidden}
+.a-wubar i{display:block;height:100%;background:var(--text-2)}
+.a-wuq{margin:0;font-size:24px;line-height:1.35;font-weight:600}
+.a-wuopts{display:flex;flex-direction:column;gap:var(--s3);width:100%}
+.a-wuopt{font:inherit;font-size:18px;text-align:left;display:flex;align-items:flex-start;gap:var(--s3);width:100%;min-height:56px;padding:var(--s3) var(--s4);border-radius:var(--r-md);border:1px solid var(--line-strong);background:var(--surface);color:var(--text);cursor:pointer}
+.a-wuopt:hover{border-color:var(--text-3)}
+.a-wuopt[aria-pressed="true"]{border-color:var(--text);box-shadow:0 0 0 1px var(--text)}
+.a-wul{flex:0 0 32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--sunk);font-weight:600;font-size:16px}
+.a-wunav{width:100%;justify-content:space-between}
+.a-wudone{display:flex;flex-direction:column;gap:var(--s4)}
+.a-wuscore{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
+.a-wulist{display:flex;flex-direction:column;gap:var(--s3)}
+.a-wures{display:flex;flex-direction:column;gap:var(--s2);padding:var(--s4) var(--s5);border-left:4px solid var(--right)}
+.a-wures.bad{border-left-color:var(--wrong)}
+.a-wures p{margin:0}
+.a-wumine{color:var(--wrong)}
+.a-wuans{font-weight:600}
+@media (max-width:760px){.a-wu{padding:var(--s4)}.a-wuq{font-size:20px}.a-wuopt{font-size:16px}}
