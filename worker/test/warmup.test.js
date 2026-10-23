@@ -124,3 +124,54 @@ describe("phone push when he finishes a section (21 Oct)", () => {
     expect((await call(T0 + MIN, "POST", "/api/s/sections/d1-chem/done", { token: p2.token, json: {} })).status).toBe(200);
   });
 });
+
+describe("warm-up in step with the pack (23 Oct)", () => {
+  async function pack2() {
+    const r = await teacher(T0, "POST", "/api/t/exams", { json: { title: "Holiday", kind: "assignment",
+      sections: [{ id: "d1-chem", title: "Day 1 Chemistry", subject: "chem", day: 1 }, { id: "d2-chem", title: "Day 2 Chemistry", subject: "chem", day: 2 }],
+      questions: [
+        { id: "d1c1", label: "Q1", marks: 1, type: "mcq", choices: "ABCD", answer: "c", section_id: "d1-chem", study: { pages: [{ spec: "3.3.4", pages: "pp. 151-155" }] } },
+        { id: "d1c2", label: "Q2", marks: 1, type: "mcq", choices: "ABCD", answer: "B", section_id: "d1-chem", study: { pages: [{ spec: "3.3.4" }] } },
+        { id: "d1c3", label: "Q3", marks: 1, type: "mcq", choices: "ABCD", answer: "A", section_id: "d1-chem", study: { pages: [{ spec: "3.3.4" }] } },
+        { id: "d2c1", label: "Q1", marks: 4, type: "short", section_id: "d2-chem", study: { pages: [{ spec: "3.3.10" }] } }] } });
+    const token = (await teacher(T0, "POST", `/api/t/exams/${r.data.id}/link`)).data.token;
+    return { id: r.data.id, token };
+  }
+  it("never shows him the right letter, and turns wrong or blank taps into picture cards when he finishes", async () => {
+    const { id, token } = await pack2();
+    const st = await call(T0, "GET", "/api/s/state", { token });
+    expect(JSON.stringify(st.data)).not.toContain('"answer"');
+    await call(T0 + MIN, "PUT", "/api/s/answers/d1c1", { token, json: { text: "A", seq: 1 } });
+    await call(T0 + MIN, "PUT", "/api/s/answers/d1c2", { token, json: { text: "B", seq: 1 } });
+    await teacher(T0, "PUT", `/api/t/exams/${id}/cards`, { json: { cards: [card("g1", { topic: "3.3.2" })] } });
+    await call(T0 + 2 * MIN, "POST", "/api/s/sections/d1-chem/done", { token, json: {} });
+    const c = await teacher(T0 + 3 * MIN, "GET", `/api/t/exams/${id}/cards`);
+    const auto = c.data.cards.filter((x) => x.qid).sort((a, b) => a.id.localeCompare(b.id));
+    expect(auto.map((x) => x.id)).toEqual(["q-d1c1", "q-d1c3"]);
+    expect(auto[0]).toMatchObject({ kind: "mistake", qid: "d1c1", topic: "3.3.4", page: "CGP pp. 151-155", live: true });
+    expect(auto[0].options[0]).toBe("C"); expect(auto[0].q).toContain("you chose A");
+    // Ali sending the repo's cards again keeps them
+    await teacher(T0 + 4 * MIN, "PUT", `/api/t/exams/${id}/cards`, { json: { cards: [card("g1", { topic: "3.3.2" })] } });
+    const d = await call(T0 + 5 * MIN, "GET", "/api/s/deck", { token });
+    expect(d.data.cards.map((x) => x.id).sort()).toEqual(["g1", "q-d1c1", "q-d1c3"]);
+    const pc = d.data.cards.find((x) => x.id === "q-d1c1");
+    expect(pc.qid).toBe("d1c1"); expect(pc.options).toEqual(["A", "B", "C", "D"]); expect(pc.answer).toBe(2);
+  });
+  it("general cards on the day he is on come up more often", async () => {
+    const { id, token } = await pack2();
+    const cards = [...Array.from({ length: 10 }, (_, i) => card("al" + i, { topic: "3.3.4" })), ...Array.from({ length: 60 }, (_, i) => card("x" + i, { topic: "3.3.2" }))];
+    await teacher(T0, "PUT", `/api/t/exams/${id}/cards`, { json: { cards } });
+    let hits = 0;
+    for (let k = 0; k < 20; k++) hits += (await call(T0 + k, "GET", "/api/s/deck", { token })).data.cards.filter((c) => c.topic === "3.3.4").length;
+    expect(hits / 20).toBeGreaterThan(3.2);   // 10 of 70 cards; unweighted about 2.1 a deck, weighted 3 times about 5
+  });
+  it("a general card he got wrong comes back like a mistake", async () => {
+    const { id, token } = await pack2();
+    await teacher(T0, "PUT", `/api/t/exams/${id}/cards`, { json: { cards: Array.from({ length: 40 }, (_, i) => card("g" + i, { topic: "3.3.2" })) } });
+    const d = await call(T0, "GET", "/api/s/deck", { token });
+    const miss = d.data.cards[0];
+    await call(T0, "POST", "/api/s/deck", { token, json: { run: d.data.run, tries: [{ card: miss.id, picked: "wrong a" }] } });
+    const next = await call(T0 + DAY, "GET", "/api/s/deck", { token });
+    expect(next.data.cards.map((c) => c.id)).toContain(miss.id);
+  });
+});

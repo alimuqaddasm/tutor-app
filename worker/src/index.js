@@ -178,7 +178,8 @@ function cleanQuestions(list) {
       if (choices.length < 2 || choices.length > 8) fail(400, "Question " + id + " needs 2 to 8 choices (letters A to Z).");
     }
     const work = q.work == null || q.work === "" ? null : String(q.work).slice(0, 300);
-    return { id, pos: i, label: String(q.label || "").slice(0, 200), text_html: String(q.text_html || "").slice(0, 100000), marks, type, suggested_min: Number.isFinite(sm) ? sm : null, section_id, study, choices, work, typed: q.typed ? 1 : 0 };
+    const answer = type === "mcq" && q.answer && choices.includes(String(q.answer).toUpperCase()) ? String(q.answer).toUpperCase() : null;
+    return { answer, id, pos: i, label: String(q.label || "").slice(0, 200), text_html: String(q.text_html || "").slice(0, 100000), marks, type, suggested_min: Number.isFinite(sm) ? sm : null, section_id, study, choices, work, typed: q.typed ? 1 : 0 };
   });
 }
 
@@ -400,6 +401,7 @@ async function route(request, env, now) {
       if (took != null && !(took >= 0 && took <= 1440)) fail(400, "The minutes must be between 0 and 1440.");
       await env.DB.batch([env.DB.prepare("UPDATE sections SET done_at = ?, took_min = ? WHERE exam_id = ? AND id = ?").bind(now, took, exam.id, a[1]),
         env.DB.prepare("INSERT INTO events (exam_id, at, kind, detail) VALUES (?, ?, 'done', ?)").bind(exam.id, now, a[1])]);
+      await mcqCards(env, exam, a[1], now);
       const st = await env.DB.prepare("SELECT title FROM sections WHERE exam_id = ? AND id = ?").bind(exam.id, a[1]).first();
       await notify(env, (exam.practice ? "Practice: " : "") + "finished " + ((st && st.title) || a[1]), exam.title + (took != null ? " \u00b7 took " + took + " min" : ""));
       return json({ ok: true, doneAt: now, tookMin: took });
@@ -576,7 +578,7 @@ async function route(request, env, now) {
       const stmts = [env.DB.prepare("INSERT INTO exams (id, title, subject, source_path, ratio, base_minutes, practice, kind, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(id, title, String(b.subject || "").slice(0, 40), String(b.source_path || "").slice(0, 300), Number.isFinite(ratio) ? ratio : null, base, b.practice ? 1 : 0, kind, now)];
       for (const x of secs) stmts.push(env.DB.prepare("INSERT INTO sections (exam_id, id, pos, title, subject, day, date, suggest_min) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(id, x.id, x.pos, x.title, x.subject, x.day, x.date, x.suggest_min));
-      for (const q of qs) stmts.push(env.DB.prepare("INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, section_id, study, choices, work, typed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(q.id, id, q.pos, q.label, q.text_html, q.marks, q.type, q.suggested_min, q.section_id, q.study, q.choices, q.work, q.typed));
+      for (const q of qs) stmts.push(env.DB.prepare("INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, section_id, study, choices, work, typed, answer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(q.id, id, q.pos, q.label, q.text_html, q.marks, q.type, q.suggested_min, q.section_id, q.study, q.choices, q.work, q.typed, q.answer));
       const gap = Number(b.gap_hours); if (kind === "assignment" && gap > 0 && gap <= 240) stmts.push(env.DB.prepare("UPDATE exams SET gap_hours = ? WHERE id = ?").bind(gap, id));
       stmts.push(env.DB.prepare("INSERT INTO events (exam_id, at, kind, detail) VALUES (?, ?, 'created', ?)").bind(id, now, String(b.source_path || "")));
       await env.DB.batch(stmts);
@@ -624,9 +626,9 @@ async function route(request, env, now) {
           for (let i = 0; i < gone.length; i += 90) { const part = gone.slice(i, i + 90);
             stmts.push(env.DB.prepare("DELETE FROM questions WHERE exam_id = ? AND id IN (" + part.map(() => "?").join(",") + ")").bind(exam.id, ...part)); }
           for (const q of qs) stmts.push(env.DB.prepare(
-            "INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, choices, work, typed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
-            "ON CONFLICT (exam_id, id) DO UPDATE SET pos = excluded.pos, label = excluded.label, text_html = excluded.text_html, marks = excluded.marks, type = excluded.type, suggested_min = excluded.suggested_min, choices = excluded.choices, work = excluded.work, typed = excluded.typed"
-          ).bind(q.id, exam.id, q.pos, q.label, q.text_html, q.marks, q.type, q.suggested_min, q.choices, q.work, q.typed));
+            "INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, choices, work, typed, answer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+            "ON CONFLICT (exam_id, id) DO UPDATE SET pos = excluded.pos, label = excluded.label, text_html = excluded.text_html, marks = excluded.marks, type = excluded.type, suggested_min = excluded.suggested_min, choices = excluded.choices, work = excluded.work, typed = excluded.typed, answer = excluded.answer"
+          ).bind(q.id, exam.id, q.pos, q.label, q.text_html, q.marks, q.type, q.suggested_min, q.choices, q.work, q.typed, q.answer));
         }
         if (stmts.length) await env.DB.batch(stmts);
         return json({ ok: true });
@@ -682,9 +684,9 @@ async function route(request, env, now) {
         const id = randomToken(9);
         await env.DB.batch([
           env.DB.prepare("INSERT INTO exams (id, title, subject, source_path, ratio, base_minutes, practice, kind, gap_hours, created_at) SELECT ?, 'Practice: ' || title, subject, source_path, ratio, base_minutes, 1, kind, gap_hours, ? FROM exams WHERE id = ?").bind(id, now, exam.id),
-          env.DB.prepare("INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, img, img_mime, section_id, ms_img, ms_mime, study, choices, work, typed) SELECT id, ?, pos, label, text_html, marks, type, suggested_min, img, img_mime, section_id, ms_img, ms_mime, study, choices, work, typed FROM questions WHERE exam_id = ?").bind(id, exam.id),
+          env.DB.prepare("INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, img, img_mime, section_id, ms_img, ms_mime, study, choices, work, typed, answer) SELECT id, ?, pos, label, text_html, marks, type, suggested_min, img, img_mime, section_id, ms_img, ms_mime, study, choices, work, typed, answer FROM questions WHERE exam_id = ?").bind(id, exam.id),
           env.DB.prepare("INSERT INTO sections (exam_id, id, pos, title, subject, day, date, suggest_min) SELECT ?, id, pos, title, subject, day, date, suggest_min FROM sections WHERE exam_id = ?").bind(id, exam.id),
-          env.DB.prepare("INSERT INTO cards (exam_id, id, pos, kind, subject, q, options, why, page, topic, status, ms_worded, live_at) SELECT ?, id, pos, kind, subject, q, options, why, page, topic, status, ms_worded, live_at FROM cards WHERE exam_id = ?").bind(id, exam.id),
+          env.DB.prepare("INSERT INTO cards (exam_id, id, pos, kind, subject, q, options, why, page, topic, status, ms_worded, live_at, qid) SELECT ?, id, pos, kind, subject, q, options, why, page, topic, status, ms_worded, live_at, qid FROM cards WHERE exam_id = ? AND qid IS NULL").bind(id, exam.id),
           env.DB.prepare("INSERT INTO events (exam_id, at, kind, detail) VALUES (?, ?, 'created', ?)").bind(id, now, "practice copy of " + exam.id)
         ]);
         return json({ id }, 201);
@@ -839,10 +841,42 @@ async function route(request, env, now) {
 const DECK = 15, MISTAKE_MAX = 10, DAYMS = 86400000;
 const SPACING = [0, 1, 3, 7, 14, 30];       // days after the last try, by how many times in a row he got it right
 const cardLive = (c, now) => c.status === "live" || (c.status === "pending" && !!c.ms_worded && c.live_at != null && c.live_at <= now);
-const cardOut = (c) => ({ id: c.id, kind: c.kind, subject: c.subject, q: c.q, options: JSON.parse(c.options), why: c.why, page: c.page, topic: c.topic });
+const cardOut = (c) => ({ id: c.id, kind: c.kind, subject: c.subject, q: c.q, options: JSON.parse(c.options), why: c.why, page: c.page, topic: c.topic, qid: c.qid || null });
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 /* Year 2 organic (3.3.7 and on) counts twice when general cards are drawn */
 const year2 = (t) => { const m = /^3\.3\.(\d+)/.exec(t || ""); return m && +m[1] >= 7; };
+
+/* The spec codes of the day he is on in the pack (the first day with a section not finished; once all are finished,
+   the last day), from each question's study pointer. General cards on these topics come up three times as often. */
+async function dayTopics(env, exam, now) {
+  const r = await reads(env, [sectionsQ(env, exam.id), env.DB.prepare("SELECT section_id, study FROM questions WHERE exam_id = ?").bind(exam.id)]);
+  const secs = withDays(exam, sectionList(r[0]), now);
+  if (!secs.length) return new Set();
+  const days = [...new Set(secs.map((x) => x.day))];
+  const day = days.find((d) => secs.some((x) => x.day === d && x.open && x.doneAt == null)) ?? days.filter((d) => secs.some((x) => x.day === d && x.doneAt != null)).pop();
+  const ids = new Set(secs.filter((x) => x.day === day).map((x) => x.id)), out = new Set();
+  for (const q of r[1]) if (ids.has(q.section_id)) for (const p of (parseJSON(q.study) || {}).pages || []) if (p.spec) out.add(p.spec);
+  return out;
+}
+
+/* When he finishes a section: each multiple choice he got wrong (or left blank) becomes a mistake card with the
+   question's picture, due at once and then spaced like his other mistakes. */
+async function mcqCards(env, exam, sectionId, now) {
+  const r = await reads(env, [env.DB.prepare("SELECT q.id, q.label, q.choices, q.answer, q.study, s.title FROM questions q JOIN sections s ON s.exam_id = q.exam_id AND s.id = q.section_id WHERE q.exam_id = ? AND q.section_id = ? AND q.type = 'mcq' AND q.answer IS NOT NULL").bind(exam.id, sectionId),
+    answersQ(env, exam.id)]);
+  const mine = {}; for (const a of r[1]) if (!a.practice) mine[a.question_id] = String(a.text || "").trim().toUpperCase();
+  const stmts = [];
+  for (const q of r[0]) {
+    const got = mine[q.id] || "";
+    if (got === q.answer) continue;
+    const pages = (parseJSON(q.study) || {}).pages || [], p = pages[0] || {};
+    const opts = [q.answer, ...String(q.choices || "ABCD").split("").filter((l) => l !== q.answer)];
+    stmts.push(env.DB.prepare("INSERT OR IGNORE INTO cards (exam_id, id, pos, kind, subject, q, options, why, page, topic, status, ms_worded, live_at, qid) VALUES (?, ?, 100000, 'mistake', 'chem', ?, ?, ?, ?, ?, 'live', 1, NULL, ?)")
+      .bind(exam.id, "q-" + q.id, (q.title || "Holiday pack") + " " + (q.label || "") + ": try it again" + (got ? " (you chose " + got + ")" : ""), JSON.stringify(opts),
+        "Mark scheme: " + q.answer, p.pages ? "CGP " + p.pages : "", p.spec || "", q.id));
+  }
+  if (stmts.length) await env.DB.batch(stmts);
+}
 
 async function deck(env, exam, now) {
   const r = await reads(env, [env.DB.prepare("SELECT * FROM cards WHERE exam_id = ?").bind(exam.id),
@@ -851,16 +885,21 @@ async function deck(env, exam, now) {
   for (const t of r[1]) (tries[t.card_id] = tries[t.card_id] || []).push(t);
   const live = r[0].filter((c) => cardLive(c, now));
   const streak = (ts) => { let n = 0; for (let i = ts.length - 1; i >= 0 && ts[i].right; i--) n++; return n; };
-  const due = live.filter((c) => c.kind === "mistake").filter((c) => { const ts = tries[c.id] || []; if (!ts.length) return true;
+  const wrongLast = (c) => { const ts = tries[c.id] || []; return ts.length && !ts[ts.length - 1].right; };
+  // a general card he got wrong is spaced like a mistake until he gets it right again
+  const due = live.filter((c) => c.kind === "mistake" || wrongLast(c)).filter((c) => { const ts = tries[c.id] || []; if (!ts.length) return true;
     const n = streak(ts); if (n >= SPACING.length - 1) return false;     // right 5 times in a row: learnt
     return now - ts[ts.length - 1].at >= SPACING[n] * DAYMS - 3600000; });
   const pick = shuffle(due).slice(0, MISTAKE_MAX);
   const recent = (c) => { const ts = tries[c.id] || []; return ts.length && now - ts[ts.length - 1].at < 2 * DAYMS; };
-  let pool = live.filter((c) => c.kind !== "mistake" && !recent(c));
-  if (pool.length < DECK - pick.length) pool = live.filter((c) => c.kind !== "mistake");
-  const weighted = shuffle(pool.flatMap((c) => year2(c.topic) ? [c, c] : [c]));
+  let pool = live.filter((c) => c.kind !== "mistake" && !wrongLast(c) && !recent(c));
+  if (pool.length < DECK - pick.length) pool = live.filter((c) => c.kind !== "mistake" && !pick.includes(c));
+  // in step with the pack: today's topics 3 times, other Year 2 twice, Year 1 once
+  const today = await dayTopics(env, exam, now);
+  const weighted = shuffle(pool.flatMap((c) => today.has(c.topic) ? [c, c, c] : year2(c.topic) ? [c, c] : [c]));
   for (const c of weighted) { if (pick.length >= DECK) break; if (!pick.includes(c)) pick.push(c); }
-  const cards = shuffle(pick).map((c) => { const o = cardOut(c), right = o.options[0]; o.options = shuffle(o.options.slice()); o.answer = o.options.indexOf(right); return o; });
+  // a picture card (qid) keeps A, B, C, D in order
+  const cards = shuffle(pick).map((c) => { const o = cardOut(c), right = o.options[0]; o.options = c.qid ? o.options.slice().sort() : shuffle(o.options.slice()); o.answer = o.options.indexOf(right); return o; });
   return { run: randomToken(9), cards, due: due.length, total: live.length, serverNow: now };
 }
 
@@ -900,7 +939,8 @@ async function putCards(env, exam, b, now) {
   });
   const keep = [...seen];
   // D1 takes at most 100 bound values a statement: delete the dropped cards in chunks, not with one NOT IN (all kept ids)
-  const gone = (await env.DB.prepare("SELECT id FROM cards WHERE exam_id = ?").bind(exam.id).all()).results.map((r) => r.id).filter((x) => !seen.has(x));
+  // cards made on the server from his wrong taps (qid) are not in the repo's list: keep them
+  const gone = (await env.DB.prepare("SELECT id FROM cards WHERE exam_id = ? AND qid IS NULL").bind(exam.id).all()).results.map((r) => r.id).filter((x) => !seen.has(x));
   for (let i = 0; i < gone.length; i += 90) { const part = gone.slice(i, i + 90);
     stmts.unshift(env.DB.prepare("DELETE FROM cards WHERE exam_id = ? AND id IN (" + part.map(() => "?").join(",") + ")").bind(exam.id, ...part)); }
   for (let i = 0; i < stmts.length; i += 90) await env.DB.batch(stmts.slice(i, i + 90));

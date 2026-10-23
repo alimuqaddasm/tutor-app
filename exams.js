@@ -215,7 +215,7 @@ function loadToServer(path, btn, practice) {
     var ratio = Number(e.ratio) || null;
     var base = Number(e.minutes) || (ratio ? Math.ceil(marks * ratio / 5) * 5 : 0);
     var body = { title: e.title, subject: e.subject || "", source_path: path, ratio: ratio, base_minutes: asg ? 0 : base || 0,
-      questions: qs.map(function (q, i) { return { id: q.id || "q" + (i + 1), label: q.label || "", text_html: q.text || "", marks: Number(q.marks) || 0, type: q.type || "long", suggested_min: q.suggestMin == null ? null : q.suggestMin, section_id: q.section_id || null, study: q.study || null, choices: q.choices || null, work: q.work || null, typed: !!q.typed }; }) };
+      questions: qs.map(function (q, i) { return { id: q.id || "q" + (i + 1), label: q.label || "", text_html: q.text || "", marks: Number(q.marks) || 0, type: q.type || "long", suggested_min: q.suggestMin == null ? null : q.suggestMin, section_id: q.section_id || null, study: q.study || null, choices: q.choices || null, answer: q.answer || null, work: q.work || null, typed: !!q.typed }; }) };
     if (practice) { body.practice = true; body.title = "Practice: " + body.title; }
     if (asg) { body.kind = "assignment"; body.gap_hours = Number(e.gapHours) || 12; body.sections = e.sections.map(function (x) { return { id: x.id, title: x.title, subject: x.subject, day: x.day, date: x.date, suggest_min: x.suggestMin }; }); }
     var full = function (p) { return /^(students|books)\//.test(p) ? p : folder + p; };

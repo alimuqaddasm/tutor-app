@@ -23,6 +23,10 @@ errs = []
 with sync_playwright() as p:
     b = p.chromium.launch(**({"executable_path": os.environ["CHROMIUM_PATH"]} if os.environ.get("CHROMIUM_PATH") else {}))
     fake = FakeGH()
+    # every card waiting, whatever Ali has approved in the real repo since (the counts below start from none approved)
+    _p = "students/UK-1/warmup/cards.json"; _c = json.loads(fake.blob(fake.sha_of(_p)))
+    for _x in _c["cards"]: _x["status"] = "draft"
+    fake.extra[_p] = json.dumps(_c, ensure_ascii=False).encode()
     def ctx(w, h):
         c = b.new_context(viewport={"width": w, "height": h}, service_workers="block", reduced_motion="reduce")
         c.add_init_script("localStorage.setItem('tutor.token','t');localStorage.setItem('tutor.device','test');localStorage.setItem('tutor.test','1');localStorage.setItem('tutor.examApi',%s);localStorage.setItem('tutor.examPw',%s)" % (json.dumps(API), json.dumps(PW)))
