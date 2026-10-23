@@ -26,6 +26,20 @@ async function makeDays(now = T0 - 10 * MIN) {
 }
 
 describe("days, practice, notes, phone (8 Oct)", () => {
+  it("takes a pack of 134 questions, and edits that drop over 100 of them (23 Oct)", async () => {
+    const qs = Array.from({ length: 134 }, (_, i) => ({ id: "q" + i, marks: 1, type: i % 2 ? "mcq" : "short", choices: "ABCD", section_id: "d" + (1 + (i % 8)) }));
+    const r = await teacher(T0, "POST", "/api/t/exams", { json: { title: "Big", kind: "assignment",
+      sections: Array.from({ length: 8 }, (_, d) => ({ id: "d" + (d + 1), title: "Day " + (d + 1), day: d + 1 })), questions: qs } });
+    expect(r.status).toBe(201);
+    let e = await teacher(T0, "GET", `/api/t/exams/${r.data.id}`);
+    expect(e.data.questions.length).toBe(134);
+    const put = await teacher(T0, "PUT", `/api/t/exams/${r.data.id}`, { json: { questions: qs.slice(0, 20) } });
+    expect(put.status).toBe(200);
+    e = await teacher(T0, "GET", `/api/t/exams/${r.data.id}`);
+    expect(e.data.questions.map((q) => q.id)).toEqual(qs.slice(0, 20).map((q) => q.id));
+    const big = await teacher(T0, "POST", "/api/t/exams", { json: { title: "Too big", questions: Array.from({ length: 301 }, (_, i) => ({ id: "x" + i, marks: 1 })) } });
+    expect(big.status).toBe(400);
+  });
   it("finishing every section of a day opens the next day at once (21 Oct)", async () => {
     const r = await teacher(T0, "POST", "/api/t/exams", { json: { title: "Days", kind: "assignment", gap_hours: 12,
       sections: [{ id: "d1m", title: "Day 1 Maths", day: 1 }, { id: "d1c", title: "Day 1 Chem", day: 1 }, { id: "d2m", title: "Day 2 Maths", day: 2 }, { id: "d3m", title: "Day 3 Maths", day: 3 }],
