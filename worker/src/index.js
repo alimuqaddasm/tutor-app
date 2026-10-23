@@ -157,7 +157,8 @@ function clock(exam, now, extensions) {
 
 function cleanQuestions(list) {
   if (!Array.isArray(list) || list.length === 0) fail(400, "An exam needs at least one question.");
-  if (list.length > 100) fail(400, "Too many questions.");
+  // 300: the holiday pack of 23 Oct has 134 (8 days, maths and chemistry, one question per multiple choice)
+  if (list.length > 300) fail(400, "Too many questions (300 at most).");
   const seen = new Set();
   return list.map((q, i) => {
     const id = String(q.id || "q" + (i + 1)).slice(0, 40);
@@ -617,8 +618,11 @@ async function route(request, env, now) {
         if (b.questions) {
           if (started(exam)) fail(409, "Questions can't change once the exam has started.");
           const qs = cleanQuestions(b.questions);
-          const keep = qs.map((q) => q.id);
-          stmts.push(env.DB.prepare("DELETE FROM questions WHERE exam_id = ? AND id NOT IN (" + keep.map(() => "?").join(",") + ")").bind(exam.id, ...keep));
+          // D1 takes at most 100 bound values a statement: find the dropped ids first, then delete them in chunks
+          const keep = new Set(qs.map((q) => q.id));
+          const gone = (await env.DB.prepare("SELECT id FROM questions WHERE exam_id = ?").bind(exam.id).all()).results.map((r) => r.id).filter((x) => !keep.has(x));
+          for (let i = 0; i < gone.length; i += 90) { const part = gone.slice(i, i + 90);
+            stmts.push(env.DB.prepare("DELETE FROM questions WHERE exam_id = ? AND id IN (" + part.map(() => "?").join(",") + ")").bind(exam.id, ...part)); }
           for (const q of qs) stmts.push(env.DB.prepare(
             "INSERT INTO questions (id, exam_id, pos, label, text_html, marks, type, suggested_min, choices, work, typed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
             "ON CONFLICT (exam_id, id) DO UPDATE SET pos = excluded.pos, label = excluded.label, text_html = excluded.text_html, marks = excluded.marks, type = excluded.type, suggested_min = excluded.suggested_min, choices = excluded.choices, work = excluded.work, typed = excluded.typed"
