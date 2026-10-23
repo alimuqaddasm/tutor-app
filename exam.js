@@ -640,15 +640,15 @@ function asgWarm(m) {
   else if (WU.saved == null) {
     var c = WU.cards[WU.i];
     body = '<section class="card a-wucard"><div class="a-wubar" aria-hidden="true"><i style="width:' + Math.round(100 * WU.i / WU.cards.length) + '%"></i></div>' +
-      (c.page ? '<span class="tag">' + esc(c.page) + '</span>' : "") + '<h2 class="a-wuq">' + esc(c.q) + '</h2>' +
-      '<div class="a-wuopts">' + c.options.map(function (o, n) { return '<button type="button" class="a-wuopt" data-a-wpick="' + n + '"' + (WU.picks[WU.i] === n ? ' aria-pressed="true"' : "") + '><span class="a-wul">' + "ABCDEF".charAt(n) + '</span><span>' + esc(o) + '</span></button>'; }).join("") + '</div>' +
+      (c.page ? '<span class="tag">' + esc(c.page) + '</span>' : "") + '<h2 class="a-wuq">' + esc(c.q) + '</h2>' + (c.qid ? '<figure class="a-qimg a-wuimg"><button type="button" data-zoom><img alt="The question" data-src="/api/s/questions/' + esc(c.qid) + '/image"></button></figure>' : "") +
+      '<div class="a-wuopts">' + c.options.map(function (o, n) { return '<button type="button" class="a-wuopt" data-a-wpick="' + n + '"' + (WU.picks[WU.i] === n ? ' aria-pressed="true"' : "") + '><span class="a-wul">' + (c.qid ? esc(o) : "ABCDEF".charAt(n)) + '</span>' + (c.qid ? "" : '<span>' + esc(o) + '</span>') + '</button>'; }).join("") + '</div>' +
       '<div class="row a-wunav">' + (WU.i ? '<button type="button" class="a-btn" data-a-wback>Back</button>' : "") + '<span class="hint">Right or wrong shows after the last card.</span></div></section>';
   } else {
     var right = WU.cards.filter(function (c, i) { return WU.picks[i] === c.answer; }).length;
     body = '<section class="card pad a-wudone"><div class="row"><b class="a-wuscore">' + right + '/' + WU.cards.length + ' right</b>' + (WU.saved === false ? '<span class="hint">Saving\u2026</span>' : "") + (WU.err ? '<span class="hint">' + esc(WU.err) + '</span>' : "") + (WU.saved === "failed" ? '<button type="button" class="a-btn" data-a-wsave>Try saving again</button>' : "") + '</div>' +
       '<div class="row"><button type="button" class="a-btn dark" data-a-warm>Another round</button><button type="button" class="a-btn" data-a-home>Back to all days</button></div></section>' +
       '<div class="a-wulist">' + WU.cards.map(function (c, i) { return i; }).sort(function (x, y) { return (WU.picks[x] === WU.cards[x].answer) - (WU.picks[y] === WU.cards[y].answer); }).map(function (i) { var c = WU.cards[i], ok = WU.picks[i] === c.answer;
-        return '<section class="card a-wures ' + (ok ? "ok" : "bad") + '"><div class="row"><span class="tag ' + (ok ? "ok" : "bad") + '">' + (ok ? "\u2713 Right" : "\u2715 Wrong") + '</span>' + (c.page ? '<span class="tag">' + esc(c.page) + '</span>' : "") + '</div><b>' + esc(c.q) + '</b>' +
+        return '<section class="card a-wures ' + (ok ? "ok" : "bad") + '"><div class="row"><span class="tag ' + (ok ? "ok" : "bad") + '">' + (ok ? "\u2713 Right" : "\u2715 Wrong") + '</span>' + (c.page ? '<span class="tag">' + esc(c.page) + '</span>' : "") + '</div><b>' + esc(c.q) + '</b>' + (c.qid ? '<figure class="a-qimg a-wuimg"><button type="button" data-zoom><img alt="The question" data-src="/api/s/questions/' + esc(c.qid) + '/image"></button></figure>' : "") +
           (ok ? "" : '<p class="a-wumine">You chose: ' + esc(c.options[WU.picks[i]]) + '</p>') + '<p class="a-wuans">Answer: ' + esc(c.options[c.answer]) + '</p>' + (c.why ? '<p class="hint">' + esc(c.why) + '</p>' : "") + '</section>'; }).join("") + '</div>';
   }
   m.innerHTML = '<div class="a-root">' + top + '<main class="a-wu">' + body + '</main></div>';

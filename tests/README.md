@@ -77,3 +77,4 @@ Since 5 Oct quick flow is the app's default. tests/fakegh.py starts every test b
 test sets tutor.flow itself, because the older tests were written for it.
 
 The maths and QR checks load KaTeX and the QR library from cdnjs, so they need internet.
+    python tests/runtest.py tests/test_round43.py   # round 43 (23 Oct): warm-up in step with the holiday pack: a wrong multiple choice becomes a picture card when he finishes the section, letters A to D, right letter never on his page (12 checks; needs the local exam server)
