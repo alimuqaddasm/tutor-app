@@ -203,6 +203,9 @@ body.a-body .ex-main{max-width:none;padding:0}
 .a-study b{color:var(--on-slate)}
 .a-study ul{margin:6px 0 0;padding-left:18px;display:grid;gap:4px}
 .a-study a{color:#fff}
+.a-clip{margin:8px 0 0}
+.a-clip video{display:block;width:100%;max-width:640px;aspect-ratio:16/9;background:#000;border-radius:var(--r-md)}
+.a-clip figcaption{margin-top:4px}
 .a-again{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .a-practice{display:flex;flex-direction:column;gap:12px;padding:18px;background:var(--surface);border:2px dashed var(--line-strong);border-radius:18px}
 .a-finbox{max-width:620px}

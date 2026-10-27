@@ -685,8 +685,17 @@ function asgWork(m) {
   if (a) { a.addEventListener("input", function () { onType(q.id, a.value); count(a); asgNav(); }); a.addEventListener("blur", function () { flush(); }); count(a); }
 }
 
+/* a worked-answer clip made for this question (Ali, 27 Oct): a video file in this site's videos/ folder, shown with the study pointer */
+function clipsHTML(st) {
+  var cs = (st.clips || []).filter(function (c) { return c && /^videos\/[\w\/.-]+\.mp4$/.test(c.src || ""); });
+  if (!cs.length) return "";
+  return '<div class="a-study"><b>Watch the worked answer</b>' + cs.map(function (c) { return '<figure class="a-clip"><video controls playsinline preload="metadata" src="' + esc(c.src) + '"></video>' + (c.title ? '<figcaption>' + esc(c.title) + '</figcaption>' : "") + '</figure>'; }).join("") + '</div>';
+}
 function studyHTML(st) {
   if (!st) return "";
+  return clipsHTML(st) + studyLinks(st);
+}
+function studyLinks(st) {
   if (st.videos && st.videos.length) return '<div class="a-study"><b>Watch on Maths Genie</b><ul>' + st.videos.map(function (v) { return '<li><a href="https://www.youtube.com/watch?v=' + encodeURIComponent(v.id) + '" target="_blank" rel="noopener">' + esc(v.title) + '</a></li>'; }).join("") + '</ul></div>';
   if (st.pages && st.pages.length) return '<div class="a-study"><b>Read in ' + esc(st.book || "the book") + '</b><ul>' + st.pages.map(function (p) { return '<li>' + esc((p.topic ? p.topic + ": " : "") + p.pages) + '</li>'; }).join("") + '</ul></div>';
   return "";
