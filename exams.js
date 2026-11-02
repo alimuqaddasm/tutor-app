@@ -157,7 +157,9 @@ function drawList(repo, all) {
         : st === "ready" ? '<button class="btn sm pri" type="button" data-load="' + esc(r.path) + '">Load to exam server</button>'
         : '<span class="hint">Finish the draft first</span>'; };
     var notes = function (e) { return e.why ? '<details class="fold xnotes"><summary>Notes</summary><p class="hint">' + esc(e.why) + '</p></details>' : ""; };
-    var asgs = repo.filter(function (r) { return /\/assignment\.json$/.test(r.path); }), exs = repo.filter(function (r) { return !/\/assignment\.json$/.test(r.path); });
+    // "pinned": true in exam.json or assignment.json puts it in its own section at the top (Ali, 2 Nov: the holiday pack)
+    var isPin = function (r) { return !!(r.exam && r.exam.pinned); }, pins = repo.filter(isPin), rest = repo.filter(function (r) { return !isPin(r); });
+    var asgs = rest.filter(function (r) { return /\/assignment\.json$/.test(r.path); }), exs = rest.filter(function (r) { return !/\/assignment\.json$/.test(r.path); });
     var examCard = function (r) {
       if (r.error) return '<div class="card pad"><b>' + esc(r.path) + '</b><span class="hint">' + esc(r.error) + '</span></div>';
       var e = r.exam || {}, res = r.result, qs = flatQs(e), marks = qs.reduce(function (s, q) { return s + (Number(q.marks) || 0); }, 0), st = e.status || "draft", on = loaded[r.path];
@@ -185,6 +187,7 @@ function drawList(repo, all) {
         '<div class="xdays">' + dk.map(function (d) { var D = days[d];
           return '<div class="xday"><span class="tag day">Day ' + esc(d) + '</span><b>' + esc(D.date ? T.fmtDate(D.date) : "") + '</b><span class="row s2">' + D.secs.map(function (s) { return '<span class="dot ' + esc(s.subject) + '" title="' + esc(s.title || "") + '"></span>'; }).join("") + '<span class="hint">' + D.secs.reduce(function (m, s) { return m + (Number(s.suggestMin) || flatQs(s).reduce(function (a2, q) { return a2 + (Number(q.suggestMin) || 0); }, 0)); }, 0).toFixed(0) + ' min</span></span></div>'; }).join("") + '</div>' +
         notes(a) + '</section>'; };
+    if (pins.length) h += '<section class="stack"><h2 class="t-sec">Pinned</h2>' + pins.map(function (r) { return /\/assignment\.json$/.test(r.path) ? asgCard(r) : examCard(r); }).join("") + '</section>';
     h += '<section class="stack"><h2 class="t-sec">Exams</h2>' + (exs.length ? exs.map(examCard).join("") : '<div class="empty"><b class="t-card">No exams yet</b><span class="hint">An exam is proposed in the lesson chat when one is due, or ask: “make a test on chapter 5”.</span></div>') + '</section>';
     h += '<section class="stack"><h2 class="t-sec">Assignments</h2>' + (asgs.length ? asgs.map(asgCard).join("") : '<div class="empty"><b class="t-card">No take-home assignments yet</b></div>') + '</section>';
     var extra = server.filter(function (s) { return !s.sourcePath || !repo.some(function (r) { return r.path === s.sourcePath; }); });
