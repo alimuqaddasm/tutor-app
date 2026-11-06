@@ -382,13 +382,14 @@ function drawRun() {
   }
   else {
   if (st === "draft") html = '<p class="hint">Make the student link first (below).</p>';
-  if (st === "waiting") html = '<button class="btn accent xt-start" type="button" data-start>Start the exam</button><p class="hint">' + (X.lastSeenAt && Date.now() + offset - X.lastSeenAt < 10000 ? "He has the exam open and is waiting." : "He hasn’t opened the link yet.") + '</p>';
+  if (st === "waiting" && X.startOnOpen) html = '<p><b>Starts when he opens the link.</b> His ' + esc(mins(X.baseMinutes || 0)) + ' clock starts then.</p><button class="btn accent xt-start" type="button" data-start>Start now instead</button> <button class="btn" type="button" data-openoff>Cancel</button>';
+  else if (st === "waiting") html = '<button class="btn accent xt-start" type="button" data-start>Start the exam</button> <button class="btn" type="button" data-openon>Start when he opens it</button><p class="hint">' + (X.lastSeenAt && Date.now() + offset - X.lastSeenAt < 10000 ? "He has the exam open and is waiting." : "He hasn’t opened the link yet.") + '</p>';
   if (st === "running" || st === "timeup") html = (st === "timeup" ? '<p class="xt-up">Time is up. Add time or lock.</p>' : "") +
     '<div class="xt-add"><button class="btn" type="button" data-ext="5">+5 min</button><button class="btn" type="button" data-ext="10">+10 min</button><input type="number" id="xt-custom" min="1" max="600" step="1" placeholder="min" aria-label="Minutes to add"><button class="btn" type="button" data-extc>Add</button></div>' +
     '<button class="btn danger" type="button" data-lock>Lock the exam</button>';
   if (st === "submitted") html = '<p><b>He handed in at ' + esc(t12(X.submittedAt)) + '.</b></p><a class="btn accent" href="#/exams/' + esc(X.id) + '/mark">Mark it</a> <button class="btn" type="button" data-lock>Lock</button> <button class="btn" type="button" data-reopen>Reopen</button>';
   if (st === "locked") html = '<p><b>Locked at ' + esc(t12(X.lockedAt)) + '.</b></p><a class="btn accent" href="#/exams/' + esc(X.id) + '/mark">Mark it</a> <button class="btn" type="button" data-reopen>Reopen</button>';
-  if (b.getAttribute("data-k") !== st + html.length) { b.innerHTML = html; b.setAttribute("data-k", st + html.length); }
+  if (b.getAttribute("data-k") !== st + X.startOnOpen + html.length) { b.innerHTML = html; b.setAttribute("data-k", st + X.startOnOpen + html.length); }
   }
   var tm = $("#xt-times");
   if (tm) tm.textContent = isAsg(X) ? (X.startedAt ? "Opened " + day(X.startedAt) + " " + t12(X.startedAt) : "") : X.startedAt ? "Started " + t12(X.startedAt) + " · original end " + t12(X.originalEndAt) + (X.endAt !== X.originalEndAt ? " · now ends " + t12(X.endAt) : "") : "";
@@ -411,11 +412,11 @@ function tickClock() {
 }
 setInterval(function () { if (X && (location.hash || "").indexOf("#/exams/" + X.id) === 0 && !/\/mark$/.test(location.hash)) tickClock(); }, 500);
 
-var EVT = { release: "You opened early:", done: "He finished", created: "Loaded to the exam server", link: "Student link made", "new-link": "New student link (old one stopped)", start: "Started", extend: "Time added", timeup: "Time up", submit: "He handed in", lock: "Locked", reopen: "Reopened", "remove-picture": "He removed a picture" };
+var EVT = { release: "You opened early:", done: "He finished", created: "Loaded to the exam server", link: "Student link made", "new-link": "New student link (old one stopped)", start: "Started", extend: "Time added", timeup: "Time up", submit: "He handed in", lock: "Locked", reopen: "Reopened", "remove-picture": "He removed a picture", "start-on-open": "Set to start when he opens the link", "start-on-open-off": "Start when he opens the link: cancelled" };
 function drawLog() {
   var ul = $("#xt-log"); if (!ul) return;
   ul.innerHTML = (X.events || []).slice().reverse().map(function (e) {
-    var what = e.kind === "extend" ? e.detail + " at " + t12(e.at) : (EVT[e.kind] || e.kind) + (e.kind === "start" ? " (" + e.detail + ")" : e.kind === "done" ? " " + ((X.sections || []).filter(function (x) { return x.id === e.detail; }).map(function (x) { return x.title; })[0] || e.detail) : "");
+    var what = e.kind === "extend" ? e.detail + " at " + t12(e.at) : (EVT[e.kind] || e.kind) + (e.kind === "start" || e.kind === "start-on-open" ? " (" + e.detail + ")" : e.kind === "done" ? " " + ((X.sections || []).filter(function (x) { return x.id === e.detail; }).map(function (x) { return x.title; })[0] || e.detail) : "");
     if (isAsg(X)) return '<li><span class="num">' + esc(day(e.at)) + ' ' + esc(t12(e.at)) + '</span> ' + esc(what) + '</li>';
     return '<li><span class="num">' + esc(t12(e.at)) + '</span> ' + esc(what) + '</li>';
   }).join("") || '<li class="hint">Nothing yet.</li>';
@@ -428,7 +429,7 @@ function poll() {
     offset = d.serverNow - Date.now();
     var secSig = function (l) { return JSON.stringify((l || []).map(function (x) { return x.doneAt; })); };
     var changed = d.status !== X.status || d.endAt !== X.endAt || (d.sections && secSig(d.sections) !== secSig(X.sections));
-    ["status", "startedAt", "originalEndAt", "endAt", "submittedAt", "lockedAt", "lastSeenAt", "extensions"].forEach(function (k) { X[k] = d[k]; });
+    ["status", "startedAt", "originalEndAt", "endAt", "submittedAt", "lockedAt", "lastSeenAt", "startOnOpen", "extensions"].forEach(function (k) { X[k] = d[k]; });
     examLiveMark(); X.on = d.on; if (d.sections) { X.sections = d.sections; d.sections.forEach(function (x) { var el = $('[data-secst="' + x.id + '"]'); if (el) { var nh = secState(x, true); if (el.getAttribute("data-h") !== nh) { el.innerHTML = nh; el.setAttribute("data-h", nh); } } }); }
     drawRun();
     $$("[data-qrow]").forEach(function (tr) { var qid = tr.getAttribute("data-q"), p = d.perQuestion[qid], c = $("[data-saved]", tr); if (!c) return;
@@ -834,11 +835,13 @@ document.addEventListener("click", function (e) {
   if (b.hasAttribute("data-praccopy")) { b.disabled = true; b.textContent = "Copying…"; return call("POST", "/api/t/exams/" + encodeURIComponent(b.getAttribute("data-praccopy")) + "/practice-copy").then(function (r) { T.toast("Practice copy made"); location.hash = "#/exams/" + r.id; }, function (e) { b.disabled = false; b.textContent = "Practice copy"; T.toast(e.message); }); }
   if (T.isTry && b.hasAttribute("data-load")) return;
   if (b.hasAttribute("data-load")) return loadToServer(b.getAttribute("data-load"), b);
-  if (X && readOnly(X) && b.matches("[data-newlink],[data-start],[data-ext],[data-extc],[data-lock],[data-reopen],[data-savesetup],[data-usesugg]")) return;
+  if (X && readOnly(X) && b.matches("[data-newlink],[data-start],[data-openon],[data-openoff],[data-ext],[data-extc],[data-lock],[data-reopen],[data-savesetup],[data-usesugg]")) return;
   if (T.isTry && b.matches("[data-addpaper],[data-delpaper]")) return;
   if (b.hasAttribute("data-newlink")) { if (X.token && !confirm("Make a new link? The old link will stop working.")) return; return act("/link", undefined, "Link ready"); }
   if (b.hasAttribute("data-copy")) { var l = $("#xt-link"); l.select(); (navigator.clipboard ? navigator.clipboard.writeText(l.value) : Promise.reject()).then(function () { T.toast("Link copied"); }, function () { document.execCommand("copy"); T.toast("Link copied"); }); return; }
   if (b.hasAttribute("data-qr")) { var box = $("#xt-qr"); box.hidden = !box.hidden; if (!box.hidden && window.qrcode) { var q = qrcode(0, "M"); q.addData(link()); q.make(); box.innerHTML = q.createSvgTag({ cellSize: 5, margin: 2, scalable: true }); } return; }
+  if (b.hasAttribute("data-openon")) { if (!confirm("Start the clock (" + mins(X.baseMinutes || 0) + ") the first time he opens the link?")) return; return act("/start-on-open", { on: true }, "Starts when he opens it"); }
+  if (b.hasAttribute("data-openoff")) return act("/start-on-open", { on: false }, "Cancelled");
   if (b.hasAttribute("data-start")) { if (!confirm("Start the exam now? His timer starts at once.")) return; return act("/start", undefined, "Started"); }
   if (b.hasAttribute("data-ext")) return act("/extend", { minutes: Number(b.getAttribute("data-ext")) }, "+" + b.getAttribute("data-ext") + " min added");
   if (b.hasAttribute("data-extc")) { var n = Number($("#xt-custom").value); if (!(n > 0)) { T.toast("Type the minutes first"); return; } return act("/extend", { minutes: n }, "+" + n + " min added"); }

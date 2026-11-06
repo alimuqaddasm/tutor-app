@@ -127,6 +127,15 @@ async function event(env, examId, now, kind, detail = "") {
   await env.DB.prepare("INSERT INTO events (exam_id, at, kind, detail) VALUES (?, ?, ?, ?)").bind(examId, now, kind, detail).run();
 }
 
+/* Start the clock now: base_minutes from now. Used by Start and by "start when he opens the link". */
+async function startClock(env, exam, now, detail) {
+  const end = now + Math.round(exam.base_minutes * 60000);
+  await env.DB.prepare("UPDATE exams SET status = 'running', started_at = ?, original_end_at = ?, end_at = ? WHERE id = ? AND status = 'waiting'").bind(now, end, end, exam.id).run();
+  await event(env, exam.id, now, "start", exam.base_minutes + " min" + detail);
+  Object.assign(exam, { status: "running", started_at: now, original_end_at: end, end_at: end });
+  return end;
+}
+
 /* The first time anyone looks after the end time, write "time up" into the log (once per end time). */
 async function noteTimeUp(env, exam, now) {
   if (liveStatus(exam, now) === "timeup" && exam.timeup_logged_for !== exam.end_at) {
@@ -333,6 +342,8 @@ async function route(request, env, now) {
     await noteTimeUp(env, exam, now);
 
     if (p === "/api/s/state" && m === "GET") {
+      // "Start when he opens the link": the first time his page asks, the clock starts
+      if (exam.status === "waiting" && exam.start_on_open && exam.base_minutes > 0) await startClock(env, exam, now, ", when he opened the link");
       await noteView(env, exam, url.searchParams.get("q"), now);
       // Questions only from Start on, and not once the exam is locked.
       const open = started(exam) && exam.status !== "locked";
@@ -600,7 +611,7 @@ async function route(request, env, now) {
       if (sub === "" && m === "GET") {
         const [ext, qs, evs, secs] = await reads(env, [extensionsQ(env, exam.id), questionsQ(env, exam.id), eventsQ(env, exam.id), sectionsQ(env, exam.id)]);
         return json({
-          id: exam.id, title: exam.title, subject: exam.subject, sourcePath: exam.source_path, practice: !!exam.practice, kind: exam.kind || "exam", token: exam.token, ratio: exam.ratio, createdAt: exam.created_at, lastSeenAt: exam.last_seen_at,
+          id: exam.id, title: exam.title, subject: exam.subject, sourcePath: exam.source_path, practice: !!exam.practice, kind: exam.kind || "exam", token: exam.token, ratio: exam.ratio, createdAt: exam.created_at, lastSeenAt: exam.last_seen_at, startOnOpen: !!exam.start_on_open,
           ...clock(exam, now, ext), questions: questionList(qs), sections: isAssignment(exam) ? withDays(exam, sectionList(secs), now) : sectionList(secs), gapHours: exam.gap_hours == null ? 12 : exam.gap_hours, events: evs
         });
       }
@@ -707,10 +718,17 @@ async function route(request, env, now) {
         if (isAssignment(exam)) fail(409, "An assignment has no Start: the link opens it.");
         if (exam.status !== "waiting") fail(409, exam.status === "draft" ? "Make the student link first." : "The exam has already started.");
         if (!(exam.base_minutes > 0)) fail(409, "Set the duration first.");
-        const end = now + Math.round(exam.base_minutes * 60000);
-        await env.DB.prepare("UPDATE exams SET status = 'running', started_at = ?, original_end_at = ?, end_at = ? WHERE id = ?").bind(now, end, end, exam.id).run();
-        await event(env, exam.id, now, "start", exam.base_minutes + " min");
+        const end = await startClock(env, exam, now, "");
         return json({ ok: true, startedAt: now, originalEndAt: end, endAt: end });
+      }
+      if (sub === "/start-on-open" && m === "POST") {
+        const on = (await body(request)).on !== false;
+        if (isAssignment(exam)) fail(409, "An assignment has no Start: the link opens it.");
+        if (exam.status !== "waiting") fail(409, exam.status === "draft" ? "Make the student link first." : "The exam has already started.");
+        if (on && !(exam.base_minutes > 0)) fail(409, "Set the duration first.");
+        await env.DB.prepare("UPDATE exams SET start_on_open = ? WHERE id = ?").bind(on ? 1 : 0, exam.id).run();
+        await event(env, exam.id, now, on ? "start-on-open" : "start-on-open-off", on ? exam.base_minutes + " min" : "");
+        return json({ ok: true, startOnOpen: on });
       }
       if (sub === "/extend" && m === "POST") {
         const b = await body(request);
@@ -762,7 +780,7 @@ async function route(request, env, now) {
         for (const u of ups) { perQ[u.question_id] = perQ[u.question_id] || { lastSave: null, saves: 0, late: false }; perQ[u.question_id].pictures = u.n; perQ[u.question_id].lastPicture = u.at; }
         const views = timeOn(vs, now);
         for (const [q, v] of Object.entries(views.per)) { perQ[q] = perQ[q] || { lastSave: null, saves: 0, late: false, pictures: 0 }; perQ[q].seconds = v.seconds; perQ[q].visits = v.visits.length; }
-        return json({ ...clock(exam, now, ext), lastSeenAt: exam.last_seen_at, perQuestion: perQ, on: views.on, sections: isAssignment(exam) ? withDays(exam, sectionList(secr), now) : undefined });
+        return json({ ...clock(exam, now, ext), lastSeenAt: exam.last_seen_at, startOnOpen: !!exam.start_on_open, perQuestion: perQ, on: views.on, sections: isAssignment(exam) ? withDays(exam, sectionList(secr), now) : undefined });
       }
       if ((sub === "/review" || sub === "/export") && m === "GET") {
         const [revs, marks, ups, vs, qs, ext, evs, secr] = await reads(env, [
