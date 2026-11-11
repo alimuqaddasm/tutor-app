@@ -82,7 +82,5 @@ The maths and QR checks load KaTeX and the QR library from cdnjs, so they need i
 
 Run on Linux: start the app yourself (`python -m http.server 8765` in this folder), then `python tests/runtest.py tests/<file>`.
 
-Known to fail on `main` (checked 11 Nov 2026):
-- `test_exams_tryout.py`: 17 of 18 pass; "real exams on the server are listed" looks for an exam the test no longer makes.
-
 `test_round17.py` (18 checks) and `test_tryout.py` (13 checks) were brought up to date with the redesigned Teach page on 11 Nov 2026.
+`test_exams_tryout.py` had two checks written for the old Exams screens (the list shows the short title; a look-only exam has no boxes to type in). Fixed 11 Nov 2026 (26 checks; needs the local exam server).

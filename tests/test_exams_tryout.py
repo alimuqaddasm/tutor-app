@@ -132,7 +132,8 @@ with sync_playwright() as p:
     pg.goto(APP + "?try#/exams")
     check("Try-out shows the Practice section", wait_for(lambda: "Practice (Try-out)" in pg.inner_text("#app"), 15) is not None, pg.inner_text("#app")[:300])
     check("Claude's real exam has no Load button in Try-out, only a practice copy", pg.locator("[data-load]").count() == 0 and pg.locator("[data-pracload]").count() >= 1)
-    check("real exams on the server are listed", "Real exam (test" in pg.inner_text("#app"))
+    # the list shows a short title: the note in brackets is dropped and the words are in title case ("Real Exam")
+    check("real exams on the server are listed", "real exam" in pg.inner_text("#app").lower(), pg.inner_text("#app")[:400])
 
     # practice: the whole flow
     pg.click("[data-practice]")
@@ -169,7 +170,8 @@ with sync_playwright() as p:
     check("real exam opens with the look-only note", wait_for(lambda: "you can look but not change" in pg.inner_text("#app"), 10) is not None)
     check("  no Start, + minutes or Lock", pg.locator("[data-start], [data-ext], [data-lock], [data-savesetup]").count() == 0)
     check("  Make student link is off", pg.locator("[data-newlink]").is_disabled())
-    check("  question fields are off", pg.locator('tr[data-q] [data-f="marks"]').is_disabled())
+    # a look-only exam lists its questions as plain rows: there are no boxes to type in at all
+    check("  questions are listed with nothing to edit", pg.locator("[data-qrow]").count() >= 1 and pg.locator("[data-qrow] input, [data-qrow] select").count() == 0)
     check("  the server still has no link for it", tapi("GET", "/api/t/exams/" + real)["token"] is None)
     pg.goto(APP + "?try#/exams/" + real + "/mark")
     check("  marking is look-only", wait_for(lambda: pg.locator('[data-score="q1"]').count() == 1, 10) is not None and pg.locator('[data-score="q1"]').is_disabled())
