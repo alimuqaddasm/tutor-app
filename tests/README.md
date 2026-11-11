@@ -34,7 +34,7 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/runtest.py tests/test_round40.py   # round 40 (21 Oct, app v72): no 'Hard:' on his screens, zoom on Student view (Questions and canvas), End lesson opens After the lesson as a card in Teach, every question (video ones too) in the His work list (20 checks)
     python tests/test_round41.py                    # round 41 (21 Oct): the warm-up deck on his assignment link: 15 cards, right or wrong after the last, his tries saved (21 checks; needs the local exam server)
     python tests/runtest.py tests/test_round42.py   # round 42 (21 Oct): warm-up card review in Exams: filter, edit, approve, reject, Save to tutoring repo, Send to his deck, his tries on each card (17 checks; needs the local exam server)
-    python tests/runtest.py tests/test_round44.py   # round 44 (11 Nov, app v73): speed: the file list is downloaded only when GitHub changed, home drawn once, cleaned text remembered in Teach, offline shell serves versioned files from the saved copy (16 checks; own server on :8766)
+    python tests/runtest.py tests/test_round44.py   # round 44 (11 Nov, app v74, exams v32): speed: the file list is downloaded only when GitHub changed, home drawn once, cleaned text remembered in Teach, the offline shell serves versioned files from the saved copy, Exams screens show from the copy kept on the device (22 checks; own server on :8766; the 6 Exams checks need the local exam server and are skipped without it)
     cd worker && npx vitest run test/warmup.test.js # the deck and the phone push on the exam server (8 tests)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
@@ -79,3 +79,9 @@ test sets tutor.flow itself, because the older tests were written for it.
 
 The maths and QR checks load KaTeX and the QR library from cdnjs, so they need internet.
     python tests/runtest.py tests/test_round43.py   # round 43 (23 Oct): warm-up in step with the holiday pack: a wrong multiple choice becomes a picture card when he finishes the section, letters A to D, right letter never on his page (12 checks; needs the local exam server)
+
+Run on Linux: start the app yourself (`python -m http.server 8765` in this folder), then `python tests/runtest.py tests/<file>`.
+
+Known to fail on `main` (checked 11 Nov 2026, before and after the speed work):
+- `test_round17.py` and `test_tryout.py`: written for the lesson page before the redesign (they look for the old parts rail). They need rewriting for the new Teach page.
+- `test_exams_tryout.py`: 17 of 18 pass; "real exams on the server are listed" looks for an exam the test no longer makes.

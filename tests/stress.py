@@ -1,7 +1,7 @@
 import subprocess, sys, time, json, statistics as st
 from playwright.sync_api import sync_playwright
 TOK = subprocess.run([r"C:/Program Files/GitHub CLI/gh.exe", "auth", "token"], capture_output=True, text=True).stdout.strip()
-srv = subprocess.Popen([sys.executable, "-m", "http.server", "8765", "-d", r"Z:/Shared Neurons/tutor-app"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+srv = subprocess.Popen([sys.executable, "-m", "http.server", "8765", "-d", __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 time.sleep(1.2); B = "http://localhost:8765/"; errs = []; puts = []; offline = {"on": False}
 def route(r):
     if r.request.method != "GET": puts.append(r.request.url); return r.abort()

@@ -1,9 +1,11 @@
-"""Round 44 (11 Nov, app v73): speed.
+"""Round 44 (11 Nov, app v74, exams v32): speed.
   1. The file list (about 1 MB) is downloaded once. After that the app asks GitHub only for the newest commit's id,
      and downloads the list again only when something changed.
   2. Home is drawn once when nothing changed, and again when something did.
   3. Script text is made safe once and remembered: Teach steps do not clean the whole script again. Same output as before.
   4. Warm-up Shuffle still changes the order.
+  6. Exams (v32): the list, an exam page and the marking page show from the copy kept on the device before the far-away
+     exam server answers; question pictures are kept on the device (needs the local exam server on :8787; skipped without it).
   5. The offline shell: versioned files (app.js?v=73) and vendor/ come from the saved copy with no network request;
      index.html still asks the server first; with the server gone, the app still opens.
 Run:  python tests/runtest.py tests/test_round44.py      (own server on :8766, pretend GitHub, nothing is written)"""
@@ -98,6 +100,55 @@ try:
         down["on"] = True; t0 = time.time(); p.reload(); p.wait_for_selector(".home", timeout=20000); dt = time.time() - t0
         ok("server gone: the app still opens from the saved copy", True); ok("server gone: opens in under 2 s", dt < 2, round(dt, 2))
         down["on"] = False
+        c.close()
+
+        # 6. Exams: the copy kept on the device shows at once (needs the local exam server on :8787, and the app on :8765 for its CORS rule)
+        import urllib.request
+        API = os.environ.get("EXAM_API", "http://localhost:8787"); PW = os.environ.get("EXAM_PW", "local-test")
+        try: urllib.request.urlopen(API + "/api/health", timeout=3); up = True
+        except Exception: up = False
+        if not up:
+            print("SKIP Exams checks (no exam server on :8787)")
+        else:
+            srv2 = http.server.ThreadingHTTPServer(("127.0.0.1", 8765), H) if not os.environ.get("APP_UP") else None
+            if srv2: threading.Thread(target=srv2.serve_forever, daemon=True).start()
+            A = "http://localhost:8765/"
+            c = b.new_context(viewport={"width": 1280, "height": 860}, service_workers="block")
+            c.add_init_script("localStorage.setItem('tutor.token','fake-token');localStorage.setItem('tutor.device','speed');localStorage.setItem('tutor.examApi',%s);localStorage.setItem('tutor.examPw',%s);" % (json.dumps(API), json.dumps(PW)))
+            fake3 = FakeGH(); c.route("https://api.github.com/**", fake3.route)
+            slow = {"ms": 0, "off": False}; xcalls = []
+            def xroute(r):
+                xcalls.append(r.request.method + " " + r.request.url.split("/api/t/")[-1])
+                if slow["off"]: return r.abort()
+                if slow["ms"]: time.sleep(slow["ms"] / 1000)
+                r.continue_()
+            c.route(API + "/**", xroute)
+            p = c.new_page(); p.goto(A + "#/exams"); p.wait_for_selector("[data-load], .exams a[href^='#/exams/']:not([href*=warmup])", timeout=60000); p.wait_for_timeout(800)
+            if not p.locator(".exams a.btn[href^='#/exams/']:not([href*=warmup]):not([href$='/mark'])").count():
+                p.locator("[data-load]").first.click(); p.wait_for_selector("#xt-btns", timeout=180000); p.wait_for_timeout(1500)
+                p.goto(A + "#/exams"); p.wait_for_selector(".exams a.btn[href^='#/exams/']:not([href*=warmup])", timeout=30000); p.wait_for_timeout(800)
+            xid = p.locator(".exams a.btn[href^='#/exams/']:not([href*=warmup]):not([href$='/mark'])").first.get_attribute("href").split("/")[2]
+            p.goto(A + "#/exams/" + xid); p.wait_for_selector("#xt-btns", timeout=30000); p.wait_for_timeout(2500)        # first visit: from the server, pictures and all
+            p.goto(A + "#/exams/" + xid + "/mark"); p.wait_for_function("!/^\\s*Loading/.test(document.querySelector('#app').innerText)", timeout=30000); p.wait_for_timeout(2500)
+            # now the server is 2 s away
+            slow["ms"] = 2000
+            def shown(hash_, sel):
+                # timed inside the page: this test's own pretend delay holds up the test's calls, not the page
+                p.goto(A + "#/settings"); p.wait_for_selector("#setform"); xcalls.clear()
+                ms = p.evaluate("""([h, sel]) => new Promise(res => { const t0 = performance.now(); location.hash = h;
+                    const iv = setInterval(() => { if (document.querySelector(sel)) { clearInterval(iv); res(performance.now() - t0); } else if (performance.now() - t0 > 6000) { clearInterval(iv); res(99000); } }, 20); })""", [hash_, sel])
+                return ms / 1000
+            t = shown("#/exams", ".exams a.btn[href^='#/exams/']:not([href*=warmup])"); ok("Exams list shows from the saved copy before the server answers", t < 1.2, round(t, 2))
+            t = shown("#/exams/" + xid, "#xt-btns"); ok("an exam page shows from the saved copy before the server answers", t < 1.2, round(t, 2))
+            p.wait_for_timeout(3500); pics = [x for x in xcalls if x.startswith("GET") and "/questions/" in x]
+            ok("question pictures come from the device, not the server again", not pics, pics[:3])
+            ok("the fresh answer still arrives and the page is still there", p.locator("#xt-btns").count() == 1 and any(x.endswith("exams/" + xid) for x in xcalls), xcalls[:5])
+            t = shown("#/exams/" + xid + "/mark", ".xmfoot, #xt-total"); ok("the marking page shows from the saved copy before the server answers", t < 1.2, round(t, 2))
+            p.wait_for_timeout(3000)
+            slow["off"] = True; t = shown("#/exams", ".exams a.btn[href^='#/exams/']:not([href*=warmup])"); p.wait_for_timeout(800)
+            ok("server unreachable: the saved list stays on screen", t < 1.2 and p.locator(".exams a.btn[href^='#/exams/']").count() > 0, round(t, 2))
+            c.close()
+            if srv2: srv2.shutdown()
         b.close()
 finally:
     srv.shutdown()

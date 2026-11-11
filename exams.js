@@ -44,7 +44,17 @@ var blobs = {};
 /* question and mark-scheme pictures never change once an exam is loaded (a new load is a new exam id), so they are kept
    on this device: an exam page opens from the tablet, not from the server in America (Ali, 11 Oct: "exam section is
    particularly slow"). */
-var KEEP = /^\/api\/t\/exams\/[^/]+\/questions\/[^/]+\/(img|ms)$/;
+var KEEP = /^\/api\/t\/(exams\/[^/]+\/questions\/[^/]+\/(image|ms)|files\/[^/]+)$/;   // his own pictures too: an upload never changes (a new upload has a new id)
+/* Speed (11 Nov): the exam server is far away, so a screen that waits for it stays empty for a second or more.
+   The last answer for the list and for each exam is kept on this device and shown at once; the server's fresh
+   answer replaces it as soon as it arrives. Not used in try-out mode. */
+function savedGet(k) { return T.cget && !T.isTry ? T.cget("xs:" + xapi() + ":" + k).catch(function () { return null; }) : Promise.resolve(null); }
+function savedPut(k, v) { if (T.cput && !T.isTry) T.cput("xs:" + xapi() + ":" + k, v); }
+function sameBut(a, b) { var f = function (k, v) { return k === "serverNow" ? undefined : v; }; return JSON.stringify(a, f) === JSON.stringify(b, f); }
+function keepExam() { if (X && X.id && X.questions) savedPut("exam:" + X.id, { exam: X, papers: papers }); }
+/* open the line to the exam server as soon as the app starts, so the first Exams screen does not pay for the handshake */
+try { if (ready()) { var pc = document.createElement("link"); pc.rel = "preconnect"; pc.href = new URL(xapi()).origin; pc.crossOrigin = "anonymous"; document.head.appendChild(pc); } } catch (e) {}
+function typing() { var a = document.activeElement; return !!(a && app.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)); }
 function picUrl(path) { if (blobs[path]) return Promise.resolve(blobs[path]);
   var keep = KEEP.test(path) && T.cget;
   return (keep ? T.cget("x:" + path) : Promise.resolve(null)).then(function (hit) {
@@ -127,10 +137,12 @@ function listView() {
       return Promise.all(files.map(function (f) { var rp = examFolder(f.path) + "result.json";
         return Promise.all([T.fileJSON(f.path), has[rp] ? T.fileJSON(rp).catch(function () { return null; }) : null]).then(function (v) { return { path: f.path, exam: v[0] && v[0].data, result: v[1] && v[1].data }; }, function (e) { return { path: f.path, error: e.message }; }); }));
     });
-  var serverP = call("GET", "/api/t/exams"), done = false;
-  repoP.then(function (repo) { if (!done && (location.hash || "") === "#/exams") drawList(repo, null); }, function () {});
-  Promise.all([repoP, serverP]).then(function (res) { done = true; if ((location.hash || "") === "#/exams") drawList(res[0], res[1]); })
-    .catch(function (e) { app.innerHTML = '<div class="wrap exams">' + listHead() + '<div class="empty"><b class="t-card">Couldn’t load exams</b><span class="hint">' + esc(e.message) + '. Check the exam server and password in <a href="#/settings">Settings</a>.</span></div></div>'; });
+  var serverP = call("GET", "/api/t/exams"), done = false, old = null;
+  // the server's last answer, kept on this device, fills the list at once; the fresh answer replaces it
+  Promise.all([repoP, savedGet("list")]).then(function (v) { if (!done && (location.hash || "") === "#/exams") { old = v[1]; drawList(v[0], old); } }, function () {});
+  serverP.then(function (all) { savedPut("list", all); }, function () {});
+  Promise.all([repoP, serverP]).then(function (res) { done = true; if ((location.hash || "") === "#/exams" && !(old && sameBut(old, res[1]) && $(".exams .list, .exams .card"))) drawList(res[0], res[1]); })
+    .catch(function (e) { if (old && $(".exams")) { done = true; T.toast(e.message + " Showing the saved list."); return; } app.innerHTML = '<div class="wrap exams">' + listHead() + '<div class="empty"><b class="t-card">Couldn’t load exams</b><span class="hint">' + esc(e.message) + '. Check the exam server and password in <a href="#/settings">Settings</a>.</span></div></div>'; });
 }
 function listHead() { return '<header class="head"><div class="stack s2"><h1 class="t-page">Exams and Assignments</h1><div class="tags">' + T.tag("Exam: timed, on his tablet") + T.tag("Assignment: no clock") + '</div></div>' +
   '<div class="row s2"><a class="btn" href="#/exams/warmup">Warm-up cards</a>' + (T.isTry ? '<button class="btn pri" type="button" data-practice>Make a practice exam</button>' : "") + '</div></header>'; }
@@ -246,7 +258,8 @@ function sendPictures(examId, e, path, have, say) {
     say("Pictures " + done + " of " + jobs.length + (done > 2 && left > 5 ? " · about " + (left > 90 ? Math.round(left / 60) + " min" : left + " s") + " left" : "")); };
   var one = function (job) {
     return Promise.all(job.paths.map(full).map(T.fileURL)).then(function (urls) { return stitch(urls.filter(Boolean)); })
-      .then(function (b) { return call("PUT", "/api/t/exams/" + examId + "/questions/" + encodeURIComponent(job.id) + "/" + job.kind, b, { "Content-Type": "image/jpeg" }); })
+      .then(function (b) { var pp = "/api/t/exams/" + examId + "/questions/" + encodeURIComponent(job.id) + "/" + job.kind;
+        return call("PUT", pp, b, { "Content-Type": "image/jpeg" }).then(function (r) { delete blobs[pp]; if (T.cput) T.cput("x:" + pp, null); return r; }); })   // a picture sent again: forget the kept copy
       .catch(function () { failed++; });
   };
   var lane = function () { if (next >= jobs.length) return Promise.resolve(); var job = jobs[next++]; return one(job).then(function () { done++; tell(); return lane(); }); };
@@ -260,10 +273,17 @@ var papers = [], myRatio = null;   // myRatio: the number typed in "My own numbe
 
 function examView(id) {
   app.innerHTML = '<div class="empty"><h3>Loading</h3></div>';
+  var fresh = false, old = null, here = function () { var h = location.hash || ""; return h === "#/exams/" + id || h === "#/exams/" + encodeURIComponent(id); };
+  // the copy kept on this device shows at once (the clock uses the last known gap between this device and the server)
+  savedGet("exam:" + id).then(function (v) { if (fresh || !v || !v.exam || !here()) return; old = v; X = v.exam; papers = v.papers || []; myRatio = null; offset = Number(T.ls("tutor.examOffset")) || 0; drawExam(); });
   Promise.all([call("GET", "/api/t/exams/" + encodeURIComponent(id)), call("GET", "/api/t/papers")]).then(function (r) {
-    X = r[0]; papers = r[1]; myRatio = null; offset = X.serverNow - Date.now();
-    drawExam(); poll(); missingPictures();
-  }).catch(function (e) { app.innerHTML = '<div class="empty"><h3>Couldn’t open this exam</h3><p>' + esc(e.message) + '</p><p><a href="#/exams">Back to exams</a></p></div>'; });
+    fresh = true; savedPut("exam:" + id, { exam: r[0], papers: r[1] }); if (!here()) return;
+    var same = old && sameBut(old.exam, r[0]) && sameBut(old.papers, r[1]);
+    X = r[0]; papers = r[1]; offset = X.serverNow - Date.now(); T.ls("tutor.examOffset", String(offset));
+    if (!old) myRatio = null;
+    if (!(old && (same || typing()))) drawExam();   // nothing new, or he is typing in a box: leave the screen as it is
+    poll(); missingPictures();
+  }).catch(function (e) { if (old && here()) { T.toast(e.message + " Showing the saved copy."); return; } app.innerHTML = '<div class="empty"><h3>Couldn’t open this exam</h3><p>' + esc(e.message) + '</p><p><a href="#/exams">Back to exams</a></p></div>'; });
 }
 
 /* a load that stopped half way (closed tab, lost connection): offer to send only the missing pictures */
@@ -439,7 +459,7 @@ function poll() {
       if (p && p.seconds) bits.push('<span class="xt-time">' + esc(dur(p.seconds)) + (p.visits > 1 ? " · " + p.visits + " visits" : "") + '</span>');
       if (d.on === qid) bits.push('<span class="xt-now">He is on it now</span>');
       c.innerHTML = bits.join(tr.tagName === "TR" ? "<br>" : " \u00b7 ") || "-"; tr.classList.toggle("xt-here", d.on === qid); });
-    if (changed) call("GET", "/api/t/exams/" + X.id).then(function (full) { X.events = full.events; drawLog(); });
+    if (changed) call("GET", "/api/t/exams/" + X.id).then(function (full) { X.events = full.events; drawLog(); keepExam(); });
   }).catch(function () { var s = $("#xt-seen"); if (s) s.textContent = "Can’t reach the exam server. Retrying."; }).then(function () {
     if (X && (location.hash || "").indexOf("#/exams/" + X.id) === 0 && !/\/mark$/.test(location.hash)) live = setTimeout(poll, X.status === "running" || X.status === "timeup" || X.status === "waiting" ? 2500 : 10000);
   });
@@ -451,7 +471,7 @@ function examLiveMark() { if (!X || isAsg(X)) return; var on = X.startedAt && (X
   if (on) T.ls("tutor.examlive", JSON.stringify({ id: X.id, subject: X.subject === "chemistry" ? "chem" : X.subject, startedAt: X.startedAt, endAt: X.endAt }));
   else if (cur && cur.id === X.id) T.ls("tutor.examlive", JSON.stringify(Object.assign(cur, { doneAt: Date.now() }))); }
 function act(path, body, okMsg) {
-  return call("POST", "/api/t/exams/" + X.id + path, body).then(function (r) { if (okMsg) T.toast(okMsg); return call("GET", "/api/t/exams/" + X.id).then(function (full) { X = full; offset = full.serverNow - Date.now(); drawExam(); poll(); return r; }); })
+  return call("POST", "/api/t/exams/" + X.id + path, body).then(function (r) { if (okMsg) T.toast(okMsg); return call("GET", "/api/t/exams/" + X.id).then(function (full) { X = full; offset = full.serverNow - Date.now(); keepExam(); drawExam(); poll(); return r; }); })
     .catch(function (e) { T.toast(e.message); });
 }
 
@@ -463,7 +483,7 @@ function saveSetup() {
   var body = { questions: qs, ratio: ratioNow() };
   var dur = Number($("#xt-dur") && $("#xt-dur").value); if (dur > 0) body.base_minutes = dur;
   $("#xt-msg").textContent = "Saving…";
-  return call("PUT", "/api/t/exams/" + X.id, body).then(function () { return call("GET", "/api/t/exams/" + X.id); }).then(function (full) { X = full; drawExam(); T.toast("Saved"); })
+  return call("PUT", "/api/t/exams/" + X.id, body).then(function () { return call("GET", "/api/t/exams/" + X.id); }).then(function (full) { X = full; keepExam(); drawExam(); T.toast("Saved"); })
     .catch(function (e) { $("#xt-msg").textContent = e.message; });
 }
 
@@ -479,13 +499,23 @@ var repoExam = null, claudeMarks = null, partMap = null;
 
 function markView(id) {
   app.innerHTML = '<div class="empty"><h3>Loading</h3></div>';
-  call("GET", "/api/t/exams/" + encodeURIComponent(id) + "/review").then(function (r) {
-    R = r; repoExam = null; claudeMarks = null; partMap = null;
-    if (r.practice && !r.sourcePath) { repoExam = SAMPLE; return drawMark(); }
-    // The mark scheme lives in the repo, next to the exam file Claude wrote; so do Claude's marks, once he has marked it.
+  var fresh = false, old = null, here = function () { var h = location.hash || ""; return h === "#/exams/" + id + "/mark" || h === "#/exams/" + encodeURIComponent(id) + "/mark"; };
+  // The mark scheme lives in the repo, next to the exam file Claude wrote; so do Claude's marks, once he has marked it.
+  var repoPart = function (r) {
+    if (r.practice && !r.sourcePath) return Promise.resolve([{ data: SAMPLE }, null, null]);
     return T.loadTree().then(function () { return r.sourcePath ? Promise.all([T.fileJSON(r.sourcePath), T.fileJSON(examFolder(r.sourcePath) + "claude-marks.json").catch(function () { return null; }), T.fileJSON(examFolder(r.sourcePath) + "parts.json").catch(function () { return null; })]) : [null, null, null]; })
-      .then(function (j) { repoExam = j[0] && j[0].data; claudeMarks = j[1] && j[1].data; partMap = j[2] && j[2].data; }, function () {}).then(drawMark).then(autoAccept);
-  }).catch(function (e) { app.innerHTML = '<div class="empty"><h3>Couldn’t open the marking</h3><p>' + esc(e.message) + '</p><p><a href="#/exams">Back to exams</a></p></div>'; });
+      .catch(function () { return [null, null, null]; });
+  };
+  var show = function (r, j) { R = r; repoExam = j[0] && j[0].data; claudeMarks = j[1] && j[1].data; partMap = j[2] && j[2].data; drawMark(); };
+  // the copy kept on this device shows at once; it is never used to accept marks (that waits for the server's own answer)
+  savedGet("review:" + id).then(function (v) { if (fresh || !v || !v.questions) return; return repoPart(v).then(function (j) { if (fresh || !here()) return; old = v; show(v, j); }); });
+  call("GET", "/api/t/exams/" + encodeURIComponent(id) + "/review").then(function (r) {
+    fresh = true; savedPut("review:" + id, r); if (!here()) return;
+    if (old && R === old && sameBut(old, r)) return autoAccept();   // nothing new: the screen stays as it is
+    if (old && R === old && typing()) return;                        // he is typing a mark: never redraw under him
+    return repoPart(r).then(function (j) { if (!here()) return; show(r, j); return autoAccept(); });
+  }).catch(function (e) { if (old && here()) { T.toast(e.message + " Showing the saved copy."); return; }
+    app.innerHTML = '<div class="empty"><h3>Couldn’t open the marking</h3><p>' + esc(e.message) + '</p><p><a href="#/exams">Back to exams</a></p></div>'; });
 }
 
 function lateSplit(q) {
@@ -766,6 +796,7 @@ function saveMark(qid, ticks) {
     if (tot) tot.textContent = r2(R.total) + " / " + R.max; if (mk) mk.textContent = R.marked + " of " + R.questions.length + " marked";
     var ls = $('[data-lscore="' + qid + '"]'); if (ls) ls.textContent = (score == null ? "-" : score) + "/" + q.marks;
     if (claudeOf(qid)) refreshClaude(qid);
+    savedPut("review:" + R.id, R);   // the copy kept on this device has the new mark too
   }, function (e) { st.textContent = e.message; });
 }
 

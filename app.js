@@ -113,9 +113,15 @@ var TMAP = null, TMAPsrc = null;
 function shaOf(path) { if (TMAPsrc !== TREE) { TMAP = {}; (TREE || []).forEach(function (t) { TMAP[t.path] = t.sha; }); TMAPsrc = TREE; } return TMAP[path] || null; }
 function setTreeSha(path, sha) { TREE = TREE || []; var f = TREE.filter(function (t) { return t.path === path; })[0]; if (f) f.sha = sha; else TREE.push({ path: path, sha: sha }); TMAPsrc = null; saveTreeSoon(); }
 var inflight = {};
+/* at most 24 downloads from GitHub at a time: a first visit asks for about 80 files at once, and GitHub turns away
+   an account that has more than 100 requests open */
+var gate = { on: 0, wait: [] };
+function gated(fn) { return new Promise(function (res, rej) { var go = function () { gate.on++; fn().then(function (v) { gate.on--; if (gate.wait.length) gate.wait.shift()(); res(v); }, function (e) { gate.on--; if (gate.wait.length) gate.wait.shift()(); rej(e); }); };
+  if (gate.on < 24) go(); else gate.wait.push(go); }); }
+function gfetch(url, opts) { return gated(function () { return fetch(url, opts); }); }
 function blobBytes(sha) {
   return cget("b:" + sha).then(function (v) { if (v) return v; if (inflight[sha]) return inflight[sha];
-    inflight[sha] = fetch(API + "/repos/" + CFG.repo + "/git/blobs/" + sha, { headers: { "Authorization": "Bearer " + CFG.token, "Accept": "application/vnd.github.raw+json", "X-GitHub-Api-Version": "2022-11-28" } })
+    inflight[sha] = gfetch(API + "/repos/" + CFG.repo + "/git/blobs/" + sha, { headers: { "Authorization": "Bearer " + CFG.token, "Accept": "application/vnd.github.raw+json", "X-GitHub-Api-Version": "2022-11-28" } })
       .then(function (r) { if (!r.ok) { var e = new Error("GitHub " + r.status); e.status = r.status; throw e; } return r.arrayBuffer(); })
       .then(function (buf) { var b = new Uint8Array(buf); cput("b:" + sha, b); delete inflight[sha]; return b; }, function (e) { delete inflight[sha]; throw e; });
     return inflight[sha]; });
