@@ -70,6 +70,10 @@ class FakeGH:
 
     def _serve(self, route, req, url, path):
         m = req.method
+        if m == "GET" and path.endswith("/commits/HEAD"):
+            # the newest commit's id: changes whenever any file does (the app asks for this before the full list)
+            head = hashlib.sha1(json.dumps(self.tree(), sort_keys=True).encode()).hexdigest()
+            return route.fulfill(status=200, content_type="text/plain", body=head)
         if m == "GET" and "/git/trees/" in path:
             return route.fulfill(status=200, content_type="application/json", body=json.dumps(self.tree()))
         mm = re.search(r"/git/blobs/([0-9a-f]{40})$", path)

@@ -1,7 +1,7 @@
 import subprocess, sys, time, json
 from playwright.sync_api import sync_playwright
 TOK = subprocess.run([r"C:/Program Files/GitHub CLI/gh.exe", "auth", "token"], capture_output=True, text=True).stdout.strip()
-srv = subprocess.Popen([sys.executable, "-m", "http.server", "8765", "-d", r"Z:/Shared Neurons/tutor-app"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+srv = subprocess.Popen([sys.executable, "-m", "http.server", "8765", "-d", __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 time.sleep(1.2); errs = []; B = "http://localhost:8765/"; O = "v4shots/"; L = "2026-10-01-chem"
 FIG = "\u25a7"
 
