@@ -5,7 +5,7 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     pip install playwright && python -m playwright install msedge
     python tests/test_teach.py     # Teach v4: preview vs live, Skip, outline, quiz picker, figures, Student view, phone
     python tests/stress.py         # timings, 200+ rapid Teach steps, every route, resize, offline
-    python tests/test_tryout.py    # try-out mode sends nothing; a suggestion is the only write; normal mode still saves
+    python tests/runtest.py tests/test_tryout.py    # try-out mode sends nothing; a suggestion is the only write; normal mode still saves (13 checks)
     python tests/test_suggestions_1oct.py   # Ali's 12 suggestions of 1 Oct
     python tests/test_bugs_round10.py       # round 10 bug hunt: 24 PASS/FAIL checks (exit 1 on a FAIL); saves go to a pretend GitHub inside the test
     python tests/test_round11.py            # round 11 (2 Oct): I-skipped-it, Taught/Next/Skip, student swipe/arrows, missed lessons + make-up time (27 checks)
@@ -14,7 +14,7 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/test_round14.py            # round 14 (2 Oct): Try-out button, plain dot, make-up chip, Side panel / Floating card layouts with no scrolling (15 checks)
     python tests/test_round15.py            # round 15 (2 Oct): Flip layout, question and answer screens with no scrolling (8 checks)
     python tests/test_round16.py            # round 16 (2 Oct): Flip is the default; week dots only for taught lessons (2 checks)
-    python tests/test_round17.py            # round 17 (6 Oct): fix mic notes (Heard box + editable notes), short lessons ask whose doing it was (18 checks)
+    python tests/runtest.py tests/test_round17.py   # round 17 (6 Oct): fix mic notes (Heard box + editable notes), short lessons ask whose doing it was (18 checks)
     python tests/runtest.py tests/test_round24.py   # round 24 (11 Oct): Teach clock bar, questions on the exam page, picture-only questions, MCQ letters (29 checks; needs the local exam server)
     python tests/runtest.py tests/test_round25.py   # round 25 (11 Oct): typed questions with cropped figures, swipe between zoomed questions on the exam page (12 checks; needs the local exam server)
     python tests/runtest.py tests/test_round26.py   # round 26 (11 Oct): typed questions set out like the paper (number boxes, marks, option boxes, Edexcel parts, figure in place), on the Exams page before the start too (29 checks)
@@ -82,6 +82,7 @@ The maths and QR checks load KaTeX and the QR library from cdnjs, so they need i
 
 Run on Linux: start the app yourself (`python -m http.server 8765` in this folder), then `python tests/runtest.py tests/<file>`.
 
-Known to fail on `main` (checked 11 Nov 2026, before and after the speed work):
-- `test_round17.py` and `test_tryout.py`: written for the lesson page before the redesign (they look for the old parts rail). They need rewriting for the new Teach page.
+Known to fail on `main` (checked 11 Nov 2026):
 - `test_exams_tryout.py`: 17 of 18 pass; "real exams on the server are listed" looks for an exam the test no longer makes.
+
+`test_round17.py` (18 checks) and `test_tryout.py` (13 checks) were brought up to date with the redesigned Teach page on 11 Nov 2026.
