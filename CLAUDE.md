@@ -20,7 +20,7 @@ The lesson app for Ali's tutoring. Static site on GitHub Pages (`main` is live a
 | `exam.html`, `exam.js`, `exam.css` | his exam and assignment pages, and his phone page |
 | `design.css` | the design system |
 | `title.js` | `titleCase()` for titles, on both the teacher app and his pages |
-| `sw.js` | offline shell. Bump `SHELL` and the `?v=` numbers in `index.html`/`exam.html` when a file changes |
+| `sw.js` | offline shell. Bump `SHELL` and the `?v=` numbers in `index.html`/`exam.html` when a file changes. This matters: a file with `?v=` (and anything in `vendor/`) is served from the saved copy and never asked for again under the same address |
 | `worker/` | exam server. `cd worker && npx vitest run` |
 | `tests/` | Playwright browser tests (see `tests/README.md`). They serve this folder on :8765 and never write to the real repo |
 

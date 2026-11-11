@@ -8,7 +8,10 @@
 var $ = function (s, r) { return (r || document).querySelector(s); };
 var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
-function clean(h) { h = h == null ? "" : String(h); return window.DOMPurify ? DOMPurify.sanitize(h, { USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true } }) : esc(h); }
+/* speed: the same script text is made safe again on every Teach step, so each answer is remembered (same text in, same text out) */
+var CLEANED = new Map(), PLAINED = new Map();
+function clean(h) { h = h == null ? "" : String(h); if (!window.DOMPurify) return esc(h); var c = CLEANED.get(h);
+  if (c === undefined) { if (CLEANED.size > 4000) CLEANED.clear(); c = DOMPurify.sanitize(h, { USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true } }); CLEANED.set(h, c); } return c; }
 function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (window.__tutorTry && /^tutor\.(s|review)\./.test(k)) return null; if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
 var SUBJ = { chem: "Chemistry", maths: "Maths" };
 var DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], DAYL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -77,21 +80,38 @@ function commitFiles(files, msg, onStep) {
     return attempt(3).then(function () { files.forEach(function (f, k) { setTreeSha(f.path, shas[k]); }); });
   });
 }
-/* the file list: one request, kept for 20 s, remembered on the device for an instant start */
-var TREE = null, treeAt = 0, treeP = null;
+/* the file list: kept for 20 s, remembered on the device for an instant start.
+   Speed: the list is about 1 MB, so first ask GitHub only for the newest commit's id (40 letters). The list is
+   downloaded again only when that id has changed. TREEV goes up each time a new list arrives, so a screen
+   already drawn from the saved list is not drawn a second time for nothing. */
+var TREE = null, treeAt = 0, treeP = null, TREEV = 0;
 try { TREE = JSON.parse(ls("tutor.tree." + CFG.repo) || "null"); } catch (e) {}
+function headKey() { return "tutor.head." + CFG.repo; }
+function headSha() {
+  return fetch(API + "/repos/" + CFG.repo + "/commits/HEAD", { headers: { "Authorization": "Bearer " + CFG.token, "Accept": "application/vnd.github.sha", "X-GitHub-Api-Version": "2022-11-28" }, cache: "no-store" })
+    .then(function (r) { return r.ok ? r.text() : ""; }).then(function (t) { t = String(t).trim(); return /^[0-9a-f]{40}$/.test(t) ? t : ""; });   // a network failure still rejects (offline); anything odd means "ask for the list"
+}
 function loadTree(force) {
   if (!force && TREE && Date.now() - treeAt < 20000) return Promise.resolve(TREE);
   if (treeP) return treeP;
-  treeP = gh("/repos/" + CFG.repo + "/git/trees/HEAD?recursive=1").then(function (r) {
-    TREE = r.status === 404 ? [] : r.json.tree.filter(function (t) { return t.type === "blob"; }).map(function (t) { return { path: t.path, sha: t.sha }; });
-    treeAt = Date.now(); treeP = null; ls("tutor.tree." + CFG.repo, JSON.stringify(TREE)); return TREE;
+  treeP = headSha().then(function (head) {
+    if (head && TREE && TREE.length && ls(headKey()) === head) { treeAt = Date.now(); treeP = null; return TREE; }
+    return gh("/repos/" + CFG.repo + "/git/trees/" + (head || "HEAD") + "?recursive=1").then(function (r) {
+      TREE = r.status === 404 ? [] : r.json.tree.filter(function (t) { return t.type === "blob"; }).map(function (t) { return { path: t.path, sha: t.sha }; });
+      treeAt = Date.now(); treeP = null; TREEV++; var js = JSON.stringify(TREE); ls("tutor.tree." + CFG.repo, js);
+      ls(headKey(), head && ls("tutor.tree." + CFG.repo) === js ? head : null); return TREE;   // the id is kept only if the list itself was kept
+    });
   }).catch(function (e) { treeP = null; if (e.status === 409) { TREE = []; return TREE; } throw e; });
   return treeP;
 }
+/* the list is about 400 KB as text: after a save, write it to the device once things go quiet, not on every file */
+var treeSaveT = null;
+function saveTreeNow() { if (treeSaveT == null) return; clearTimeout(treeSaveT); treeSaveT = null; ls("tutor.tree." + CFG.repo, JSON.stringify(TREE || [])); }
+function saveTreeSoon() { if (treeSaveT != null) clearTimeout(treeSaveT); treeSaveT = setTimeout(saveTreeNow, 800); }
+window.addEventListener("pagehide", saveTreeNow); document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") saveTreeNow(); });
 var TMAP = null, TMAPsrc = null;
 function shaOf(path) { if (TMAPsrc !== TREE) { TMAP = {}; (TREE || []).forEach(function (t) { TMAP[t.path] = t.sha; }); TMAPsrc = TREE; } return TMAP[path] || null; }
-function setTreeSha(path, sha) { TREE = TREE || []; var f = TREE.filter(function (t) { return t.path === path; })[0]; if (f) f.sha = sha; else TREE.push({ path: path, sha: sha }); TMAPsrc = null; ls("tutor.tree." + CFG.repo, JSON.stringify(TREE)); }
+function setTreeSha(path, sha) { TREE = TREE || []; var f = TREE.filter(function (t) { return t.path === path; })[0]; if (f) f.sha = sha; else TREE.push({ path: path, sha: sha }); TMAPsrc = null; saveTreeSoon(); }
 var inflight = {};
 function blobBytes(sha) {
   return cget("b:" + sha).then(function (v) { if (v) return v; if (inflight[sha]) return inflight[sha];
@@ -290,8 +310,9 @@ function lessonsView() {
     });
   }
   if (!$(".home")) app.innerHTML = '<div class="empty"><h3>Loading lessons</h3></div>';
-  if (TREE && TREE.length) loadMakeup().then(function () { return draw(TREE); }).catch(function () {});
-  loadTree(true).then(function (tr) { return loadMakeup().then(function () { return draw(tr); }); }).catch(function (e) { if (!TREE || !TREE.length) fail(e); else setSave("Offline", true); });
+  var v0 = TREEV, first = TREE && TREE.length ? loadMakeup().then(function () { return draw(TREE); }).then(function () { return true; }, function () { return false; }) : Promise.resolve(false);
+  loadTree(true).then(function (tr) { return first.then(function (drawn) { if (drawn && TREEV === v0) return;   // nothing new on GitHub: the saved list is already on screen
+    return loadMakeup().then(function () { return draw(tr); }); }); }).catch(function (e) { if (!TREE || !TREE.length) fail(e); else setSave("Offline", true); });
 }
 function card(it) {
   var p = parseId(it.id), s = it.s || {}, x = it.x || null, subj = s.subject || (x && x.subject) || p.subject;
@@ -537,7 +558,8 @@ function lessonView(id) {
   if (!(L && L.id === id)) app.innerHTML = '<div class="empty"><h3>Opening the lesson</h3></div>';
   var had = TREE && TREE.some(function (t) { return t.path.indexOf(base) === 0; });
   var first = had ? open(false) : loadTree(true).then(function () { return open(false); });
-  first.then(function () { if (had) return loadTree(true).then(function () { return open(true); }, function () { setSave("Offline · using the saved copy", true); }); }).catch(function (e) { if (window.console) console.error(e); if (!(L && L.id === id)) fail(e); else toast("Couldn’t draw this lesson: " + (e && e.message || e)); });
+  var v0 = TREEV;
+  first.then(function () { if (had) return loadTree(true).then(function () { return TREEV === v0 ? null : open(true); }, function () { setSave("Offline · using the saved copy", true); }); }).catch(function (e) { if (window.console) console.error(e); if (!(L && L.id === id)) fail(e); else toast("Couldn’t draw this lesson: " + (e && e.message || e)); });
 }
 function phases() {
   var s = L.script, ps = [];
@@ -598,7 +620,7 @@ function drawPhase() {
 function focusTable(rows) { return '<div class="card" style="margin-top:var(--s4);overflow-x:auto"><table class="tbl"><thead><tr><th>Pick your focus</th><th>Spend the time on</th><th>Cut down</th></tr></thead><tbody>' + rows.map(function (r) { return '<tr><td><b>' + clean(r.want) + '</b></td><td>' + clean(r.spend) + '</td><td>' + clean(r.cut) + '</td></tr>'; }).join("") + '</tbody></table></div>'; }
 document.addEventListener("click", function (e) { if (!(e.target.closest && e.target.closest("[data-focus]"))) return; var b = $("#focusbox"); if (b) b.hidden = !b.hidden; });
 /* "taught" ticks: keyed by the content itself, so they survive edits elsewhere in the script */
-function plain(h) { return String(h == null ? "" : h).replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/g, " ").replace(/\s+/g, " ").trim(); }
+function plain(h) { h = String(h == null ? "" : h); var c = PLAINED.get(h); if (c === undefined) { if (PLAINED.size > 4000) PLAINED.clear(); c = h.replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/g, " ").replace(/\s+/g, " ").trim(); PLAINED.set(h, c); } return c; }
 function isDone(k) { var d = L && L.session.done && L.session.done[k]; return !!(d && !d.off); }
 function tick_(k, label) { return '<button class="tick" type="button" data-tick="' + esc(k) + '" data-lab="' + esc(String(label).slice(0, 90)) + '" aria-pressed="' + isDone(k) + '" title="Mark as taught" aria-label="Mark as taught">\u2713</button>'; }
 function stepKey(h) { return "s:" + hkey(plain(h)); }
@@ -920,7 +942,7 @@ document.addEventListener("click", function (ev) {
   if (t.id === "zoomx") { closeZoom(); return; }
   if (t.hasAttribute("data-seek") && false) { var fr = $('iframe[data-vid="' + t.getAttribute("data-seek") + '"]'); if (fr) { fr.src = vsrc(t.getAttribute("data-seek"), t.getAttribute("data-t"), true); fr.scrollIntoView({ block: "center", behavior: "smooth" }); } return; }
   if (t.id === "s-clear") { ls("tutor.token", null); toast("Key removed from this device"); settingsView(); return; }
-  if (t.id === "s-cache") { try { indexedDB.deleteDatabase("tutor-desk"); } catch (e) {} idbP = null; ls("tutor.tree." + CFG.repo, null); TREE = null; toast("Cache cleared"); return; }
+  if (t.id === "s-cache") { try { indexedDB.deleteDatabase("tutor-desk"); } catch (e) {} idbP = null; clearTimeout(treeSaveT); treeSaveT = null; ls("tutor.tree." + CFG.repo, null); ls(headKey(), null); TREE = null; toast("Cache cleared"); return; }
   if (!L || route().indexOf("/lesson/") !== 0) return;
   var x = L.session;
   if (t.hasAttribute("data-tick")) { ev.preventDefault(); ev.stopPropagation(); var k = t.getAttribute("data-tick"); x.done = x.done || {}; var on = !isDone(k);
@@ -1234,12 +1256,12 @@ function loadRevise(force) {
     if (local && local.dirty) Object.keys(local.data).forEach(function (k) { var a = local.data[k], b = rv[k]; if (!b || String(a.last) > String(b.last)) rv[k] = a; });
     REV = { ms: ms, rv: rv, sha: v[1] && v[1].sha, dirty: !!(local && local.dirty) }; if (REV.dirty) saveRevise(); return REV; });
 }
-function dueList(subject) { if (!REV) return []; var t = todayIso();
+function dueList(subject) { if (!REV) return []; var t = todayIso(), tail = "|" + t + "|" + revSeed();
   return REV.ms.filter(function (m) { var r = REV.rv[m.key]; if (m.fixed && !r) return false; if (r && r.box >= GAPS.length) return false; if (subject && m.subject && m.subject !== subject) return false; return !r || r.due <= t; })
-    .sort(function (a, b) { return shufKey(a.key).localeCompare(shufKey(b.key)); }); }
+    .map(function (m) { return [shufKey(m.key, tail), m]; }).sort(function (a, b) { return a[0].localeCompare(b[0]); }).map(function (x) { return x[1]; }); }
 /* the order is shuffled each day, and again with Shuffle (Ali, 11 Oct: "randomize warm up mistakes on every 24 hours") */
 function revSeed(bump) { var t = todayIso(), o = null; try { o = JSON.parse(ls("tutor.revseed") || "null"); } catch (e) {} if (!o || o.d !== t) o = { d: t, s: 0 }; if (bump) { o.s++; ls("tutor.revseed", JSON.stringify(o)); } return o.s; }
-function shufKey(k) { return hkey(k + "|" + todayIso() + "|" + revSeed()); }
+function shufKey(k, tail) { return hkey(k + (tail || "|" + todayIso() + "|" + revSeed())); }
 function markRevise(key, ok) { var r = REV.rv[key] || { box: 0, history: [] }, t = todayIso();
   r.box = ok ? r.box + 1 : 0;
   r.due = !ok ? addDays(t, 1) : r.box >= GAPS.length ? "done" : addDays(t, GAPS[r.box - 1]);

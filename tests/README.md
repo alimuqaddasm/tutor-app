@@ -34,6 +34,7 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/runtest.py tests/test_round40.py   # round 40 (21 Oct, app v72): no 'Hard:' on his screens, zoom on Student view (Questions and canvas), End lesson opens After the lesson as a card in Teach, every question (video ones too) in the His work list (20 checks)
     python tests/test_round41.py                    # round 41 (21 Oct): the warm-up deck on his assignment link: 15 cards, right or wrong after the last, his tries saved (21 checks; needs the local exam server)
     python tests/runtest.py tests/test_round42.py   # round 42 (21 Oct): warm-up card review in Exams: filter, edit, approve, reject, Save to tutoring repo, Send to his deck, his tries on each card (17 checks; needs the local exam server)
+    python tests/runtest.py tests/test_round44.py   # round 44 (11 Nov, app v73): speed: the file list is downloaded only when GitHub changed, home drawn once, cleaned text remembered in Teach, offline shell serves versioned files from the saved copy (16 checks; own server on :8766)
     cd worker && npx vitest run test/warmup.test.js # the deck and the phone push on the exam server (8 tests)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
