@@ -109,8 +109,11 @@ try:
             return strip(live).isEqualNode(strip(want)); })()""")
         ok("  and it is exactly what a new build would give", same)
         # a kept view from another day or filter is never used
-        p.evaluate("(() => { const o = JSON.parse(localStorage.getItem('tutor.home')); o.k = o.k.replace(/\\d{4}-\\d\\d-\\d\\d$/, '2001-01-01'); localStorage.setItem('tutor.home', JSON.stringify(o)); })()")
+        good = p.evaluate("localStorage.getItem('tutor.home')")
+        p.evaluate("(() => { const o = JSON.parse(localStorage.getItem('tutor.home')); o.k = o.k.replace(/\\d{4}-\\d\\d-\\d\\d/, '2001-01-01'); localStorage.setItem('tutor.home', JSON.stringify(o)); })()")
         ok("a view kept on another day is not used", T("homeSnap()") == "")
+        p.evaluate("s => { const o = JSON.parse(s); o.k = o.k.replace(/\\|v\\d+$/, '|v1'); localStorage.setItem('tutor.home', JSON.stringify(o)); }", good)
+        ok("a view drawn by an older version of the app is not used", T("homeSnap()") == "" and p.evaluate("s => /\\|v\\d+$/.test(JSON.parse(s).k)", good))
         T("lessonsView()"); p.wait_for_timeout(1500)
         ok("  and today's view replaces it", T("homeSnap().length") > 2000)
 
@@ -224,6 +227,18 @@ try:
             press("[data-ext]", "Add minutes")
             press("[data-lock]", "Lock")
             ok("  the page shows it locked", "locked" in p.inner_text("#app").lower(), p.inner_text("#app")[:200])
+            # an exam server from before 13 Nov answers without the exam: the page then asks for it, as it always did
+            def old_server(r):
+                xcalls.append(r.request.method + " " + r.request.url.split("/api/t/")[-1])
+                if r.request.method == "POST" and "full=1" in r.request.url:
+                    resp = r.fetch(); body = resp.json(); body.pop("exam", None)
+                    return r.fulfill(status=resp.status, headers=resp.headers, body=json.dumps(body))
+                r.continue_()
+            c.unroute(API + "/**"); c.route(API + "/**", old_server)
+            xcalls.clear(); p.click("[data-reopen]"); p.wait_for_timeout(1800)
+            ok("an older exam server (no exam in the answer): the page asks for the exam itself", any(x == "GET exams/" + xid for x in xcalls), xcalls[:6])
+            ok("  and shows the new state", p.locator("[data-lock]").count() == 1, p.inner_text("#app")[:200])
+            tapi("POST", "/api/t/exams/" + xid + "/lock")
             ok("no script error on the exam page", not xerrs, xerrs[:3])
             tapi("DELETE", "/api/t/exams/" + xid)
             c.close()

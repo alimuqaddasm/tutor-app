@@ -368,7 +368,8 @@ function lessonIds(tree) {
 var listSeq = 0;
 /* Home as it was last drawn today, kept on the device: the app opens on it at once (and so does coming back to Home),
    then the real data changes only what differs. Kept per student, subject filter and day; never used on another day. */
-function homeSnapKey() { return CFG.repo + "|" + CFG.student + "|" + subjPick() + "|" + todayIso(); }
+var APPV = (function () { try { var m = /[?&]v=(\d+)/.exec(document.querySelector('script[src^="app.js"]').getAttribute("src")); return m ? m[1] : ""; } catch (e) { return ""; } })();   // this app.js's version number, from index.html
+function homeSnapKey() { return CFG.repo + "|" + CFG.student + "|" + subjPick() + "|" + todayIso() + "|v" + APPV; }   // never a view drawn by an older version of the app
 function homeSnap() { try { var o = JSON.parse(ls("tutor.home") || "null"); return o && o.k === homeSnapKey() && typeof o.h === "string" && o.h.indexOf('class="home"') > 0 ? o.h : ""; } catch (e) { return ""; } }
 var homeSnapT = null;
 function homeSnapSoon() { clearTimeout(homeSnapT); homeSnapT = setTimeout(function () { if (route() !== "/" || !$(".home") || !HOMEALL.length) return; ls("tutor.home", JSON.stringify({ k: homeSnapKey(), h: app.innerHTML })); }, 700); }
