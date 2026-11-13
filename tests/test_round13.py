@@ -21,7 +21,7 @@ try:
             r.continue_()
         c.route("https://api.github.com/**", route)
         p = page(c, "?try#/lesson/" + MA + "/teach"); p.wait_for_timeout(9000)
-        shas = p.evaluate("""() => { const t = JSON.parse(localStorage.getItem('tutor.tree.alimuqaddasm/tutoring')); const m = {}; t.forEach(x => m[x.path] = x.sha); return m; }""")
+        shas = p.evaluate("""() => { const ft = JSON.parse(localStorage.getItem('tutor.ft.alimuqaddasm/tutoring') || 'null'); const t = ft ? ft.t : JSON.parse(localStorage.getItem('tutor.tree.alimuqaddasm/tutoring')); const m = {};   /* since 13 Nov the list and its commit id are one item */ t.forEach(x => m[x.path] = x.sha); return m; }""")
         base = "students/UK-1/lessons/%s/assets/" % MA
         want = {k: shas.get(base + k) for k in ["r5.png", "r5-ans.png", "c3t-q10-ans.png", "mg-addition-board13.jpg"]}
         got = {k: v in blobs for k, v in want.items()}

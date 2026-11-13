@@ -52,6 +52,14 @@ class FakeGH:
         paths = set(self.files) | set(self.extra)
         return {"sha": "HEAD", "tree": [{"path": p, "type": "blob", "sha": self.sha_of(p)} for p in sorted(paths)]}
 
+    def head(self, plus=None, bump=0):
+        """The newest commit's id. It is made from every file's id (so it moves when a test changes a file by hand) and
+        from the number of writes so far (so every write gives a new commit, even one that changes nothing, as on
+        GitHub). plus = {path: blob sha} and bump = 1 give the id the repo will have after one more write of those files."""
+        ids = {p: self.sha_of(p) for p in set(self.files) | set(self.extra)}
+        ids.update(plus or {})
+        return hashlib.sha1((json.dumps(sorted(ids.items())) + "#" + str(getattr(self, "writes", 0) + bump)).encode()).hexdigest()
+
     # ----- the handler -----
     def route(self, route, request=None):
         req = route.request
@@ -72,8 +80,7 @@ class FakeGH:
         m = req.method
         if m == "GET" and path.endswith("/commits/HEAD"):
             # the newest commit's id: changes whenever any file does (the app asks for this before the full list)
-            head = hashlib.sha1(json.dumps(self.tree(), sort_keys=True).encode()).hexdigest()
-            return route.fulfill(status=200, content_type="text/plain", body=head)
+            return route.fulfill(status=200, content_type="text/plain", body=self.head())
         if m == "GET" and "/git/trees/" in path:
             return route.fulfill(status=200, content_type="application/json", body=json.dumps(self.tree()))
         mm = re.search(r"/git/blobs/([0-9a-f]{40})$", path)
@@ -91,21 +98,24 @@ class FakeGH:
             sha = gitsha(data); self.blobcache[sha] = data
             return J(201, {"sha": sha})
         if m == "GET" and re.search(r"/git/ref/heads/[^/]+$", path):
-            return J(200, {"object": {"sha": "c" * 40}})
+            return J(200, {"object": {"sha": self.head()}})
         if m == "GET" and re.search(r"/git/commits/[0-9a-f]{40}$", path):
-            return J(200, {"sha": "c" * 40, "tree": {"sha": "t" * 40}})
+            return J(200, {"sha": path.rsplit("/", 1)[1], "tree": {"sha": "t" * 40}})
         if m == "POST" and path.endswith("/git/trees"):
             body = json.loads(req.post_data or "{}"); self.pending = body.get("tree", [])
             return J(201, {"sha": "d" * 40})
         if m == "POST" and path.endswith("/git/commits"):
-            self.commits = getattr(self, "commits", []) + [json.loads(req.post_data or "{}").get("message")]
-            return J(201, {"sha": "e" * 40})
+            cb = json.loads(req.post_data or "{}")
+            self.commits = getattr(self, "commits", []) + [cb.get("message")]
+            # the id this commit will have once the branch points at it: the repo with the waiting files written
+            self.pending_head = self.head({t["path"]: t["sha"] for t in getattr(self, "pending", [])}, 1)
+            return J(201, {"sha": self.pending_head, "parents": [{"sha": x} for x in cb.get("parents", [])]})
         if m == "PATCH" and re.search(r"/git/refs/heads/[^/]+$", path):
             for t in getattr(self, "pending", []):
                 data = self.blobcache.get(t["sha"], b"")
                 self.extra[t["path"]] = data; self.puts[t["path"]] = data
-            self.pending = []
-            return J(200, {"object": {"sha": "e" * 40}})
+            self.pending = []; self.writes = getattr(self, "writes", 0) + 1
+            return J(200, {"object": {"sha": self.head()}})
         mm = re.search(r"/contents/(.+)$", path)
         if mm:
             fpath = urllib.parse.unquote(mm.group(1))
@@ -123,13 +133,18 @@ class FakeGH:
                 cur = self.sha_of(fpath)
                 if cur and body.get("sha") != cur:
                     return route.fulfill(status=409, content_type="application/json", body=json.dumps({"message": "sha mismatch"}))
+                before = self.head()
                 self.extra[fpath] = data
                 self.puts[fpath] = data
-                return route.fulfill(status=201 if not cur else 200, content_type="application/json", body=json.dumps({"content": {"sha": gitsha(data), "path": fpath}, "commit": {"sha": "deadbeef"}}))
+                self.writes = getattr(self, "writes", 0) + 1
+                # as GitHub answers: the new commit and the commit it was built on
+                return route.fulfill(status=201 if not cur else 200, content_type="application/json", body=json.dumps({"content": {"sha": gitsha(data), "path": fpath}, "commit": {"sha": self.head(), "parents": [{"sha": before}]}}))
             if m == "DELETE":
+                before = self.head()
                 self.extra.pop(fpath, None)
                 self.files.pop(fpath, None)
-                return route.fulfill(status=200, body="{}")
+                self.writes = getattr(self, "writes", 0) + 1
+                return route.fulfill(status=200, content_type="application/json", body=json.dumps({"content": None, "commit": {"sha": self.head(), "parents": [{"sha": before}]}}))
         if m == "GET" and re.search(r"^/repos/[^/]+/[^/]+$", path):
             return route.fulfill(status=200, content_type="application/json", body=json.dumps({"permissions": {"push": True}, "full_name": "x/y", "default_branch": "main"}))
         return route.fulfill(status=404, content_type="application/json", body="{}")

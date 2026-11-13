@@ -36,7 +36,7 @@ export async function handle(request, env, now) {
   } : { "Vary": "Origin" };
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   try {
-    const res = await route(request, env, now);
+    const res = await withFull(request, env, now, await route(request, env, now));
     for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
     return res;
   } catch (e) {
@@ -328,6 +328,29 @@ async function sendUpload(env, examId, uploadId, questionId) {
 
 /* ---------- router ---------- */
 
+/* The teacher's whole view of one exam (what GET /api/t/exams/<id> answers). */
+async function examFull(env, exam, now) {
+  const [ext, qs, evs, secs] = await reads(env, [extensionsQ(env, exam.id), questionsQ(env, exam.id), eventsQ(env, exam.id), sectionsQ(env, exam.id)]);
+  return {
+    id: exam.id, title: exam.title, subject: exam.subject, sourcePath: exam.source_path, practice: !!exam.practice, kind: exam.kind || "exam", token: exam.token, ratio: exam.ratio, createdAt: exam.created_at, lastSeenAt: exam.last_seen_at, startOnOpen: !!exam.start_on_open,
+    ...clock(exam, now, ext), questions: questionList(qs), sections: isAssignment(exam) ? withDays(exam, sectionList(secs), now) : sectionList(secs), gapHours: exam.gap_hours == null ? 12 : exam.gap_hours, events: evs
+  };
+}
+
+/* Speed (13 Nov): the exam page used to ask twice for every button (do it, then "what does the exam look like now?"),
+   and the server is far from the teacher. A change sent with ?full=1 gets the exam as it now is in the same answer,
+   under "exam". Only for the teacher's POST and PUT on one exam, and only when the change worked. */
+async function withFull(request, env, now, res) {
+  const url = new URL(request.url);
+  if (url.searchParams.get("full") !== "1" || (request.method !== "POST" && request.method !== "PUT") || res.status >= 300) return res;
+  const a = url.pathname.replace(/\/+$/, "").match(/^\/api\/t\/exams\/([\w-]+)(\/.*)?$/);
+  if (!a || !(res.headers.get("Content-Type") || "").includes("json")) return res;
+  const data = await res.json();
+  if (!data || typeof data !== "object" || Array.isArray(data)) return json(data, res.status);
+  data.exam = await examFull(env, await examById(env, a[1]), now);
+  return json(data, res.status);
+}
+
 async function route(request, env, now) {
   const url = new URL(request.url);
   const p = url.pathname.replace(/\/+$/, "");
@@ -608,13 +631,7 @@ async function route(request, env, now) {
       await noteTimeUp(env, exam, now);
       let b2;
 
-      if (sub === "" && m === "GET") {
-        const [ext, qs, evs, secs] = await reads(env, [extensionsQ(env, exam.id), questionsQ(env, exam.id), eventsQ(env, exam.id), sectionsQ(env, exam.id)]);
-        return json({
-          id: exam.id, title: exam.title, subject: exam.subject, sourcePath: exam.source_path, practice: !!exam.practice, kind: exam.kind || "exam", token: exam.token, ratio: exam.ratio, createdAt: exam.created_at, lastSeenAt: exam.last_seen_at, startOnOpen: !!exam.start_on_open,
-          ...clock(exam, now, ext), questions: questionList(qs), sections: isAssignment(exam) ? withDays(exam, sectionList(secs), now) : sectionList(secs), gapHours: exam.gap_hours == null ? 12 : exam.gap_hours, events: evs
-        });
-      }
+      if (sub === "" && m === "GET") return json(await examFull(env, exam, now));
       if (sub === "" && m === "PUT") {
         const b = await body(request);
         const sets = [], vals = [];

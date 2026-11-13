@@ -37,6 +37,7 @@ var idbP = null;
 function idb() { if (idbP) return idbP; idbP = new Promise(function (res) { try { var r = indexedDB.open("tutor-desk", 1); r.onupgradeneeded = function () { r.result.createObjectStore("kv"); }; r.onsuccess = function () { res(r.result); }; r.onerror = function () { res(null); }; } catch (e) { res(null); } }); return idbP; }
 function cget(k) { return idb().then(function (d) { if (!d) return null; return new Promise(function (res) { try { var q = d.transaction("kv").objectStore("kv").get(k); q.onsuccess = function () { res(q.result == null ? null : q.result); }; q.onerror = function () { res(null); }; } catch (e) { res(null); } }); }); }
 function cput(k, v) { return idb().then(function (d) { if (!d) return; try { d.transaction("kv", "readwrite").objectStore("kv").put(v, k); } catch (e) {} }); }
+function cdel(k) { return idb().then(function (d) { if (!d) return; try { d.transaction("kv", "readwrite").objectStore("kv").delete(k); } catch (e) {} }); }
 
 /* try-out mode: this tab saves nothing (no GitHub writes, no lesson or review copies on the device) */
 var TRY = window.__tutorTry = (function () { var q = /[?&]try\b/.test(location.search); try { if (q) sessionStorage.setItem("tutor.try", "1"); return sessionStorage.getItem("tutor.try") === "1"; } catch (e) { return q; } })();
@@ -55,7 +56,7 @@ function b64enc(str) { var bytes = new TextEncoder().encode(str), bin = ""; for 
 function b64bytes(b64) { var bin = atob(String(b64).replace(/\s/g, "")), bytes = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); return bytes; }
 function putB64(path, b64, msg, sha) {
   return gh("/repos/" + CFG.repo + "/contents/" + enc(path), { method: "PUT", body: { message: msg, content: b64, sha: sha || undefined } })
-    .then(function (r) { var nsha = r.json.content.sha; setTreeSha(path, nsha); return nsha; });
+    .then(function (r) { var nsha = r.json.content.sha, c = r.json.commit || {}; ownSave([{ path: path, sha: nsha, b64: b64 }], c.sha, c.parents && c.parents[0] && c.parents[0].sha); return nsha; });
 }
 /* many files in one commit (blobs sent a few at a time, then one tree, one commit): far faster than one commit per file.
    files: [{ path, b64 }]. If someone else pushed in between, it builds again on top of theirs. */
@@ -74,19 +75,23 @@ function commitFiles(files, msg, onStep) {
         return gh(R0 + "/git/commits/" + head).then(function (c) {
           return gh(R0 + "/git/trees", { method: "POST", body: { base_tree: c.json.tree.sha, tree: files.map(function (f, k) { return { path: f.path, mode: "100644", type: "blob", sha: shas[k] }; }) } });
         }).then(function (t) { return gh(R0 + "/git/commits", { method: "POST", body: { message: msg, tree: t.json.sha, parents: [head] } }); })
-          .then(function (nc) { return gh(R0 + "/git/refs/heads/" + enc(branch), { method: "PATCH", body: { sha: nc.json.sha } }); });
+          .then(function (nc) { return gh(R0 + "/git/refs/heads/" + enc(branch), { method: "PATCH", body: { sha: nc.json.sha } }).then(function () { return { commit: nc.json.sha, parent: head }; }); });
       }).catch(function (e) { if (left > 0 && e.status === 422) return attempt(left - 1); throw e; });
     };
-    return attempt(3).then(function () { files.forEach(function (f, k) { setTreeSha(f.path, shas[k]); }); });
+    return attempt(3).then(function (c) { ownSave(files.map(function (f, k) { return { path: f.path, sha: shas[k], b64: f.b64 }; }), c && c.commit, c && c.parent); });
   });
 }
 /* the file list: kept for 20 s, remembered on the device for an instant start.
    Speed: the list is about 1 MB, so first ask GitHub only for the newest commit's id (40 letters). The list is
    downloaded again only when that id has changed. TREEV goes up each time a new list arrives, so a screen
-   already drawn from the saved list is not drawn a second time for nothing. */
-var TREE = null, treeAt = 0, treeP = null, TREEV = 0;
-try { TREE = JSON.parse(ls("tutor.tree." + CFG.repo) || "null"); } catch (e) {}
-function headKey() { return "tutor.head." + CFG.repo; }
+   already drawn from the saved list is not drawn a second time for nothing.
+   HEADSHA is the commit the list in TREE belongs to. The two are kept on the device as one item (one write), so a
+   list can never be paired with the wrong commit. */
+var TREE = null, HEADSHA = "", treeAt = 0, treeP = null, TREEV = 0;
+function ftKey() { return "tutor.ft." + CFG.repo; }
+(function () { try { var o = JSON.parse(ls(ftKey()) || "null"); if (o && Array.isArray(o.t)) { TREE = o.t; HEADSHA = o.h || ""; return; }
+    o = JSON.parse(ls("tutor.tree." + CFG.repo) || "null"); if (Array.isArray(o)) { TREE = o; HEADSHA = ls("tutor.head." + CFG.repo) || ""; }   // the two items used before 13 Nov
+  } catch (e) {} })();
 function headSha() {
   return fetch(API + "/repos/" + CFG.repo + "/commits/HEAD", { headers: { "Authorization": "Bearer " + CFG.token, "Accept": "application/vnd.github.sha", "X-GitHub-Api-Version": "2022-11-28" }, cache: "no-store" })
     .then(function (r) { return r.ok ? r.text() : ""; }).then(function (t) { t = String(t).trim(); return /^[0-9a-f]{40}$/.test(t) ? t : ""; });   // a network failure still rejects (offline); anything odd means "ask for the list"
@@ -95,23 +100,57 @@ function loadTree(force) {
   if (!force && TREE && Date.now() - treeAt < 20000) return Promise.resolve(TREE);
   if (treeP) return treeP;
   treeP = headSha().then(function (head) {
-    if (head && TREE && TREE.length && ls(headKey()) === head) { treeAt = Date.now(); treeP = null; return TREE; }
+    // nothing new: the same commit, or an answer that left GitHub just before a save of ours arrived (our list is then the newer one)
+    if (head && TREE && TREE.length && (HEADSHA === head || ownAfter(head))) { treeAt = Date.now(); treeP = null; return TREE; }
     return gh("/repos/" + CFG.repo + "/git/trees/" + (head || "HEAD") + "?recursive=1").then(function (r) {
       TREE = r.status === 404 ? [] : r.json.tree.filter(function (t) { return t.type === "blob"; }).map(function (t) { return { path: t.path, sha: t.sha }; });
-      treeAt = Date.now(); treeP = null; TREEV++; var js = JSON.stringify(TREE); ls("tutor.tree." + CFG.repo, js);
-      ls(headKey(), head && ls("tutor.tree." + CFG.repo) === js ? head : null); return TREE;   // the id is kept only if the list itself was kept
+      HEADSHA = head || ""; followOwn();   // a save of ours that landed while the list was on its way goes back on top of it
+      treeAt = Date.now(); treeP = null; TREEV++; saveTreeNow(true); return TREE;
     });
-  }).catch(function (e) { treeP = null; if (e.status === 409) { TREE = []; return TREE; } throw e; });
+  }).catch(function (e) { treeP = null; if (e.status === 409) { TREE = []; HEADSHA = ""; return TREE; } throw e; });
   return treeP;
 }
 /* the list is about 400 KB as text: after a save, write it to the device once things go quiet, not on every file */
 var treeSaveT = null;
-function saveTreeNow() { if (treeSaveT == null) return; clearTimeout(treeSaveT); treeSaveT = null; ls("tutor.tree." + CFG.repo, JSON.stringify(TREE || [])); }
+function saveTreeNow(must) { if (treeSaveT == null && must !== true) return; clearTimeout(treeSaveT); treeSaveT = null; if (!TREE) return;
+  ls(ftKey(), JSON.stringify({ h: HEADSHA, t: TREE }));   // one write: if it does not fit, the older pair stays, and that pair still belongs together
+  ls("tutor.tree." + CFG.repo, null); ls("tutor.head." + CFG.repo, null); }
 function saveTreeSoon() { if (treeSaveT != null) clearTimeout(treeSaveT); treeSaveT = setTimeout(saveTreeNow, 800); }
-window.addEventListener("pagehide", saveTreeNow); document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") saveTreeNow(); });
+function dropTree() { clearTimeout(treeSaveT); treeSaveT = null; TREE = null; HEADSHA = ""; OWN = []; ls(ftKey(), null); ls("tutor.tree." + CFG.repo, null); ls("tutor.head." + CFG.repo, null); }
+window.addEventListener("pagehide", function () { saveTreeNow(); }); document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") saveTreeNow(); });
 var TMAP = null, TMAPsrc = null;
 function shaOf(path) { if (TMAPsrc !== TREE) { TMAP = {}; (TREE || []).forEach(function (t) { TMAP[t.path] = t.sha; }); TMAPsrc = TREE; } return TMAP[path] || null; }
-function setTreeSha(path, sha) { TREE = TREE || []; var f = TREE.filter(function (t) { return t.path === path; })[0]; if (f) f.sha = sha; else TREE.push({ path: path, sha: sha }); TMAPsrc = null; saveTreeSoon(); }
+function treeSet(path, sha) { TREE = TREE || []; var f = null; for (var i = 0; i < TREE.length; i++) if (TREE[i].path === path) { f = TREE[i]; break; } if (f) f.sha = sha; else TREE.push({ path: path, sha: sha }); TMAPsrc = null; }
+function setTreeSha(path, sha) { treeSet(path, sha); saveTreeSoon(); }
+/* Speed: what this device saves, it already has.
+   - The saved bytes go straight into the device cache under their git id, so they are never downloaded back.
+   - When our commit sits directly on the commit the file list was read at, the list with our change in it is exactly
+     the new commit's list. HEADSHA moves on to our commit, and the 1 MB list is not downloaded again after a save.
+   If anyone else saved in between, the chain breaks, HEADSHA stays behind, and the next look at GitHub fetches the list. */
+var OWN = [];   // our own commits, newest last: {files: [{path, sha}], commit, parent}
+function ownSave(files, commit, parent) {
+  files.forEach(function (f) { var was = shaOf(f.path); treeSet(f.path, f.sha); if (f.b64 == null) return;
+    try { cput("b:" + f.sha, b64bytes(f.b64)); } catch (e) {}
+    // the copy this save replaces is let go (a lesson saves every few seconds: without this each save would leave one behind)
+    if (was && was !== f.sha && !(TREE || []).some(function (t) { return t.sha === was; })) { cdel("b:" + was); ROJSON.delete(was); } });
+  if (commit && parent && commit !== parent) { OWN.push({ files: files.map(function (f) { return { path: f.path, sha: f.sha }; }), commit: commit, parent: parent }); if (OWN.length > 80) OWN.shift(); }
+  followOwn();
+  /* Home was drawn a moment before this save landed (leaving a lesson saves it and opens Home at the same time):
+     draw it again from the device, so the lesson just taught shows as it now is */
+  if (files.some(function (f) { return /\/(session|makeup)\.json$/.test(f.path); })) { clearTimeout(timers.ownHome); timers.ownHome = setTimeout(function () { if (route() === "/" && $(".home")) lessonsView(true); }, 120); }
+}
+function followOwn() {
+  for (var n = 0, go = !!HEADSHA; go && n <= OWN.length; n++) { go = false;   // never more steps than there are commits: this can not go round in circles
+    for (var i = 0; i < OWN.length; i++) if (OWN[i].parent === HEADSHA && OWN[i].commit !== HEADSHA) { OWN[i].files.forEach(function (f) { treeSet(f.path, f.sha); }); HEADSHA = OWN[i].commit; go = true; break; } }
+  saveTreeSoon();
+}
+/* is `head` a commit our own saves were built on, on the way to HEADSHA? (GitHub answered before our save landed) */
+function ownAfter(head) { for (var x = head, n = 0; n <= OWN.length; n++) { var nx = null; for (var i = 0; i < OWN.length; i++) if (OWN[i].parent === x) { nx = OWN[i].commit; break; } if (!nx) return false; if (nx === HEADSHA) return true; x = nx; } return false; }
+/* for screens that only read (Home, Record): each file is read and parsed once, then kept by its git id.
+   Whatever this gives back is shared: never change it (a lesson being taught uses fileJSON, which gives a fresh copy). */
+var ROJSON = new Map();
+function fileJSONro(path) { var sha = shaOf(path); if (!sha) return Promise.resolve(null); var hit = ROJSON.get(sha); if (hit) return hit;
+  if (ROJSON.size > 600) ROJSON.clear(); var p = fileJSON(path); ROJSON.set(sha, p); p.catch(function () { ROJSON.delete(sha); }); return p; }
 var inflight = {};
 /* at most 24 downloads from GitHub at a time: a first visit asks for about 80 files at once, and GitHub turns away
    an account that has more than 100 requests open */
@@ -140,6 +179,31 @@ function lessonBase(id) { return studentBase() + "lessons/" + id + "/"; }
 var saveEl = $("#save"), timers = {};
 function setSave(t, err) { saveEl.textContent = t; saveEl.className = "save" + (err ? " err" : ""); }
 function toast(t) { var el = $("#toast"); el.textContent = t; el.hidden = false; clearTimeout(timers.toast); timers.toast = setTimeout(function () { el.hidden = true; }, 3000); }
+
+/* ---------------- change only what differs ----------------
+   Speed: morph(el, html) makes el hold html by touching only the nodes that are different, so the rest of the screen
+   is not rebuilt, laid out or painted again. Nodes are matched in order (same tag, same id). An element marked
+   data-keep keeps what is inside it: that is for the parts of a screen that are filled in a moment later.
+   Use it only where nothing hangs its own listeners or canvas drawing on the nodes (Home, the Teach outline). */
+function morph(el, html) { var t = document.createElement("template"); t.innerHTML = html; morphKids(el, t.content); }
+function morphKids(a, b) {
+  var x = a.firstChild, y = b.firstChild, nx, ny;
+  while (y) { ny = y.nextSibling;
+    if (x && x.nodeType === y.nodeType && (x.nodeType !== 1 || (x.tagName === y.tagName && x.id === y.id))) {
+      if (x.nodeType === 1) morphEl(x, y); else if (x.nodeValue !== y.nodeValue) x.nodeValue = y.nodeValue;
+      x = x.nextSibling; }
+    else { a.insertBefore(y, x); if (x) { nx = x.nextSibling; a.removeChild(x); x = nx; } }
+    y = ny; }
+  while (x) { nx = x.nextSibling; a.removeChild(x); x = nx; }
+}
+function morphEl(x, y) {
+  var i, n, at = y.attributes;
+  for (i = x.attributes.length - 1; i >= 0; i--) { n = x.attributes[i].name; if (!y.hasAttribute(n)) x.removeAttribute(n); }
+  for (i = 0; i < at.length; i++) if (x.getAttribute(at[i].name) !== at[i].value) x.setAttribute(at[i].name, at[i].value);
+  if (x.tagName === "INPUT" || x.tagName === "TEXTAREA" || x.tagName === "SELECT") { if (x.value !== y.value) x.value = y.value; if (x.checked !== y.checked) x.checked = y.checked; }
+  if (x.hasAttribute("data-keep")) return;
+  morphKids(x, y);
+}
 
 /* ---------------- session model ---------------- */
 /* "skipped" = he did not attempt it; "tskip" = Ali skipped the question on purpose (not a verdict, never a mistake) */
@@ -302,21 +366,29 @@ function lessonIds(tree) {
   return Object.keys(ids).map(function (k) { return ids[k]; }).sort(function (a, b) { return b.id.localeCompare(a.id); });
 }
 var listSeq = 0;
-function lessonsView() {
+/* Home as it was last drawn today, kept on the device: the app opens on it at once (and so does coming back to Home),
+   then the real data changes only what differs. Kept per student, subject filter and day; never used on another day. */
+function homeSnapKey() { return CFG.repo + "|" + CFG.student + "|" + subjPick() + "|" + todayIso(); }
+function homeSnap() { try { var o = JSON.parse(ls("tutor.home") || "null"); return o && o.k === homeSnapKey() && typeof o.h === "string" && o.h.indexOf('class="home"') > 0 ? o.h : ""; } catch (e) { return ""; } }
+var homeSnapT = null;
+function homeSnapSoon() { clearTimeout(homeSnapT); homeSnapT = setTimeout(function () { if (route() !== "/" || !$(".home") || !HOMEALL.length) return; ls("tutor.home", JSON.stringify({ k: homeSnapKey(), h: app.innerHTML })); }, 700); }
+function lessonsView(local) {
   var seq = ++listSeq;
   function draw(tree) {
     var items = lessonIds(tree);
     return Promise.all(items.slice(0, 60).map(function (it) {
-      return Promise.all([it.script ? fileJSON(lessonBase(it.id) + "script.json") : null, it.session ? fileJSON(lessonBase(it.id) + "session.json") : null])
+      return Promise.all([it.script ? fileJSONro(lessonBase(it.id) + "script.json") : null, it.session ? fileJSONro(lessonBase(it.id) + "session.json") : null])
         .then(function (v) { it.s = v[0] && v[0].data; it.x = v[1] && norm(v[1].data); return it; }).catch(function () { return it; });
     })).then(function (items) {
       if (seq !== listSeq || route().indexOf("/lesson/") === 0 || route().indexOf("/record") === 0 || route().indexOf("/settings") === 0) return;
       HOMEALL = items; var sp = subjPick(); items = items.filter(function (it) { var sj = (it.s && it.s.subject) || (it.x && it.x.subject) || parseId(it.id).subject; return sp === "all" || sj === sp; });
-      app.innerHTML = homeHTML(items); fillHomeRevise(); fillHomeAsg(); warmUpNext(HOMEALL);
+      var html = homeHTML(items); if ($(".home")) morph(app, html); else app.innerHTML = html;   // on screen already (or its saved view): change only what differs
+      fillHomeRevise(); fillHomeAsg(); warmUpNext(HOMEALL); homeSnapSoon();
     });
   }
-  if (!$(".home")) app.innerHTML = '<div class="empty"><h3>Loading lessons</h3></div>';
+  if (!$(".home")) app.innerHTML = homeSnap() || '<div class="empty"><h3>Loading lessons</h3></div>';
   var v0 = TREEV, first = TREE && TREE.length ? loadMakeup().then(function () { return draw(TREE); }).then(function () { return true; }, function () { return false; }) : Promise.resolve(false);
+  if (local === true) return;   // a save of ours just landed: the device has everything, GitHub is not asked
   loadTree(true).then(function (tr) { return first.then(function (drawn) { if (drawn && TREEV === v0) return;   // nothing new on GitHub: the saved list is already on screen
     return loadMakeup().then(function () { return draw(tr); }); }); }).catch(function (e) { if (!TREE || !TREE.length) fail(e); else setSave("Offline", true); });
 }
@@ -479,33 +551,35 @@ function homeHTML(items) {
   /* this week's numbers */
   var mins = 0, r = 0, n = 0, logged = 0;
   items.forEach(function (it) { if (wk.indexOf(dateOf(it)) < 0 || !it.x) return; if (it.x.time && it.x.time.minutes) mins += +it.x.time.minutes; if (it.x.status === "finished") logged++; var sc = score(it.x); r += sc.r; n += sc.n; });
-  var side = '<div class="inkcard" id="homerev"><div class="k">Mistakes warm-up</div><div class="tags"><span class="tag live num" id="homerevn">…</span></div><div class="q" id="homerevq">Loading his mistakes…</div><div class="tags" id="homerevm"></div><a class="btn" href="#/revise">Start warm-up · 5 min</a></div>' +
+  var side = '<div class="inkcard" id="homerev"><div class="k">Mistakes warm-up</div><div class="tags"><span class="tag live num" id="homerevn" data-keep>…</span></div><div class="q" id="homerevq" data-keep>Loading his mistakes…</div><div class="tags" id="homerevm" data-keep></div><a class="btn" href="#/revise">Start warm-up · 5 min</a></div>' +
     '<div class="statcard"><span class="k">This week</span><div class="row base" style="gap:var(--s5)"><span><span class="big">' + Math.floor(mins / 60) + ' h ' + Math.round(mins % 60) + '</span> <span class="hint">taught</span></span><span><span class="big">' + (n ? r + "/" + n : "-") + '</span> <span class="hint">right</span></span></div>' +
     '<div class="statline"><span>Lessons logged</span><b>' + logged + '</b></div></div>';
   side += makeupCard(HOMEALL.length ? HOMEALL : items);
-  return h + askHTML(items) + '<div id="homeasg"></div><div class="home"><div><h2 class="sec" style="margin-top:0">Today</h2><div class="tiles">' + tiles + '</div>' + (rows ? '<div class="sech"><h2 class="sec">Recent lessons</h2><a class="link" href="#/record">See all in Record</a></div><div class="rows">' + rows + '</div>' : "") + '</div><div>' + side + '</div></div>';
+  return h + askHTML(items) + '<div id="homeasg" data-keep></div><div class="home"><div><h2 class="sec" style="margin-top:0">Today</h2><div class="tiles">' + tiles + '</div>' + (rows ? '<div class="sech"><h2 class="sec">Recent lessons</h2><a class="link" href="#/record">See all in Record</a></div><div class="rows">' + rows + '</div>' : "") + '</div><div>' + side + '</div></div>';
 }
 /* take-home assignments (Ali, 8 Oct: "I don't see the assignment"): a strip on the home page that leads to them in Exams */
 function fillHomeAsg() {
   var box = $("#homeasg"); if (!box || !TREE) return;
+  var none = function () { var b = $("#homeasg"); if (b && b.firstChild) { b.innerHTML = ""; homeSnapSoon(); } };
   var base = studentBase() + "assignments/";
   var paths = TREE.filter(function (t) { return t.path.indexOf(base) === 0 && /\/assignment\.json$/.test(t.path) && t.path.slice(base.length).split("/").length === 2; }).map(function (t) { return t.path; });
-  if (!paths.length) return;
-  Promise.all(paths.map(function (pth) { return fileJSON(pth).then(function (j) { return j && j.data; }, function () { return null; }); })).then(function (list) {
-    list = list.filter(function (a) { return a && a.status !== "done"; }); if (!list.length || !$("#homeasg")) return;
-    $("#homeasg").innerHTML = list.map(function (a) {
+  if (!paths.length) return none();
+  Promise.all(paths.map(function (pth) { return fileJSONro(pth).then(function (j) { return j && j.data; }, function () { return null; }); })).then(function (list) {
+    list = list.filter(function (a) { return a && a.status !== "done"; }); if (!$("#homeasg")) return; if (!list.length) return none();
+    var asgHTML = list.map(function (a) {
       var secs = a.sections || [], days = secs.reduce(function (m, x) { m[x.day] = 1; return m; }, {});
       var ttl = String(a.title || "Assignment").replace(/,\s*\d{1,2}(\s+\w+)?\s+to\s+\d{1,2}\s+\w+$/, ""), dd = secs.map(function (x) { return x.date; }).filter(Boolean).sort();
       return '<a class="asgstrip" href="#/exams">' + tag("Assignment", "ask") + '<b>' + esc(ttl) + '</b><span class="tags">' + (dd.length ? tag(esc(fmtDate(dd[0]) + " to " + fmtDate(dd[dd.length - 1]))) : "") + tag(Object.keys(days).length + " days") + tag(secs.length + " sections") + (a.status === "ready" ? tag("Not sent yet", "dash") : a.status ? tag(esc(cap(a.status))) : "") + '</span><span class="go">Open in Exams</span></a>';
     }).join("");
+    morph($("#homeasg"), asgHTML); homeSnapSoon();
   });
 }
 function fillHomeRevise() {
   var sp = subjPick();
-  loadRevise().then(function () { var box = $("#homerev"); if (!box) return; var due = dueList(sp === "all" ? null : sp); $("#homerevn").textContent = due.length + " due today";
-    if (!due.length) { $("#homerevq").textContent = "Nothing due today."; $("#homerevm").innerHTML = '<span class="hint">Each mistake comes back on day 1, 3, 7, 14 and 30.</span>'; return; }
-    var m = due[0], rv = REV.rv[m.key]; $("#homerevq").textContent = plain(m.ask || m.text || m.what || "");
-    $("#homerevm").innerHTML = (m.subject ? subjTag(m.subject) : "") + (m.topic ? tag(esc(m.topic), "line") : "") + (m.type && VTAG[m.type] ? tag(VTAG[m.type][0], VTAG[m.type][1]) : "") + tag(rv ? "Review " + (rv.box + 1) : "First review"); revBadge(); }).catch(function () { var q = $("#homerevq"); if (q) q.textContent = "Couldn’t load the mistakes list."; });
+  loadRevise().then(function () { var box = $("#homerev"); if (!box) return; var due = dueList(sp === "all" ? null : sp); var setT = function (id, t) { var e = $(id); if (e && e.textContent !== t) e.textContent = t; }; setT("#homerevn", due.length + " due today"); homeSnapSoon();
+    if (!due.length) { setT("#homerevq", "Nothing due today."); morph($("#homerevm"), '<span class="hint">Each mistake comes back on day 1, 3, 7, 14 and 30.</span>'); return; }
+    var m = due[0], rv = REV.rv[m.key]; setT("#homerevq", plain(m.ask || m.text || m.what || ""));
+    morph($("#homerevm"), (m.subject ? subjTag(m.subject) : "") + (m.topic ? tag(esc(m.topic), "line") : "") + (m.type && VTAG[m.type] ? tag(VTAG[m.type][0], VTAG[m.type][1]) : "") + tag(rv ? "Review " + (rv.box + 1) : "First review")); revBadge(); }).catch(function () { var q = $("#homerevq"); if (q) q.textContent = "Couldn’t load the mistakes list."; });
 }
 var VTAG = { right: ["\u2713 Right", "ok"], partly: ["\u00bd Partly", "partly"], wording: ["\u2248 Wording", "wording"], terminology: ["Aa Terminology", "term"], wrong: ["\u2715 Wrong", "bad"], skipped: ["\u2212 No answer", ""] };
 function revBadge() { var b = $("#revbadge"); if (!b || !REV) return; var n = dueList(null).length; b.textContent = n; b.hidden = !n; }
@@ -948,7 +1022,7 @@ document.addEventListener("click", function (ev) {
   if (t.id === "zoomx") { closeZoom(); return; }
   if (t.hasAttribute("data-seek") && false) { var fr = $('iframe[data-vid="' + t.getAttribute("data-seek") + '"]'); if (fr) { fr.src = vsrc(t.getAttribute("data-seek"), t.getAttribute("data-t"), true); fr.scrollIntoView({ block: "center", behavior: "smooth" }); } return; }
   if (t.id === "s-clear") { ls("tutor.token", null); toast("Key removed from this device"); settingsView(); return; }
-  if (t.id === "s-cache") { try { indexedDB.deleteDatabase("tutor-desk"); } catch (e) {} idbP = null; clearTimeout(treeSaveT); treeSaveT = null; ls("tutor.tree." + CFG.repo, null); ls(headKey(), null); TREE = null; toast("Cache cleared"); return; }
+  if (t.id === "s-cache") { try { indexedDB.deleteDatabase("tutor-desk"); } catch (e) {} idbP = null; dropTree(); ROJSON.clear(); ls("tutor.home", null); toast("Cache cleared"); return; }
   if (!L || route().indexOf("/lesson/") !== 0) return;
   var x = L.session;
   if (t.hasAttribute("data-tick")) { ev.preventDefault(); ev.stopPropagation(); var k = t.getAttribute("data-tick"); x.done = x.done || {}; var on = !isDone(k);
@@ -1018,7 +1092,7 @@ document.addEventListener("submit", function (ev) {
   ev.preventDefault(); var f = ev.target;
   if (f.id === "setform") { ls("tutor.token", $("#s-token").value.trim()); ls("tutor.repo", $("#s-repo").value.trim() || "alimuqaddasm/tutoring"); ls("tutor.device", $("#s-dev").value.trim() || "tablet"); ls("tutor.student", $("#s-stu").value.trim() || "UK-1");
     ls("tutor.examApi", $("#s-xapi").value.trim().replace(/\/+$/, "") || null); ls("tutor.examPw", $("#s-xpw").value || null);
-    var nf = $("#s-font").value; if (nf !== (ls("tutor.font") || "jakarta")) { ls("tutor.font", nf); location.reload(); return; } TREE = null; nav(route()); testConnection().then(function () { if ($("#s-msg") && /\bok\b/.test($("#s-msg").className)) setTimeout(function () { location.hash = "#/"; }, 900); }); return; }
+    var nf = $("#s-font").value; if (nf !== (ls("tutor.font") || "jakarta")) { ls("tutor.font", nf); location.reload(); return; } TREE = null; HEADSHA = ""; OWN = []; ROJSON.clear(); nav(route()); testConnection().then(function () { if ($("#s-msg") && /\bok\b/.test($("#s-msg").className)) setTimeout(function () { location.hash = "#/"; }, 900); }); return; }
   if (f.id === "newform") { var id = $("#n-date").value + "-" + $("#n-subj").value;
     /* a lesson (with a script) already lives under this date and subject: open it, or log a separate one beside it */
     var taken = function (k) { return ls(localKey(k)) || (TREE && TREE.some(function (t) { return t.path.indexOf(lessonBase(k)) === 0; })); };
@@ -1157,7 +1231,7 @@ function recordView() {
   function draw(tree) {
     var ids = lessonIds(tree).filter(function (i) { return i.session; });
     return Promise.all([fileText(sb + "mistakes.jsonl"), fileText(sb + "tests.jsonl"), fileText(sb + "profile.md"), loadMakeup()].concat(ids.map(function (i) {
-      return Promise.all([fileJSON(lessonBase(i.id) + "session.json"), i.script ? fileJSON(lessonBase(i.id) + "script.json").catch(function () { return null; }) : null]).then(function (d) { i.x = d[0] && norm(d[0].data); i.s = d[1] && d[1].data; return i; }, function () { return i; }); })))
+      return Promise.all([fileJSONro(lessonBase(i.id) + "session.json"), i.script ? fileJSONro(lessonBase(i.id) + "script.json").catch(function () { return null; }) : null]).then(function (d) { i.x = d[0] && norm(d[0].data); i.s = d[1] && d[1].data; return i; }, function () { return i; }); })))
       .then(function (v) {
         if (route().indexOf("/record") !== 0) return;
         function jl(r) { return r ? r.text.split(/\n/).filter(function (l) { return l.trim(); }).map(function (l) { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean) : []; }
@@ -1195,8 +1269,9 @@ function recordView() {
       });
   }
   app.innerHTML = '<div class="wrap record">' + head() + '<div class="empty"><b class="t-card">Loading his record</b></div></div>';
-  if (TREE && TREE.length) draw(TREE).catch(function (e) { if (route().indexOf("/record") === 0) fail(e); });
-  loadTree(true).then(draw).catch(function (e) { if (!TREE || !TREE.length) fail(e); });
+  var v0 = TREEV, first = TREE && TREE.length ? draw(TREE).then(function () { return true; }, function (e) { if (route().indexOf("/record") === 0) fail(e); return false; }) : Promise.resolve(false);
+  loadTree(true).then(function (tr) { return first.then(function (drawn) { if (drawn && TREEV === v0) return;   // nothing new on GitHub: the saved list is already on screen
+    return draw(tr); }); }).catch(function (e) { if (!TREE || !TREE.length) fail(e); });
 }
 document.addEventListener("click", function (e) { var R = recordView.REC; if (!R || !e.target.closest) return;
   var b = e.target.closest("[data-recsj]"); if (b) { R.sj = b.getAttribute("data-recsj"); $$("[data-recsj]").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); }); R.list(); return; }
@@ -1318,6 +1393,9 @@ document.addEventListener("click", function (e) { var t = e.target.closest("butt
   revState.open = false; drawRevise(); }, true);
 
 /* ---------------- install as an app ---------------- */
+/* ask the browser to keep this app's saved lessons and pictures for good: without this it may clear them when the device
+   runs low on space, and everything is then downloaded again (Chrome and Edge decide by themselves, with no question) */
+try { if (CFG.token && navigator.storage && navigator.storage.persist && !/firefox/i.test(navigator.userAgent)) navigator.storage.persisted().then(function (p) { if (!p) return navigator.storage.persist(); }).catch(function () {}); } catch (e) {}
 if ("serviceWorker" in navigator && location.protocol === "https:") { window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(function (reg) {
   // look for a newer version each time the app comes back to the screen
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") reg.update().catch(function () {}); });
@@ -1738,6 +1816,15 @@ document.addEventListener("click", function (e) { var t = e.target.closest && e.
     LINES[L.id + "|" + c.bd.id] = ln; BANIM = c.bd.id; if (!PREP && ln >= 1) showBoard(c, ln); drawTeach(); };
   if (bdSteps(c) != null) go(); else Promise.all(c.bd.imgs.map(function (p) { return fileURL(/^(students|books|boards)\//.test(p) ? p : lessonBase(L.id) + p); }))
     .then(function (us) { return Board.analyse(bdKey(c.bd), us, c.bd.mode, c.bd.box); }).then(go).catch(function () { toast("Couldn\u2019t load the answer picture"); }); });
+/* Speed: a board is cut into its pieces by reading its pictures, and that takes a moment the first time. The board on
+   the next step or two is read while he is still on this one (when the tablet has nothing else to do), so it opens at once. */
+var warmB = {};
+function warmBoards(chunks) { if (!window.Board) return;
+  chunks.forEach(function (c) { var bd = c && c.bd; if (!bd || !bd.imgs || !bd.imgs.length) return; var key = bdKey(bd); if (warmB[key] || Board.info(key)) return; warmB[key] = 1;
+    var id = L.id, run = function () { if (!L || L.id !== id || Board.info(key)) return;
+      Promise.all(bd.imgs.map(function (p) { return fileURL(/^(students|books|boards)\//.test(p) ? p : lessonBase(id) + p); }))
+        .then(function (us) { if (us.every(Boolean)) return Board.analyse(key, us, bd.mode, bd.box); }).catch(function () { delete warmB[key]; }); };
+    if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 3000 }); else setTimeout(run, 500); }); }
 /* a canvas for a board, with its step labels beside it; boardMount() draws it once the pictures are in */
 function boardCanvas(bd, step, ghost) { return '<div class="bwrap' + (bd.whys && bd.whys.some(Boolean) ? " has-why" : "") + '"><div class="bcvbox"><canvas class="bcv" data-bd="' + esc(JSON.stringify(bd)) + '" data-bstep="' + step + '"' + (ghost ? ' data-bghost="1"' : "") + ' role="img" aria-label="' + (bd.mode === "lines" ? "Hint lines" : "Board") + '"></canvas><div class="ph">Loading board</div></div><div class="bwhy" aria-live="polite"></div></div>'; }
 function boardMount(root, anim) { $$("canvas.bcv", root).forEach(function (cv) { var bd = JSON.parse(cv.getAttribute("data-bd")), step = +cv.getAttribute("data-bstep"), ghost = cv.hasAttribute("data-bghost");
@@ -1819,7 +1906,7 @@ function drawTeach() {
   if (c.p) L.phase = c.p.id;
   var pk = c.p ? kindOf(c.p.name) : "", reals = phases().filter(function (p) { return !p.sys && kindOf(p.name) !== "Bank" && kindOf(p.name) !== "Recycle"; });
   var inPart = c.p ? TCH.seq.filter(function (q) { return q.p === c.p; }) : [], pf = inPart.length ? Math.round(100 * (inPart.indexOf(c) + 1) / inPart.length) : 0;
-  var h = '<div class="teach3">' + runwayHTML(c) + '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
+  var rw = runwayHTML(c), h = '<section class="stage"><div class="tbar"><div class="tbar-row"><div class="tcrumb">' +
     '<button class="btn sm outl" type="button" id="toc" aria-label="Outline">☰<span class="olab"> Outline</span></button>' + (PREP ? '<a class="btn sm quiet back" href="#/">Lessons</a>' : '<a class="btn sm quiet back" href="#/lesson/' + encodeURIComponent(L.id) + '" title="Prepare: the same screens, nothing recorded">Prepare</a>') + '' + (pk ? tag(esc(pk), pk === "If time" ? "dash" : "line") : "") + '<b>' + esc(c.p ? (partTitle(c.p.name)) : "End") + '</b>' + (c.mod ? '<span class="hint">· ' + esc(c.mod) + '</span>' : "") + '</div>' +
     '<div class="tmini"><span class="tmore"><button class="btn sm" type="button" data-tmore aria-expanded="false" aria-label="More: warm-up, suggest a change, try-out">⋯<span class="tdot" id="wudot" hidden></span></button>' +
       '<div class="tmenu" hidden>' + (PREP ? '<a class="btn sm pri" href="#/lesson/' + encodeURIComponent(L.id) + '/teach">Teach this lesson</a>' : "") + '<button class="btn sm" type="button" data-store>Add from the Store</button>' + (PREP ? "" : '<button class="btn sm" type="button" data-cvp>Canvas</button>') + '<button class="btn sm" type="button" data-warmup>Warm-up<span class="badge" id="wudue" hidden></span></button><button class="btn sm" type="button" data-suggest>Suggest a change</button><button class="btn sm trytoggle" type="button" data-trytoggle>' + (TRY ? "Leave try-out" : "Try-out") + '</button>' + LPAGES.map(function (q) { return '<button class="btn sm" type="button" data-phase="' + q[0] + '" data-real="">' + q[1] + '</button>'; }).join("") + '</div></span>' +
@@ -1838,9 +1925,15 @@ function drawTeach() {
   if (!flowQuick()) for (var i = start; i < TCH.pos; i++) h += pastLine(TCH.seq[i], i);
   h += '<div class="chunk cur t-' + c.t + (stateOf(c) === "done" ? " done" : "") + '" data-tk="' + esc(chunkKey(c) || "") + '">' + stripHTML(c) + chunkHTML(c) + '</div>';
   var nx = TCH.seq[TCH.pos + 1];
-  h += '</div>' + (nx ? '<button type="button" class="upnext" data-tjump="' + (TCH.pos + 1) + '"><b class="lab">Up next</b><span>' + esc(shortOf(nx, 130)) + '</span></button>' : "") + '</div>' + footHTML(c, lv) + '</section></div>';
-  app.innerHTML = h; fillRows(app); loadImages(app); boardMount(app, !!BANIM); BANIM = null; maths(app); tick(); pingStudent();
-  window.scrollTo(0, 0); fitBoards(); fitBoard(); applyFit(); warmCount(); prefetchLesson(); prefetchAhead(TCH.seq.slice(TCH.pos + 1, TCH.pos + 5));
+  h += '</div>' + (nx ? '<button type="button" class="upnext" data-tjump="' + (TCH.pos + 1) + '"><b class="lab">Up next</b><span>' + esc(shortOf(nx, 130)) + '</span></button>' : "") + '</div>' + footHTML(c, lv) + '</section>';
+  /* Speed: the outline is the longest part of the screen and barely changes from one step to the next, so it stays where
+     it is and only its changed lines are touched. The stage (top bar, the step, the buttons) is built new each time. */
+  var t3 = app.firstElementChild, keepRw = t3 && !t3.nextElementSibling && t3.className === "teach3" && t3.children.length === 2 && t3.children[0].tagName === "ASIDE" && t3.children[1].tagName === "SECTION";
+  if (keepRw && runwaySync(t3.children[0])) { t3.children[1].outerHTML = h;
+    if (document.activeElement && t3.children[0].contains(document.activeElement)) document.activeElement.blur(); }   // as before: a tapped outline line does not keep the keyboard
+  else { app.innerHTML = '<div class="teach3">' + rw + h + '</div>'; app.firstElementChild.firstElementChild.__rw = RWNEW; }
+  fillRows(app); loadImages(app); boardMount(app, !!BANIM); BANIM = null; maths(app); tick(); pingStudent();
+  window.scrollTo(0, 0); fitBoards(); fitBoard(); applyFit(); warmCount(); prefetchLesson(); prefetchAhead(TCH.seq.slice(TCH.pos + 1, TCH.pos + 5)); warmBoards(TCH.seq.slice(TCH.pos + 1, TCH.pos + 3));
   if (fgo) { var fb = $('.tfoot [data-tgo="' + fgo + '"]') || $(".tfoot .btn.next") || $(".tfoot .btn"); if (fb && !fb.disabled) fb.focus({ preventScroll: true }); }
   /* move only the outline's own scroll box: scrollIntoView also scrolled the page down (Ali, 2 Oct) */
   var ol = $(".outline"), oc = $(".outline .cur"); if (ol && oc && ol.clientHeight) ol.scrollTop += oc.getBoundingClientRect().top - ol.getBoundingClientRect().top - ol.clientHeight / 2 + oc.offsetHeight / 2;
@@ -1894,11 +1987,24 @@ function runwayHTML(c) {
     var pj = flowQuick() ? seqIndex(function (q) { return q.p === p; }) : seqIndex(function (q) { return q.t === "phase" && q.p === p; });
     return '<details class="opart' + (i < ci ? " past" : i === ci ? " now" : "") + '" data-pid="' + esc(p.id) + '"' + (open ? " open" : "") + '><summary>' + (kindOf(p.name) ? '<span class="kinds"><span class="k">' + esc(kindOf(p.name)) + '</span></span>' : "") + '<span class="nm">' + esc(partTitle(p.name)) + '</span>' + (sub ? '<span class="sub">' + esc(sub) + '</span>' : "") + '</summary>' +
       '<button type="button" class="oc go' + (TCH.pos === pj ? " cur" : "") + '" data-tjump="' + pj + '"><span class="ic">▸</span><span class="tx">Start of this part</span></button>' + rows + '</details>';
-  }).join("");
+  });
   var subj = s.subject || x.subject, pd = parseId(L.id);
-  return '<aside class="runway" aria-label="Lesson outline"><div class="rhead">' + (PREP ? '<a class="back" href="#/">← Lessons</a>' : '<a class="back" href="#/lesson/' + encodeURIComponent(L.id) + '">← Prepare</a>') + '<button class="btn small outl" type="button" id="tocx">Close</button></div>' +
+  var head = '<div class="rhead">' + (PREP ? '<a class="back" href="#/">← Lessons</a>' : '<a class="back" href="#/lesson/' + encodeURIComponent(L.id) + '">← Prepare</a>') + '<button class="btn small outl" type="button" id="tocx">Close</button></div>' +
     '<div class="tags">' + subjTag(subj) + tag(esc(fmtDate(s.date || x.date || pd.date))) + lessonTags(s, x) + '</div><div class="ttl">' + esc(lessonTitle(s, x)) + '</div>' +
-    bar + '<div class="onclock" id="onclock" hidden><span id="onclockt"></span></div><nav class="outline">' + parts + '</nav></aside>';
+    bar + '<div class="onclock" id="onclock" hidden><span id="onclockt"></span></div>';
+  RWNEW = { head: head, parts: parts };   // the pieces, for drawTeach: a part whose text did not change is left alone
+  return '<aside class="runway" aria-label="Lesson outline">' + head + '<nav class="outline">' + parts.join("") + '</nav></aside>';
+}
+/* put the outline just built (RWNEW) into the outline on screen, touching only the pieces whose text changed since this
+   outline was last drawn. False when the two do not line up: the caller then builds the whole screen new. */
+var RWNEW = null;
+function runwaySync(aside) {
+  var was = aside.__rw, now = RWNEW, nav = aside.lastElementChild, tpl = document.createElement("template");
+  if (!was || !now || !nav || nav.tagName !== "NAV" || nav.children.length !== was.parts.length || was.parts.length !== now.parts.length) return false;
+  if (was.head !== now.head) { tpl.innerHTML = now.head; var hs = tpl.content.children, n = hs.length; if (aside.children.length !== n + 1) return false;
+    for (var i = n - 1; i >= 0; i--) { var live = aside.children[i], want = hs[i]; if (live.tagName !== want.tagName || live.id !== want.id) return false; morphEl(live, want); } }
+  for (var k = 0; k < now.parts.length; k++) if (was.parts[k] !== now.parts[k]) { tpl.innerHTML = now.parts[k]; var d = tpl.content.firstElementChild, cur = nav.children[k]; if (!d || cur.tagName !== d.tagName) return false; morphEl(cur, d); }
+  aside.__rw = now; return true;
 }
 /* a board or picture fills the space between the top bar and the buttons: no scrolling to see the bottom */
 /* question screens without scrolling: Flip is the one layout (Ali, 8 Oct: Classic, Side panel and Floating card removed) */
@@ -1972,7 +2078,7 @@ function redrawBoard() { var c = TCH.seq[TCH.pos], cur = $(".chunk.cur"); if (!c
   fitBoard(); var bd = $(".chunk.cur .board"); if (bd && y) bd.scrollTop = y; var o = $(".chunk.cur .brow.open"); if (o && o.scrollIntoView) o.scrollIntoView({ block: "nearest" }); }
 document.addEventListener("click", function (e) { var t = e.target.closest && e.target.closest("[data-vmore]"); if (!t) return; var st = t.closest(".vstrip"), on = !st.classList.contains("more"); st.classList.toggle("more", on); t.setAttribute("aria-expanded", String(on)); fitQ(); });
 function fitQ() { var cur = $(".chunk.cur.fit"), foot = $(".tfoot"); if (!cur || !foot) return;
-  var fh = foot.getBoundingClientRect().height; document.documentElement.style.setProperty("--footh", fh + "px");
+  var fh = foot.getBoundingClientRect().height; if (fitQ.fh !== fh) { fitQ.fh = fh; document.documentElement.style.setProperty("--footh", fh + "px"); }   // only when it changed: setting it restyles the whole page
   var room = Math.max(300, window.innerHeight - cur.getBoundingClientRect().top - fh - 22); cur.style.height = room + "px";
   var left = cur.classList.contains("flipped") ? cur.querySelector(".fita") : cur.querySelector(".fitq"), ims = $$(".fig img", left).filter(function (i) { return !i.hidden; });
   var front = !cur.classList.contains("flipped") && $(".ansfront", left), more = front && $(".ansmore", left);
@@ -2878,7 +2984,8 @@ function sugSend() { if (sugBusy || !navigator.onLine) return; var q = []; try {
   sugBusy = true;
   function attempt(n) { return gh("/repos/" + CFG.repo + "/contents/" + enc(SUGFILE), { allowTry: true }).then(function (r) {
       var cur = r.status === 404 ? "" : new TextDecoder().decode(b64bytes(r.json.content)), sha = r.status === 404 ? null : r.json.sha;
-      return gh("/repos/" + CFG.repo + "/contents/" + enc(SUGFILE), { method: "PUT", allowTry: true, body: { message: "UI suggestion (" + CFG.device + ")", content: b64enc(cur.replace(/\s*$/, cur ? "\n" : "") + q.map(function (i) { return JSON.stringify(i); }).join("\n") + "\n"), sha: sha || undefined } }); })
+      return gh("/repos/" + CFG.repo + "/contents/" + enc(SUGFILE), { method: "PUT", allowTry: true, body: { message: "UI suggestion (" + CFG.device + ")", content: b64enc(cur.replace(/\s*$/, cur ? "\n" : "") + q.map(function (i) { return JSON.stringify(i); }).join("\n") + "\n"), sha: sha || undefined } })
+        .then(function (w) { var c = (w.json && w.json.commit) || {}; if (w.json && w.json.content) ownSave([{ path: SUGFILE, sha: w.json.content.sha }], c.sha, c.parents && c.parents[0] && c.parents[0].sha); return w; }); })
     .catch(function (e) { if (n < 2 && (e.status === 409 || e.status === 422)) return attempt(n + 1); throw e; }); }
   attempt(0).then(function () { var left = []; try { left = JSON.parse(ls(SUGQ_KEY) || "[]"); } catch (e) {} var ids = q.map(function (i) { return i.id; });
       ls(SUGQ_KEY, JSON.stringify(left.filter(function (i) { return ids.indexOf(i.id) < 0; }))); sugBusy = false; toast(q.length > 1 ? q.length + " suggestions saved. They will be read with the next app changes." : "Suggestion saved. It will be read with the next app changes."); sugSend(); })
