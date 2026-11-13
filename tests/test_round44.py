@@ -43,7 +43,8 @@ try:
         # 1. the list once, then only the commit id
         p.goto(B + "#/"); p.wait_for_selector(".home", timeout=60000); p.wait_for_timeout(1500)
         ok("first visit downloads the file list once", trees() == 1, trees())
-        ok("the commit id is kept on the device", p.evaluate("/^[0-9a-f]{40}$/.test(localStorage.getItem('tutor.head.alimuqaddasm/tutoring')||'')"))
+        # since 13 Nov (round 45) the list and its commit id are kept as one item, tutor.ft.<repo> = {h, t}
+        ok("the commit id is kept on the device", p.evaluate("(() => { const o = JSON.parse(localStorage.getItem('tutor.ft.alimuqaddasm/tutoring') || 'null'); return !!o && /^[0-9a-f]{40}$/.test(o.h || ''); })()"))
         fake.log.clear(); p.reload(); p.wait_for_selector(".home", timeout=60000); p.wait_for_timeout(1500)
         ok("reload: asks for the commit id", heads() >= 1, heads())
         ok("reload: does not download the file list again", trees() == 0, trees())
@@ -110,8 +111,9 @@ try:
         if not up:
             print("SKIP Exams checks (no exam server on :8787)")
         else:
-            srv2 = http.server.ThreadingHTTPServer(("127.0.0.1", 8765), H) if not os.environ.get("APP_UP") else None
-            if srv2: threading.Thread(target=srv2.serve_forever, daemon=True).start()
+            srv2 = None
+            try: srv2 = http.server.ThreadingHTTPServer(("127.0.0.1", 8765), H); threading.Thread(target=srv2.serve_forever, daemon=True).start()
+            except OSError: pass                                   # the app is already being served there
             A = "http://localhost:8765/"
             c = b.new_context(viewport={"width": 1280, "height": 860}, service_workers="block")
             c.add_init_script("localStorage.setItem('tutor.token','fake-token');localStorage.setItem('tutor.device','speed');localStorage.setItem('tutor.examApi',%s);localStorage.setItem('tutor.examPw',%s);" % (json.dumps(API), json.dumps(PW)))

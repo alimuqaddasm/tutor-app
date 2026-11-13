@@ -35,6 +35,8 @@ sign in with the GitHub CLI's token (`gh auth token`), read the real data repo, 
     python tests/test_round41.py                    # round 41 (21 Oct): the warm-up deck on his assignment link: 15 cards, right or wrong after the last, his tries saved (21 checks; needs the local exam server)
     python tests/runtest.py tests/test_round42.py   # round 42 (21 Oct): warm-up card review in Exams: filter, edit, approve, reject, Save to tutoring repo, Send to his deck, his tries on each card (17 checks; needs the local exam server)
     python tests/runtest.py tests/test_round44.py   # round 44 (11 Nov, app v74, exams v32): speed: the file list is downloaded only when GitHub changed, home drawn once, cleaned text remembered in Teach, the offline shell serves versioned files from the saved copy, Exams screens show from the copy kept on the device (22 checks; own server on :8766; the 6 Exams checks need the local exam server and are skipped without it)
+    python tests/runtest.py tests/test_round45.py   # round 45 (13 Nov, app v75, exams v33): the second speed pass: nothing is downloaded back after a save, Home opens from the view kept on the device and changes only what differs, the Teach outline stays on screen and always matches a new build, Record drawn once, morph(), one trip for an exam button (56 checks; own server on :8766; the 14 Exams checks need the local exam server and are skipped without it)
+    cd worker && npx vitest run test/full.test.js   # ?full=1: the exam comes back with the answer to a change (7 tests)
     cd worker && npx vitest run test/warmup.test.js # the deck and the phone push on the exam server (8 tests)
 
 Screenshots go to ./v4shots and ./v3shots (create them first) and tests/shots.
@@ -84,3 +86,10 @@ Run on Linux: start the app yourself (`python -m http.server 8765` in this folde
 
 `test_round17.py` (18 checks) and `test_tryout.py` (13 checks) were brought up to date with the redesigned Teach page on 11 Nov 2026.
 `test_exams_tryout.py` had two checks written for the old Exams screens (the list shows the short title; a look-only exam has no boxes to type in). Fixed 11 Nov 2026 (26 checks; needs the local exam server).
+
+Known to fail on `main` (13 Nov 2026: all 52 browser test files were run for the first time in one go; these 12 fail the
+same way on `main` and after the round 45 speed work, with the same pass and fail counts). They were written for screens
+that have since changed and need bringing up to date, like round 17 and try-out were:
+`test_batch1_lessons.py`, `test_paper_5oct.py`, `test_quickflow.py`, `test_round11.py`, `test_round16.py`, `test_round18.py`,
+`test_round19.py`, `test_slider_5oct.py`, `test_suggestions_1oct.py`, `test_topbar_5oct.py`, `test_video_v37.py`, `test_vrail_5oct.py`.
+(`test_teach.py` and `stress.py` print values and have no PASS or FAIL lines.)

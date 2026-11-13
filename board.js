@@ -10,6 +10,7 @@
 var Board = (function () {
   var CACHE = {}, DONE = {}, SCALE = 480; // analyse at about 480 px wide: quick, and plenty for finding lines
   function load(url) { return new Promise(function (ok, no) { var im = new Image(); im.onload = function () { ok(im); }; im.onerror = no; im.src = url; }); }
+  function unpack(im) { return im.decode ? im.decode().then(function () { return im; }, function () { return im; }) : Promise.resolve(im); }
   function pix(im, w, h) { var c = document.createElement("canvas"); c.width = w; c.height = h; var x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(im, 0, 0, w, h); return x.getImageData(0, 0, w, h).data; }
   function lum(d, i) { return (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000; }
   /* new ink: written in b where a was still blank (a line turning from blue to black is not new) */
@@ -58,10 +59,17 @@ var Board = (function () {
     var c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(im, x, y, w, h, 0, 0, w, h); return c; }
   function analyse(key, urls, mode, bx) {
     if (CACHE[key]) return CACHE[key];
-    return (CACHE[key] = Promise.all(urls.map(load)).then(function (ims) {
-      ims = ims.map(function (im) { return crop(im, bx); });
-      var W = ims[0].naturalWidth || ims[0].width, H = ims[0].naturalHeight || ims[0].height, s = Math.min(1, SCALE / W), w = Math.max(1, Math.round(W * s)), h = Math.max(1, Math.round(H * s));
-      var px = ims.map(function (im) { return pix(im, w, h); }), bg = lum(px[0], 0), c0 = px[0], steps = [], groups = [], cut = null;
+    return (CACHE[key] = Promise.all(urls.map(load)).then(function (raw) {
+      /* Speed: one picture at a time. It is unpacked away from the screen's own thread, and its pixels are read at once,
+         while it is still unpacked; between two pictures the page can answer a tap. (All in one go froze the screen for
+         a second or two on a tablet when a board had ten pictures.) The pixels read are the same as before. */
+      var ims = [], px = [], W, H, s, w, h, i = 0;
+      function next() { if (i >= raw.length) return null;
+        return unpack(raw[i]).then(function (im) { im = crop(im, bx);
+          if (!i) { W = im.naturalWidth || im.width; H = im.naturalHeight || im.height; s = Math.min(1, SCALE / W); w = Math.max(1, Math.round(W * s)); h = Math.max(1, Math.round(H * s)); }
+          ims.push(im); px.push(pix(im, w, h)); i++; return next(); }); }
+      return Promise.resolve(next()).then(function () {
+      var bg = lum(px[0], 0), c0 = px[0], steps = [], groups = [], cut = null;
       var S = function (r) { return scaleR(r, s, W, H); };
       if (mode === "lines") {
         var m = mask(null, px[0], w, h, bg); steps.push({ base: -2, rects: [], group: -1 });
@@ -83,6 +91,7 @@ var Board = (function () {
           R.forEach(function (_, j) { steps.push({ base: k ? k - 1 : -1, from: k, rects: R.slice(0, j + 1), group: k, full: j === R.length - 1 }); }); }
       }
       return { ims: ims, W: W, H: H, steps: steps, groups: groups, cut: cut, mode: mode || "grow", bg: "rgb(" + c0[0] + "," + c0[1] + "," + c0[2] + ")" };
+      });
     }).then(function (b) { DONE[key] = b; return b; }));
   }
   var RM = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;

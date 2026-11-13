@@ -60,8 +60,20 @@ function picUrl(path) { if (blobs[path]) return Promise.resolve(blobs[path]);
   return (keep ? T.cget("x:" + path) : Promise.resolve(null)).then(function (hit) {
     if (hit) return (blobs[path] = URL.createObjectURL(hit));
     return call("GET", path).then(function (b) { if (keep && b && b.size) T.cput("x:" + path, b); return (blobs[path] = URL.createObjectURL(b)); }); }); }
-function loadPic(im) { picUrl(im.getAttribute("data-xsrc")).then(function (u) { im.src = u; }, function () { im.alt = "Picture could not load"; }); }
-function showPics(root) { $$("img[data-xsrc]", root).forEach(loadPic); }
+function loadPic(im) { if (im.__busy || im.src) return Promise.resolve(); im.__busy = 1;
+  return picUrl(im.getAttribute("data-xsrc")).then(function (u) { im.src = u; }, function () { im.alt = "Picture could not load"; im.__busy = 0; }); }
+/* Speed (13 Nov): a marking page can hold twenty of his photos, and they all share one line to a far-away server. The
+   ones on screen (and just below) are fetched first; the rest follow two at a time, so the first question's pictures
+   do not wait behind all the others. A page with only a few pictures fetches them all at once, as before. */
+var picIO = null, picQ = [], picRun = 0;
+function picPump() { while (picRun < 2 && picQ.length) { var im = picQ.shift(); if (im.src || im.__busy || !im.isConnected) continue; picRun++; loadPic(im).then(function () { picRun--; picPump(); }); } }
+function showPics(root) {
+  var ims = $$("img[data-xsrc]", root).filter(function (im) { return !im.src && !im.__busy && !im.__seen; });
+  if (!window.IntersectionObserver || ims.length <= 4) { ims.forEach(loadPic); return; }
+  if (!picIO) picIO = new IntersectionObserver(function (es) { es.forEach(function (e) { if (!e.isIntersecting) return; picIO.unobserve(e.target); loadPic(e.target); }); }, { rootMargin: "700px 0px" });
+  ims.forEach(function (im) { im.__seen = 1; picIO.observe(im); picQ.push(im); });
+  setTimeout(picPump, 900);
+}
 function showRepoPics(root) { $$("img[data-rsrc]", root).forEach(function (im) { T.fileURL(im.getAttribute("data-rsrc")).then(function (u) { if (u) im.src = u; else im.alt = "Not in the repo"; }); }); }
 
 /* "4:32 pm" */
@@ -471,7 +483,8 @@ function examLiveMark() { if (!X || isAsg(X)) return; var on = X.startedAt && (X
   if (on) T.ls("tutor.examlive", JSON.stringify({ id: X.id, subject: X.subject === "chemistry" ? "chem" : X.subject, startedAt: X.startedAt, endAt: X.endAt }));
   else if (cur && cur.id === X.id) T.ls("tutor.examlive", JSON.stringify(Object.assign(cur, { doneAt: Date.now() }))); }
 function act(path, body, okMsg) {
-  return call("POST", "/api/t/exams/" + X.id + path, body).then(function (r) { if (okMsg) T.toast(okMsg); return call("GET", "/api/t/exams/" + X.id).then(function (full) { X = full; offset = full.serverNow - Date.now(); keepExam(); drawExam(); poll(); return r; }); })
+  // ?full=1: the exam server sends the exam as it now is with its answer, so a button costs one trip, not two (a server from before 13 Nov is asked the old way)
+  return call("POST", "/api/t/exams/" + X.id + path + "?full=1", body).then(function (r) { if (okMsg) T.toast(okMsg); var id = X.id; return (r && r.exam && r.exam.id === id ? Promise.resolve(r.exam) : call("GET", "/api/t/exams/" + id)).then(function (full) { X = full; offset = full.serverNow - Date.now(); keepExam(); drawExam(); poll(); return r; }); })
     .catch(function (e) { T.toast(e.message); });
 }
 
@@ -483,7 +496,7 @@ function saveSetup() {
   var body = { questions: qs, ratio: ratioNow() };
   var dur = Number($("#xt-dur") && $("#xt-dur").value); if (dur > 0) body.base_minutes = dur;
   $("#xt-msg").textContent = "Saving…";
-  return call("PUT", "/api/t/exams/" + X.id, body).then(function () { return call("GET", "/api/t/exams/" + X.id); }).then(function (full) { X = full; keepExam(); drawExam(); T.toast("Saved"); })
+  return call("PUT", "/api/t/exams/" + X.id + "?full=1", body).then(function (r) { return r && r.exam && r.exam.id === X.id ? r.exam : call("GET", "/api/t/exams/" + X.id); }).then(function (full) { X = full; keepExam(); drawExam(); T.toast("Saved"); })
     .catch(function (e) { $("#xt-msg").textContent = e.message; });
 }
 
