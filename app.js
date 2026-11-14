@@ -218,7 +218,8 @@ function newSession(id, script) {
     status: "not-started", time: { log: [], edit: {}, started: null, ended: null, minutes: null, phaseMinutes: {} }, answers: {}, extra: [], work: [], feedback: {}, devices: [], updated: null };
 }
 var PREVIEW_FIX = "2026-10-01T12:00:00Z";
-function norm(s) { if (s && s.done && !((s.time && s.time.log) || []).some(function (e) { return e.e === "start"; })) Object.keys(s.done).forEach(function (k) { var d = s.done[k]; if (d && !d.off && String(d.at) < PREVIEW_FIX) s.done[k] = { off: true, at: PREVIEW_FIX, label: d.label }; }); s.time = s.time || {}; s.time.log = s.time.log || []; s.time.edit = s.time.edit || {}; s.answers = s.answers || {}; s.extra = s.extra || []; s.work = s.work || []; s.feedback = s.feedback || {}; s.devices = s.devices || []; s.done = s.done || {};
+function norm(s) { if (s && s.done && !(s.time && Array.isArray(s.time.log) ? s.time.log : []).some(function (e) { return e.e === "start"; })) Object.keys(s.done).forEach(function (k) { var d = s.done[k]; if (d && !d.off && String(d.at) < PREVIEW_FIX) s.done[k] = { off: true, at: PREVIEW_FIX, label: d.label }; }); var arr = function (v) { return Array.isArray(v) ? v : []; }, obj = function (v) { return v && typeof v === "object" && !Array.isArray(v) ? v : {}; };   // a file written by hand with {} where a list belongs must not break Home
+  s.time = obj(s.time); s.time.log = arr(s.time.log); s.time.edit = obj(s.time.edit); s.answers = obj(s.answers); s.extra = arr(s.extra); s.work = arr(s.work); s.feedback = obj(s.feedback); s.devices = arr(s.devices); s.done = obj(s.done);
   if (s.time.manual && !Object.keys(s.time.edit).length) { s.time.edit = { started: s.time.started, ended: s.time.ended }; delete s.time.manual; } return s; }
 /* the lesson was ended with End lesson (its last clock event is "end") */
 function endedLog(log) { var l = log || []; return !!l.length && l[l.length - 1].e === "end"; }
@@ -391,7 +392,7 @@ function lessonsView(local) {
   var v0 = TREEV, first = TREE && TREE.length ? loadMakeup().then(function () { return draw(TREE); }).then(function () { return true; }, function () { return false; }) : Promise.resolve(false);
   if (local === true) return;   // a save of ours just landed: the device has everything, GitHub is not asked
   loadTree(true).then(function (tr) { return first.then(function (drawn) { if (drawn && TREEV === v0) return;   // nothing new on GitHub: the saved list is already on screen
-    return loadMakeup().then(function () { return draw(tr); }); }); }).catch(function (e) { if (!TREE || !TREE.length) fail(e); else setSave("Offline", true); });
+    return loadMakeup().then(function () { return draw(tr); }); }); }).catch(function (e) { if (!TREE || !TREE.length) fail(e); else { if (window.console) console.error(e); setSave(navigator.onLine && !(e instanceof TypeError && /fetch|network/i.test(e.message)) ? "Couldn’t show the newest: " + (e && e.message || e) : "Offline", true); } });   // a drawing fault is not "Offline"
 }
 function card(it) {
   var p = parseId(it.id), s = it.s || {}, x = it.x || null, subj = s.subject || (x && x.subject) || p.subject;
