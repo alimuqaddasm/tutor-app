@@ -1695,7 +1695,7 @@ function asked_(v) { return !!v && v !== "tskip"; }
 function conceptHTML(c) {
   var pts = c.steps.map(function (st) { var kd = st.it.kind || "do"; return '<li class="cp k-' + esc(kd) + '"><span class="ck" aria-hidden="true">' + esc(KIC[kd] || "\u2192") + '</span><div><div class="prose">' + clean(st.it.html) + '</div>' + warmBtn(st) + '</div></li>'; }).join("");
   var figs = c.figs.map(function (f) { return '<figure class="tfig">' + img(f.b.img, plain(f.b.caption) || "Picture") + (f.b.caption ? '<figcaption>' + clean(f.b.caption) + '</figcaption>' : "") + '</figure>'; }).join("");
-  return '<div class="concept' + (figs ? " withfig" : "") + '">' + (pts ? '<ul class="cpts">' + pts + '</ul>' : "") + (figs ? '<div class="cfigs">' + figs + '</div>' : "") + '</div>'; }
+  return '<div class="concept' + (figs && pts ? " withfig" : "") + '">' + (pts ? '<ul class="cpts">' + pts + '</ul>' : "") + (figs ? '<div class="cfigs">' + figs + '</div>' : "") + '</div>'; }
 /* the thin strip above a quick-flow screen: part and time, notes behind an i, the book pages as a row of numbers */
 function stripHTML(c) {
   if (!flowQuick()) return notesHTML(c);
